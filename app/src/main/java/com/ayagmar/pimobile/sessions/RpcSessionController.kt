@@ -76,6 +76,7 @@ import kotlin.math.roundToInt
 
 @Suppress("TooManyFunctions", "LargeClass")
 class RpcSessionController(
+    private val clientId: String,
     private val connectionFactory: () -> PiRpcConnection = { PiRpcConnection() },
     private val connectTimeoutMs: Long = DEFAULT_TIMEOUT_MS,
     private val requestTimeoutMs: Long = DEFAULT_TIMEOUT_MS,
@@ -90,7 +91,6 @@ class RpcSessionController(
     private var activeConnection: PiRpcConnection? = null
     private var activeContext: ActiveConnectionContext? = null
     private var transportPreference: TransportPreference = TransportPreference.AUTO
-    private val clientId: String = UUID.randomUUID().toString()
     private var rpcEventsJob: Job? = null
     private var connectionStateJob: Job? = null
     private var streamingMonitorJob: Job? = null
