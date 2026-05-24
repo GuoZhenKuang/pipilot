@@ -223,6 +223,13 @@ private fun ConnectionMessages(
         )
     }
 
+    state.clientId?.let { clientId ->
+        Text(
+            text = "Client ID: $clientId",
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+
     transientStatusMessage?.let { status ->
         Text(
             text = status,

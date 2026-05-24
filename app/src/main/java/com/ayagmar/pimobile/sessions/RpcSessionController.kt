@@ -600,6 +600,10 @@ class RpcSessionController(
         }
     }
 
+    override suspend fun getClientId(): String {
+        return clientId
+    }
+
     override suspend fun getLastAssistantText(): Result<String?> {
         return mutex.withLock {
             runCatching {

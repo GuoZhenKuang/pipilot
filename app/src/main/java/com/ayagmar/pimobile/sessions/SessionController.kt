@@ -102,6 +102,8 @@ interface SessionController {
 
     suspend fun getCommands(): Result<List<SlashCommandInfo>>
 
+    suspend fun getClientId(): String
+
     suspend fun getLastAssistantText(): Result<String?>
 
     suspend fun importSessionJsonl(
