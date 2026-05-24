@@ -118,6 +118,7 @@ import com.ayagmar.pimobile.sessions.SessionController
 import com.ayagmar.pimobile.sessions.SessionTreeEntry
 import com.ayagmar.pimobile.sessions.SessionTreeSnapshot
 import com.ayagmar.pimobile.sessions.SlashCommandInfo
+import dev.jeziellago.compose.markdowntext.MarkdownText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -1413,17 +1414,6 @@ private fun AssistantMessageContent(
         return
     }
 
-    // Fast path for common plain-text streaming updates (avoid regex parsing/jank on each delta).
-    if (!text.contains("```")) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = modifier,
-        )
-        return
-    }
-
     val blocks = remember(text) { parseAssistantMessageBlocks(text) }
 
     Column(
@@ -1434,10 +1424,11 @@ private fun AssistantMessageContent(
             when (block) {
                 is AssistantMessageBlock.Paragraph -> {
                     if (block.text.isNotBlank()) {
-                        Text(
-                            text = block.text,
+                        MarkdownText(
+                            markdown = block.text,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            syntaxHighlightColor = MaterialTheme.colorScheme.surfaceVariant,
+                            syntaxHighlightTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
