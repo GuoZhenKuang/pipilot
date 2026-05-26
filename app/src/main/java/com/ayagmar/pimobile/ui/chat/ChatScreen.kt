@@ -1566,6 +1566,23 @@ private fun commentRegexFor(language: String?): Regex {
 }
 
 @Composable
+private fun ThinkingHeader(isThinkingComplete: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = Icons.Default.Menu,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+        )
+        Text(
+            text = if (isThinkingComplete) " Thinking" else " Thinking…",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onTertiaryContainer,
+        )
+    }
+}
+
+@Composable
 private fun ThinkingBlock(
     thinking: String?,
     isThinkingComplete: Boolean,
@@ -1575,6 +1592,7 @@ private fun ThinkingBlock(
 ) {
     if (thinking == null) return
 
+    val thinkingStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onTertiaryContainer)
     val shouldCollapse = thinking.length > THINKING_COLLAPSE_THRESHOLD
     val displayThinking =
         if (!isThinkingExpanded && shouldCollapse) {
@@ -1599,23 +1617,12 @@ private fun ThinkingBlock(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Menu,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                )
-                Text(
-                    text = if (isThinkingComplete) " Thinking" else " Thinking…",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                )
-            }
-            Text(
-                text = displayThinking,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onTertiaryContainer,
+            ThinkingHeader(isThinkingComplete)
+            MarkdownText(
+                markdown = displayThinking,
+                style = thinkingStyle,
+                syntaxHighlightColor = MaterialTheme.colorScheme.tertiaryContainer,
+                syntaxHighlightTextColor = MaterialTheme.colorScheme.onTertiaryContainer,
             )
 
             if (shouldCollapse || isThinkingExpanded) {
