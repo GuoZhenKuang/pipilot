@@ -230,6 +230,15 @@ fun piMobileApp(appGraph: AppGraph) {
             }
         }
 
+        val startDestination =
+            remember(appGraph) {
+                if (appGraph.hostProfileStore.list().isEmpty()) {
+                    "hosts"
+                } else {
+                    "sessions"
+                }
+            }
+
         ModalNavigationDrawer(
             drawerState = drawerState,
             gesturesEnabled = drawerState.isOpen,
@@ -292,7 +301,7 @@ fun piMobileApp(appGraph: AppGraph) {
                 ) {
                     NavHost(
                         navController = navController,
-                        startDestination = "sessions",
+                        startDestination = startDestination,
                         modifier = Modifier.fillMaxSize(),
                     ) {
                         composable(route = "hosts") {
