@@ -89,6 +89,8 @@ class FakeSessionController : SessionController {
     var lastFollowUpMode: String? = null
     var lastTransportPreference: TransportPreference = TransportPreference.AUTO
 
+    var clientId: String = "fake-client-id"
+
     override val rpcEvents: SharedFlow<RpcIncomingMessage> = events
     override val connectionState: StateFlow<ConnectionState> = connectionStateFlow
     override val isStreaming: StateFlow<Boolean> = streamingState
@@ -233,6 +235,8 @@ class FakeSessionController : SessionController {
         newSessionCallCount += 1
         return newSessionResult
     }
+
+    override suspend fun getClientId(): String = clientId
 
     override suspend fun getCommands(): Result<List<SlashCommandInfo>> {
         getCommandsCallCount += 1

@@ -71,6 +71,10 @@ class SettingsViewModel(
             )
 
         viewModelScope.launch {
+            uiState = uiState.copy(clientId = sessionController.getClientId())
+        }
+
+        viewModelScope.launch {
             sessionController.connectionState.collect { state ->
                 if (uiState.isChecking) return@collect
 
@@ -322,6 +326,7 @@ data class SettingsUiState(
     val piVersion: String? = null,
     val sessionName: String? = null,
     val pendingMessageCount: Int? = null,
+    val clientId: String? = null,
     val appVersion: String = "unknown",
     val errorMessage: String? = null,
     val autoCompactionEnabled: Boolean = true,
