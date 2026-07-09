@@ -118,6 +118,7 @@ import com.ayagmar.pimobile.sessions.SessionController
 import com.ayagmar.pimobile.sessions.SessionTreeEntry
 import com.ayagmar.pimobile.sessions.SessionTreeSnapshot
 import com.ayagmar.pimobile.sessions.SlashCommandInfo
+import dev.jeziellago.compose.markdowntext.MarkdownText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -1413,17 +1414,6 @@ private fun AssistantMessageContent(
         return
     }
 
-    // Fast path for common plain-text streaming updates (avoid regex parsing/jank on each delta).
-    if (!text.contains("```")) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = modifier,
-        )
-        return
-    }
-
     val blocks = remember(text) { parseAssistantMessageBlocks(text) }
 
     Column(
@@ -1434,10 +1424,11 @@ private fun AssistantMessageContent(
             when (block) {
                 is AssistantMessageBlock.Paragraph -> {
                     if (block.text.isNotBlank()) {
-                        Text(
-                            text = block.text,
+                        MarkdownText(
+                            markdown = block.text,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            syntaxHighlightColor = MaterialTheme.colorScheme.surfaceVariant,
+                            syntaxHighlightTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -1575,6 +1566,23 @@ private fun commentRegexFor(language: String?): Regex {
 }
 
 @Composable
+private fun ThinkingHeader(isThinkingComplete: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = Icons.Default.Menu,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+        )
+        Text(
+            text = if (isThinkingComplete) " Thinking" else " Thinking…",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onTertiaryContainer,
+        )
+    }
+}
+
+@Composable
 private fun ThinkingBlock(
     thinking: String?,
     isThinkingComplete: Boolean,
@@ -1584,6 +1592,7 @@ private fun ThinkingBlock(
 ) {
     if (thinking == null) return
 
+    val thinkingStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onTertiaryContainer)
     val shouldCollapse = thinking.length > THINKING_COLLAPSE_THRESHOLD
     val displayThinking =
         if (!isThinkingExpanded && shouldCollapse) {
@@ -1608,23 +1617,12 @@ private fun ThinkingBlock(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Menu,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                )
-                Text(
-                    text = if (isThinkingComplete) " Thinking" else " Thinking…",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                )
-            }
-            Text(
-                text = displayThinking,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onTertiaryContainer,
+            ThinkingHeader(isThinkingComplete)
+            MarkdownText(
+                markdown = displayThinking,
+                style = thinkingStyle,
+                syntaxHighlightColor = MaterialTheme.colorScheme.tertiaryContainer,
+                syntaxHighlightTextColor = MaterialTheme.colorScheme.onTertiaryContainer,
             )
 
             if (shouldCollapse || isThinkingExpanded) {
