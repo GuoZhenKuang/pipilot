@@ -241,6 +241,9 @@ BRIDGE_RECONNECT_GRACE_MS=30000     # Keep control locks after disconnect (ms)
 BRIDGE_SESSION_DIR=/absolute/path/to/.pi/agent/sessions  # Override the session dir used for indexing and spawned pi runtimes
 BRIDGE_LOG_LEVEL=info               # fatal,error,warn,info,debug,trace,silent
 BRIDGE_ENABLE_HEALTH_ENDPOINT=true  # set false to disable /health endpoint
+BRIDGE_WEBSOCKET_MAX_PAYLOAD_BYTES=16777216 # maximum WebSocket message size (16 MiB)
+BRIDGE_IMPORT_MAX_BYTES=10485760     # maximum UTF-8 JSONL import size (10 MiB)
+BRIDGE_PI_COMMAND=pi                 # Pi executable path/name; probed with --version at startup
 ```
 
 ### App Build Variants

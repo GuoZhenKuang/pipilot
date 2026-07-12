@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { access, mkdir, unlink, writeFile } from "node:fs/promises";
 import http from "node:http";
@@ -33,6 +34,7 @@ export interface BridgeServer {
 interface BridgeServerDependencies {
     processManager?: PiProcessManager;
     sessionIndexer?: SessionIndexer;
+    probePiVersion?: (command: string) => Promise<string>;
 }
 
 interface ClientConnectionContext {
@@ -83,6 +85,26 @@ const BRIDGE_SESSION_FRESHNESS_TYPE = "bridge_session_freshness";
 const BRIDGE_IMPORT_SESSION_JSONL_TYPE = "bridge_import_session_jsonl";
 const BRIDGE_SESSION_IMPORTED_TYPE = "bridge_session_imported";
 const BRIDGE_INTERNAL_RPC_TIMEOUT_MS = 10_000;
+const PI_VERSION_PROBE_TIMEOUT_MS = 3_000;
+
+export async function probePiVersion(command: string): Promise<string> {
+    return await new Promise<string>((resolve, reject) => {
+        execFile(command, ["--version"], { timeout: PI_VERSION_PROBE_TIMEOUT_MS }, (error, stdout) => {
+            if (error) {
+                reject(new Error(`Unable to run ${command} --version: ${error.message}`));
+                return;
+            }
+
+            const version = stdout.trim();
+            if (!version) {
+                reject(new Error(`${command} --version returned no version`));
+                return;
+            }
+
+            resolve(version);
+        });
+    });
+}
 
 export function buildPiRpcArgs(sessionDirectory: string): string[] {
     return [
@@ -104,7 +126,11 @@ export function createBridgeServer(
 ): BridgeServer {
     const startedAt = Date.now();
 
-    const wsServer = new WebSocketServer({ noServer: true });
+    const wsServer = new WebSocketServer({
+        noServer: true,
+        maxPayload: config.websocketMaxPayloadBytes,
+    });
+    const piVersionProbe = dependencies.probePiVersion ?? probePiVersion;
     const processManager = dependencies.processManager ??
         createPiProcessManager({
             idleTtlMs: config.processIdleTtlMs,
@@ -112,7 +138,7 @@ export function createBridgeServer(
             forwarderFactory: (cwd: string) => {
                 return createPiRpcForwarder(
                     {
-                        command: "pi",
+                        command: config.piCommand,
                         args: buildPiRpcArgs(config.sessionDirectory),
                         cwd,
                     },
@@ -339,6 +365,9 @@ export function createBridgeServer(
 
     return {
         async start(): Promise<BridgeServerStartInfo> {
+            const piVersion = await piVersionProbe(config.piCommand);
+            logger.info({ command: config.piCommand, version: piVersion }, "Detected Pi executable");
+
             await new Promise<void>((resolve) => {
                 server.listen(config.port, config.host, () => {
                     resolve();
@@ -660,6 +689,19 @@ async function handleBridgeControlMessage(
                     createBridgeErrorEnvelope(
                         "invalid_import_payload",
                         "content must be a non-empty JSONL string",
+                    ),
+                ),
+            );
+            return;
+        }
+
+        const contentBytes = Buffer.byteLength(content, "utf8");
+        if (contentBytes > config.importMaxBytes) {
+            client.send(
+                JSON.stringify(
+                    createBridgeErrorEnvelope(
+                        "import_payload_too_large",
+                        `Import exceeds the ${config.importMaxBytes} byte limit`,
                     ),
                 ),
             );

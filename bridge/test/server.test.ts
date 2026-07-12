@@ -1228,9 +1228,12 @@ describe("bridge websocket server", () => {
                 reconnectGraceMs: 100,
                 sessionDirectory,
                 enableHealthEndpoint: true,
+            websocketMaxPayloadBytes: 16 * 1024 * 1024,
+            importMaxBytes: 10 * 1024 * 1024,
+            piCommand: "pi",
             },
             logger,
-            { processManager: fakeProcessManager },
+            { processManager: fakeProcessManager, probePiVersion: async () => "0.80.6" },
         );
         bridgeServer = server;
 
@@ -1308,6 +1311,9 @@ describe("bridge websocket server", () => {
                 reconnectGraceMs: 100,
                 sessionDirectory: "/tmp/pi-sessions",
                 enableHealthEndpoint: false,
+                websocketMaxPayloadBytes: 16 * 1024 * 1024,
+                importMaxBytes: 10 * 1024 * 1024,
+                piCommand: "pi",
             },
             logger,
             { processManager: fakeProcessManager },
@@ -1366,9 +1372,12 @@ async function startBridgeServer(
             reconnectGraceMs: 100,
             sessionDirectory: "/tmp/pi-sessions",
             enableHealthEndpoint: true,
+            websocketMaxPayloadBytes: 16 * 1024 * 1024,
+            importMaxBytes: 10 * 1024 * 1024,
+            piCommand: "pi",
         },
         logger,
-        deps,
+        { ...deps, probePiVersion: async () => "0.80.6" },
     );
 
     const serverInfo = await server.start();
