@@ -15,3 +15,7 @@ The bridge remains a transparent JSON pass-through. It must not normalize Pi com
 ## Consumed current capabilities
 
 The typed contract includes `agent_settled`, `get_entries`, `get_tree`, `clone`, canonical `contextUsage`, and thinking level `max`. Tree and incremental synchronization adoption is tracked separately from protocol typing.
+
+## Session entry interpretation policy
+
+For Pi 0.80.6, Pi Mobile treats the package's published `docs/session-format.md` and public `SessionEntry` definitions as part of the compatibility contract for interpreting `get_entries` and `get_tree`. Active branches are resolved through `leafId` and `parentId`; compaction follows the documented `firstKeptEntryId` behavior. Unknown entry variants must cause one explicit full rebuild rather than being guessed. Sanitized fixtures protect this boundary during Pi upgrades.

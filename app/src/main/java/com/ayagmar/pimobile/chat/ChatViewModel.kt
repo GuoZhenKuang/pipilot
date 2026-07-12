@@ -2780,7 +2780,9 @@ class ChatViewModel(
         private const val STREAMING_DIAGNOSTICS_LOG_TAG = "StreamingDiagnostics"
         private const val SESSION_COHERENCY_WARNING_MESSAGE =
             "Potential cross-device session edits detected. Use Sync now before continuing."
-        private const val SESSION_FRESHNESS_POLL_INTERVAL_MS = 4_000L
+
+        // Safety fallback for edits made outside the bridge; bridge-observed mutations resync separately.
+        private const val SESSION_FRESHNESS_POLL_INTERVAL_MS = 60_000L
         private const val SESSION_FRESHNESS_WARNING_COOLDOWN_MS = 20_000L
         private const val LOCAL_SESSION_MUTATION_GRACE_MS = 90_000L
     }
