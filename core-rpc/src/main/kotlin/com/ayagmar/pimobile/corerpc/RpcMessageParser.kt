@@ -32,8 +32,12 @@ class RpcMessageParser(
             "agent_settled" -> json.decodeFromJsonElement<AgentSettledEvent>(jsonObject)
             "turn_start" -> json.decodeFromJsonElement<TurnStartEvent>(jsonObject)
             "turn_end" -> json.decodeFromJsonElement<TurnEndEvent>(jsonObject)
-            "auto_compaction_start" -> json.decodeFromJsonElement<AutoCompactionStartEvent>(jsonObject)
-            "auto_compaction_end" -> json.decodeFromJsonElement<AutoCompactionEndEvent>(jsonObject)
+            "compaction_start",
+            "auto_compaction_start",
+            -> json.decodeFromJsonElement<AutoCompactionStartEvent>(jsonObject)
+            "compaction_end",
+            "auto_compaction_end",
+            -> json.decodeFromJsonElement<AutoCompactionEndEvent>(jsonObject)
             "auto_retry_start" -> json.decodeFromJsonElement<AutoRetryStartEvent>(jsonObject)
             "auto_retry_end" -> json.decodeFromJsonElement<AutoRetryEndEvent>(jsonObject)
             else -> GenericRpcEvent(type = type, payload = jsonObject)
