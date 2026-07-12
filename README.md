@@ -67,8 +67,8 @@ The bridge is a small Node.js service that translates WebSocket to pi's stdin/st
 
 Install pi if you haven't:
 ```bash
-npm install -g @earendil-works/pi-coding-agent@^0.80.0
-pi --version # tested with 0.80.6
+npm install -g @earendil-works/pi-coding-agent@^0.80.6
+pi --version # minimum and tested version: 0.80.6
 ```
 
 Clone and start the bridge:

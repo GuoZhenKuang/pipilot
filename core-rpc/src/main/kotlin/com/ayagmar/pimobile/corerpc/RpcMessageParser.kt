@@ -29,6 +29,7 @@ class RpcMessageParser(
             "extension_error" -> json.decodeFromJsonElement<ExtensionErrorEvent>(jsonObject)
             "agent_start" -> json.decodeFromJsonElement<AgentStartEvent>(jsonObject)
             "agent_end" -> json.decodeFromJsonElement<AgentEndEvent>(jsonObject)
+            "agent_settled" -> json.decodeFromJsonElement<AgentSettledEvent>(jsonObject)
             "turn_start" -> json.decodeFromJsonElement<TurnStartEvent>(jsonObject)
             "turn_end" -> json.decodeFromJsonElement<TurnEndEvent>(jsonObject)
             "auto_compaction_start" -> json.decodeFromJsonElement<AutoCompactionStartEvent>(jsonObject)

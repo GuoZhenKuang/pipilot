@@ -4,6 +4,7 @@ import com.ayagmar.pimobile.corerpc.AbortBashCommand
 import com.ayagmar.pimobile.corerpc.AbortCommand
 import com.ayagmar.pimobile.corerpc.AbortRetryCommand
 import com.ayagmar.pimobile.corerpc.BashCommand
+import com.ayagmar.pimobile.corerpc.CloneCommand
 import com.ayagmar.pimobile.corerpc.CompactCommand
 import com.ayagmar.pimobile.corerpc.CycleModelCommand
 import com.ayagmar.pimobile.corerpc.CycleThinkingLevelCommand
@@ -13,11 +14,13 @@ import com.ayagmar.pimobile.corerpc.FollowUpCommand
 import com.ayagmar.pimobile.corerpc.ForkCommand
 import com.ayagmar.pimobile.corerpc.GetAvailableModelsCommand
 import com.ayagmar.pimobile.corerpc.GetCommandsCommand
+import com.ayagmar.pimobile.corerpc.GetEntriesCommand
 import com.ayagmar.pimobile.corerpc.GetForkMessagesCommand
 import com.ayagmar.pimobile.corerpc.GetLastAssistantTextCommand
 import com.ayagmar.pimobile.corerpc.GetMessagesCommand
 import com.ayagmar.pimobile.corerpc.GetSessionStatsCommand
 import com.ayagmar.pimobile.corerpc.GetStateCommand
+import com.ayagmar.pimobile.corerpc.GetTreeCommand
 import com.ayagmar.pimobile.corerpc.NewSessionCommand
 import com.ayagmar.pimobile.corerpc.PromptCommand
 import com.ayagmar.pimobile.corerpc.RpcCommand
@@ -48,10 +51,13 @@ private val rpcCommandEncoders: Map<Class<out RpcCommand>, RpcCommandEncoder> =
         AbortRetryCommand::class.java to typedEncoder(AbortRetryCommand.serializer()),
         GetStateCommand::class.java to typedEncoder(GetStateCommand.serializer()),
         GetMessagesCommand::class.java to typedEncoder(GetMessagesCommand.serializer()),
+        GetEntriesCommand::class.java to typedEncoder(GetEntriesCommand.serializer()),
+        GetTreeCommand::class.java to typedEncoder(GetTreeCommand.serializer()),
         SwitchSessionCommand::class.java to typedEncoder(SwitchSessionCommand.serializer()),
         SetSessionNameCommand::class.java to typedEncoder(SetSessionNameCommand.serializer()),
         GetForkMessagesCommand::class.java to typedEncoder(GetForkMessagesCommand.serializer()),
         ForkCommand::class.java to typedEncoder(ForkCommand.serializer()),
+        CloneCommand::class.java to typedEncoder(CloneCommand.serializer()),
         ExportHtmlCommand::class.java to typedEncoder(ExportHtmlCommand.serializer()),
         CompactCommand::class.java to typedEncoder(CompactCommand.serializer()),
         CycleModelCommand::class.java to typedEncoder(CycleModelCommand.serializer()),

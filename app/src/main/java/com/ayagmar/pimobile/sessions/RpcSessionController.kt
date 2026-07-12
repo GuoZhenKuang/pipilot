@@ -8,7 +8,7 @@ import com.ayagmar.pimobile.corenet.WebSocketTarget
 import com.ayagmar.pimobile.corerpc.AbortBashCommand
 import com.ayagmar.pimobile.corerpc.AbortCommand
 import com.ayagmar.pimobile.corerpc.AbortRetryCommand
-import com.ayagmar.pimobile.corerpc.AgentEndEvent
+import com.ayagmar.pimobile.corerpc.AgentSettledEvent
 import com.ayagmar.pimobile.corerpc.AgentStartEvent
 import com.ayagmar.pimobile.corerpc.AvailableModel
 import com.ayagmar.pimobile.corerpc.BashCommand
@@ -41,7 +41,6 @@ import com.ayagmar.pimobile.corerpc.SetSteeringModeCommand
 import com.ayagmar.pimobile.corerpc.SetThinkingLevelCommand
 import com.ayagmar.pimobile.corerpc.SteerCommand
 import com.ayagmar.pimobile.corerpc.SwitchSessionCommand
-import com.ayagmar.pimobile.corerpc.TurnEndEvent
 import com.ayagmar.pimobile.coresessions.SessionRecord
 import com.ayagmar.pimobile.hosts.HostProfile
 import kotlinx.coroutines.CoroutineScope
@@ -979,9 +978,7 @@ class RpcSessionController(
                 connection.rpcEvents.collect { event ->
                     when (event) {
                         is AgentStartEvent -> _isStreaming.value = true
-                        is AgentEndEvent,
-                        is TurnEndEvent,
-                        -> _isStreaming.value = false
+                        is AgentSettledEvent -> _isStreaming.value = false
 
                         else -> Unit
                     }
@@ -1351,9 +1348,11 @@ private fun parseSessionStats(data: JsonObject?): SessionStats {
             data?.intField("autoCompactions"),
         )
 
+    val contextUsage = runCatching { data?.get("contextUsage")?.jsonObject }.getOrNull()
     val context = runCatching { data?.get("context")?.jsonObject }.getOrNull()
     val contextUsedTokens =
         coalesceLongOrNull(
+            contextUsage?.longField("tokens"),
             context?.longField("used"),
             context?.longField("tokens"),
             context?.longField("current"),
@@ -1363,12 +1362,15 @@ private fun parseSessionStats(data: JsonObject?): SessionStats {
         )
     val contextWindowTokens =
         coalesceLongOrNull(
+            contextUsage?.longField("contextWindow"),
             context?.longField("window"),
             context?.longField("max"),
             data?.longField("contextWindow"),
         )
     val contextUsagePercent =
         coalesceIntOrNull(
+            contextUsage?.intField("percent"),
+            contextUsage?.doubleField("percent")?.roundToInt(),
             context?.intField("percent"),
             context?.doubleField("percent")?.roundToInt(),
             data?.intField("contextPercent"),

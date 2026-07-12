@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.ayagmar.pimobile.corenet.ConnectionState
 import com.ayagmar.pimobile.corerpc.AgentEndEvent
+import com.ayagmar.pimobile.corerpc.AgentSettledEvent
 import com.ayagmar.pimobile.corerpc.AssistantTextAssembler
 import com.ayagmar.pimobile.corerpc.AssistantTextUpdate
 import com.ayagmar.pimobile.corerpc.AutoCompactionEndEvent
@@ -977,6 +978,7 @@ class ChatViewModel(
                         logThinkingDiagnostics(reason = "agent_end")
                         logStreamingDiagnostics(reason = "agent_end")
                     }
+                    is AgentSettledEvent -> handleAgentSettled()
                     else -> Unit
                 }
             }
@@ -1151,6 +1153,11 @@ class ChatViewModel(
     }
 
     private fun handleTurnEnd() {
+        // Refresh stats after each low-level turn while keeping the run active until agent_settled.
+        loadSessionStats()
+    }
+
+    private fun handleAgentSettled() {
         clearStreamingTimelineFlags()
         _uiState.update {
             it.copy(
@@ -1158,9 +1165,6 @@ class ChatViewModel(
                 pendingQueueItems = emptyList(),
             )
         }
-
-        // Refresh stats at turn end so context/cost indicators stay current.
-        loadSessionStats()
     }
 
     private fun handleExtensionError(event: ExtensionErrorEvent) {

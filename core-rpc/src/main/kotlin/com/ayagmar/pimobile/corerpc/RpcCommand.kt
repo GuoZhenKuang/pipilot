@@ -54,6 +54,19 @@ data class GetMessagesCommand(
 ) : RpcCommand
 
 @Serializable
+data class GetEntriesCommand(
+    override val id: String? = null,
+    override val type: String = "get_entries",
+    val since: String? = null,
+) : RpcCommand
+
+@Serializable
+data class GetTreeCommand(
+    override val id: String? = null,
+    override val type: String = "get_tree",
+) : RpcCommand
+
+@Serializable
 data class SwitchSessionCommand(
     override val id: String? = null,
     override val type: String = "switch_session",
@@ -78,6 +91,12 @@ data class ForkCommand(
     override val id: String? = null,
     override val type: String = "fork",
     val entryId: String,
+) : RpcCommand
+
+@Serializable
+data class CloneCommand(
+    override val id: String? = null,
+    override val type: String = "clone",
 ) : RpcCommand
 
 @Serializable
