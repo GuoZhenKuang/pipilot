@@ -94,7 +94,7 @@ flowchart TD
 flowchart LR
     A[User selects tree entry] --> B[Android sends bridge_navigate_tree]
     B --> C[Bridge validates cwd + control lock]
-    C --> D[Bridge checks get_commands for pi-mobile-tree]
+    C --> D[Bridge invokes internal pi-mobile-tree command]
     D --> E[Bridge sends rpc prompt: pi-mobile-tree entryId statusKey]
     E --> F[Extension navigates tree + setEditorText + setStatus]
     F --> G[Bridge captures setStatus payload]
@@ -120,5 +120,7 @@ stateDiagram-v2
 - **Per-cwd subprocesses**: isolates project state and keeps tool cwd semantics correct.
 - **Control lock before RPC**: prevents concurrent writers to the same cwd/session.
 - **Resync after reconnect**: avoids stale UI after transient network failures.
-- **Freshness polling in chat**: detects cross-device/session-file drift and prompts user to sync.
+- **Current tree paths**: source still uses bridge-owned session tree reads and an internal extension for navigation. Current Pi supports `get_tree`/`get_entries`; plans 003–004 may simplify these paths.
+- **Freshness polling in chat**: current source detects cross-device/session-file drift and prompts user to sync; plan 004 may replace frequent polling with invalidation and a slower fallback.
+- **Retained boundary**: [ADR-0004](adr/ADR-0004-retain-rpc-subprocess-boundary.md) records Android → authenticated bridge → one `pi --mode rpc` process per cwd.
 - Decision rationale is captured in [ADRs](adr/README.md).

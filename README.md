@@ -67,16 +67,19 @@ The bridge is a small Node.js service that translates WebSocket to pi's stdin/st
 
 Install pi if you haven't:
 ```bash
-npm install -g @mariozechner/pi-coding-agent
+npm install -g @earendil-works/pi-coding-agent@^0.80.0
+pi --version # tested with 0.80.6
 ```
 
 Clone and start the bridge:
 ```bash
-git clone https://github.com/yourusername/pi-mobile.git
+git clone https://github.com/ayagmar/pi-mobile.git
 cd pi-mobile/bridge
 pnpm install
 # create .env and set BRIDGE_AUTH_TOKEN (see Configuration section below)
 pnpm start
+# In another shell, when BRIDGE_ENABLE_HEALTH_ENDPOINT=true:
+curl --fail http://127.0.0.1:8787/health
 ```
 
 The bridge binds to `127.0.0.1:8787` by default. Set `BRIDGE_HOST` to your laptop Tailscale IP to allow phone access (avoid `0.0.0.0` unless you enforce firewall restrictions). It spawns pi processes on demand per working directory.

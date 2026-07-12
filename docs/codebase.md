@@ -42,6 +42,8 @@ The app never talks directly to a pi process. It talks to the bridge, which:
 - enforces single-client control lock per cwd/session
 - forwards RPC events and bridge control messages
 
+This retained boundary is documented in [ADR-0004](adr/ADR-0004-retain-rpc-subprocess-boundary.md): one isolated `pi --mode rpc` process per cwd.
+
 ## Repository Layout
 
 | Path | Purpose |
@@ -133,7 +135,7 @@ Tree flow uses both bridge control and internal extension command:
 
 1. App sends `bridge_navigate_tree { entryId }`
 2. Bridge checks internal command availability (`get_commands`)
-3. Bridge sends RPC `prompt` with internal command:
+3. Current source checks command availability, then sends RPC `prompt` with internal command:
    - `/pi-mobile-tree <entryId> <statusKey>`
 4. Extension emits `setStatus(statusKey, JSON payload)`
 5. Bridge parses payload and replies with `bridge_tree_navigation_result`
@@ -151,7 +153,7 @@ To protect against cross-device edits on the same session file:
    - emit warning notification with lock owner hints
 5. User can trigger **Sync now** to force timeline reload and clear warning
 
-This helps avoid writing on stale in-memory state after another client changed the session.
+This helps avoid writing on stale in-memory state after another client changed the session. Current Pi RPC provides `get_tree` and cursor-based `get_entries`; plans 003–004 may simplify the bridge tree read and polling paths, but that future behavior is not implemented here.
 
 ## Bridge Control Model
 

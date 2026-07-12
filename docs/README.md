@@ -12,11 +12,13 @@ This directory contains human-facing documentation for the Pi Mobile app and bri
 - [Bridge Protocol Reference](bridge-protocol.md)
 - [Testing](testing.md)
 - [Performance Baseline](perf-baseline.md)
-- [Final Acceptance Report](final-acceptance.md)
+- [Historical Final Acceptance Report](final-acceptance.md)
+- [Current Pi RPC Gap Assessment](pi-upstream-opportunities.md)
 
 ## Notes
 
-- `docs/ai/` contains planning/progress notes generated during implementation.
+- The top-level documents listed above are maintained documentation.
+- `docs/ai/` and `docs/spikes/` contain historical planning, progress, and investigation artifacts. They may describe superseded behavior and are not current implementation instructions.
 - For day-to-day development and maintenance, start with:
   1. [Product Overview, Demo, and Screenshots (README)](../README.md)
   2. [Architecture (Mermaid diagrams)](architecture.md)

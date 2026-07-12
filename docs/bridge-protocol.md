@@ -202,7 +202,7 @@ Response payload:
 
 ## RPC Channel Messages
 
-`rpc` channel forwards pi RPC commands/events.
+`rpc` channel forwards pi RPC commands/events unchanged. Current Pi provides `get_entries`, `get_tree`, and `clone`; current Android source does not yet consume all of these paths. Cross-project session listing and direct tree navigation remain bridge-owned because current Pi RPC does not expose equivalent commands.
 
 ### Preconditions for sending RPC payloads
 

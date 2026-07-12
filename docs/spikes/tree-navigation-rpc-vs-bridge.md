@@ -1,5 +1,7 @@
 # Tree navigation spike: RPC-only vs bridge endpoint
 
+> **Historical spike.** Its RPC capability conclusion is superseded: current Pi provides `get_entries` and `get_tree`. Direct tree navigation remains absent, so the internal navigation mechanism is still required.
+
 Date: 2026-02-15
 
 ## Goal
