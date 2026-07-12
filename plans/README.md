@@ -10,7 +10,7 @@ These plans deliberately retain the current architecture: Android connects to a 
 |---|---|---:|---:|---|---|
 | [001](001-clean-stale-documentation.md) | Clean stale documentation and record the RPC decision | P1 | S | — | DONE |
 | [002](002-secure-and-pin-the-bridge.md) | Secure, pin, and bound the bridge runtime | P1 | M | 001 | DONE |
-| [003](003-current-pi-rpc-conformance.md) | Bring the client and bridge up to the current Pi RPC contract | P1 | L | 002 | TODO |
+| [003](003-current-pi-rpc-conformance.md) | Bring the client and bridge up to the current Pi RPC contract | P1 | L | 002 | BLOCKED (documented `^0.80.0` range predates `agent_settled` in 0.80.4; minimum-version decision required) |
 | [004](004-simplify-tree-and-incremental-sync.md) | Simplify tree handling and implement incremental synchronization | P1 | L | 003 | TODO |
 | [005](005-decompose-chat-architecture.md) | Decompose chat state and UI without changing behavior | P2 | L | 003 | TODO |
 | [006](006-redesign-onboarding-and-navigation.md) | Redesign onboarding, navigation, and recovery UX | P2 | L | 005 | TODO |
