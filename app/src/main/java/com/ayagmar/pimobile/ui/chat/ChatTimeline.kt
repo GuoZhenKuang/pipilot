@@ -192,7 +192,8 @@ private fun ChatTimeline(
                 onClick = autoScrollUi.onJumpToLatest,
                 modifier = Modifier.testTag(CHAT_JUMP_TO_LATEST_TAG),
             ) {
-                Text("↓ Latest")
+                val label = if (autoScrollUi.unreadCount > 0) "↓ ${autoScrollUi.unreadCount} new" else "↓ Latest"
+                Text(label)
             }
         }
 
@@ -207,6 +208,7 @@ private fun ChatTimeline(
 
 private data class TimelineAutoScrollUi(
     val shouldShowJumpToLatest: Boolean,
+    val unreadCount: Int,
     val onJumpToLatest: () -> Unit,
 )
 
@@ -239,6 +241,22 @@ private fun rememberTimelineAutoScrollUi(
         )
 
     val shouldAutoScrollToBottom = shouldStickToBottom || isNearBottom
+    var readingState by remember { mutableStateOf(TimelineReadingState()) }
+    var previousActivityKey by remember { mutableStateOf(latestTimelineActivityKey) }
+
+    LaunchedEffect(isNearBottom, listState.isScrollInProgress) {
+        if (isNearBottom) {
+            readingState = reduceTimelineReadingState(readingState, TimelineReadingAction.ReachBottom)
+        } else if (listState.isScrollInProgress) {
+            readingState = reduceTimelineReadingState(readingState, TimelineReadingAction.ScrollAway)
+        }
+    }
+    LaunchedEffect(latestTimelineActivityKey) {
+        if (previousActivityKey != latestTimelineActivityKey && !shouldAutoScrollToBottom) {
+            readingState = reduceTimelineReadingState(readingState, TimelineReadingAction.NewActivity)
+        }
+        previousActivityKey = latestTimelineActivityKey
+    }
 
     RunActivityAutoScroll(
         listState = listState,
@@ -256,8 +274,10 @@ private fun rememberTimelineAutoScrollUi(
 
     return TimelineAutoScrollUi(
         shouldShowJumpToLatest = renderedItemsCount > 1 && !shouldAutoScrollToBottom,
+        unreadCount = readingState.unreadCount,
         onJumpToLatest = {
             shouldStickToBottom = true
+            readingState = reduceTimelineReadingState(readingState, TimelineReadingAction.JumpToLatest)
             coroutineScope.launch {
                 listState.scrollToItem(bottomAnchorIndex)
             }
@@ -286,7 +306,7 @@ private fun buildLatestTimelineActivityKey(
             }
 
             is ChatTimelineItem.Tool -> {
-                "tool:${tail.id}:${tail.output.length}:${tail.isStreaming}:${tail.isCollapsed}"
+                "tool:${tail.id}:${tail.output.length}:${tail.isStreaming}:${tail.isError}"
             }
 
             is ChatTimelineItem.User -> "user:${tail.id}:${tail.text.length}:${tail.imageCount}"
@@ -723,15 +743,31 @@ private fun AssistantCard(
     item: ChatTimelineItem.Assistant,
     onToggleThinkingExpansion: (String) -> Unit,
 ) {
+    val clipboardManager = LocalClipboardManager.current
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(
-            text = if (item.isStreaming) "Pi · responding" else "Pi",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = if (item.isStreaming) "Pi · responding" else "Pi",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(1f),
+            )
+            if (item.text.isNotBlank() && !item.isStreaming) {
+                IconButton(
+                    onClick = { clipboardManager.setText(AnnotatedString(item.text)) },
+                    modifier = Modifier.size(28.dp),
+                ) {
+                    Icon(
+                        Icons.Default.ContentCopy,
+                        contentDescription = "Copy answer",
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+        }
         ThinkingBlock(
             thinking = item.thinking,
             isThinkingComplete = item.isThinkingComplete,
