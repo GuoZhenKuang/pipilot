@@ -1,7 +1,7 @@
 # Current Pi RPC gap assessment
 
-**Assessed:** 2026-07-13  
-**Pi version:** 0.80.6  
+**Assessed:** 2026-07-13
+**Pi version:** 0.80.6
 **Authority:** installed `@earendil-works/pi-coding-agent` `docs/rpc.md`
 
 ## Delivered by current Pi

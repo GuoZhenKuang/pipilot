@@ -38,7 +38,7 @@ Date/operator:
 7. Save and test a valid bridge; expect Sessions to open.
 8. Restart the app; expect host metadata retained and stored token never rendered.
 
-Result: **PENDING — operator-owned**  
+Result: **PENDING — operator-owned**
 Evidence/notes: ______________________________
 
 ## Sessions and chat
@@ -56,7 +56,7 @@ For each action, verify one resulting item/state and no duplicate timeline messa
 - edit the active session externally; foreground safety sync must detect it within 60 seconds
 - navigate a branch without appending; expect exactly one safe rebuild
 
-Result: **PENDING — operator-owned**  
+Result: **PENDING — operator-owned**
 Evidence/notes: ______________________________
 
 ## Multiple hosts and recovery
@@ -67,7 +67,7 @@ Evidence/notes: ______________________________
 4. Remove model credentials; expect Pi readiness guidance.
 5. Corrupt only a test token ciphertext, relaunch, and verify the token is treated as missing without a crash.
 
-Result: **PENDING — operator-owned**  
+Result: **PENDING — operator-owned**
 Evidence/notes: ______________________________
 
 ## Accessibility and lifecycle
@@ -79,14 +79,14 @@ Evidence/notes: ______________________________
 5. Background chat for over 60 seconds; confirm safety polling pauses, then resumes on foreground.
 6. Rotate and background/restore during idle and streaming; verify current session restoration.
 
-Result: **PENDING — operator-owned**  
+Result: **PENDING — operator-owned**
 Evidence/notes: ______________________________
 
 ## Release APK
 
 The repository does not contain signing credentials. Install a safely signed operator copy of `app/build/outputs/apk/release/app-release-unsigned.apk`, launch it, connect, resume, prompt, and reconnect. Record signing method without recording key material.
 
-Result: **PENDING — operator-owned**  
+Result: **PENDING — operator-owned**
 Evidence/notes: ______________________________
 
 ## Non-device gate
