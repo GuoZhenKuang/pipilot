@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Base64
+import androidx.core.net.toUri
 import com.ayagmar.pimobile.corerpc.ImagePayload
 
 /**
@@ -12,7 +13,7 @@ import com.ayagmar.pimobile.corerpc.ImagePayload
 class ImageEncoder(private val context: Context) {
     fun encodeToPayload(pendingImage: PendingImage): ImagePayload? {
         return try {
-            val uri = Uri.parse(pendingImage.uri)
+            val uri = pendingImage.uri.toUri()
             val bytes =
                 context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                     ?: return null

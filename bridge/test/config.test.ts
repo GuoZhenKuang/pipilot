@@ -18,6 +18,9 @@ describe("parseBridgeConfig", () => {
             reconnectGraceMs: 30_000,
             sessionDirectory: path.join(os.homedir(), ".pi", "agent", "sessions"),
             enableHealthEndpoint: true,
+            websocketMaxPayloadBytes: 16 * 1024 * 1024,
+            importMaxBytes: 10 * 1024 * 1024,
+            piCommand: "pi",
         });
     });
 
@@ -31,6 +34,9 @@ describe("parseBridgeConfig", () => {
             BRIDGE_RECONNECT_GRACE_MS: "12000",
             BRIDGE_SESSION_DIR: "./tmp/custom-sessions",
             BRIDGE_ENABLE_HEALTH_ENDPOINT: "false",
+            BRIDGE_WEBSOCKET_MAX_PAYLOAD_BYTES: "2000000",
+            BRIDGE_IMPORT_MAX_BYTES: "1000000",
+            BRIDGE_PI_COMMAND: "/opt/pi/bin/pi",
         });
 
         expect(config.host).toBe("100.64.0.10");
@@ -41,6 +47,9 @@ describe("parseBridgeConfig", () => {
         expect(config.reconnectGraceMs).toBe(12_000);
         expect(config.sessionDirectory).toBe(path.resolve("./tmp/custom-sessions"));
         expect(config.enableHealthEndpoint).toBe(false);
+        expect(config.websocketMaxPayloadBytes).toBe(2_000_000);
+        expect(config.importMaxBytes).toBe(1_000_000);
+        expect(config.piCommand).toBe("/opt/pi/bin/pi");
     });
 
     it("fails on invalid port", () => {
@@ -63,6 +72,15 @@ describe("parseBridgeConfig", () => {
         expect(() =>
             parseBridgeConfig({ BRIDGE_AUTH_TOKEN: "test-token", BRIDGE_RECONNECT_GRACE_MS: "-1" }),
         ).toThrow("Invalid BRIDGE_RECONNECT_GRACE_MS: -1");
+    });
+
+    it.each([
+        ["BRIDGE_WEBSOCKET_MAX_PAYLOAD_BYTES", "0"],
+        ["BRIDGE_IMPORT_MAX_BYTES", "1.5"],
+    ])("fails when %s is invalid", (name, value) => {
+        expect(() => parseBridgeConfig({ BRIDGE_AUTH_TOKEN: "test-token", [name]: value })).toThrow(
+            `Invalid ${name}: ${value}`,
+        );
     });
 
     it("fails when health endpoint flag is invalid", () => {

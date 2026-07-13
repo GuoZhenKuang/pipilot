@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -159,7 +160,7 @@ class SettingsViewModel(
     fun toggleAutoCompaction() {
         val newValue = !uiState.autoCompactionEnabled
         uiState = uiState.copy(autoCompactionEnabled = newValue)
-        prefs.edit().putBoolean(KEY_AUTO_COMPACTION, newValue).apply()
+        prefs.edit { putBoolean(KEY_AUTO_COMPACTION, newValue) }
 
         viewModelScope.launch {
             val result = sessionController.setAutoCompaction(newValue)
@@ -171,7 +172,7 @@ class SettingsViewModel(
                         autoCompactionEnabled = revertedValue,
                         errorMessage = "Failed to update auto-compaction",
                     )
-                prefs.edit().putBoolean(KEY_AUTO_COMPACTION, revertedValue).apply()
+                prefs.edit { putBoolean(KEY_AUTO_COMPACTION, revertedValue) }
             }
         }
     }
@@ -179,7 +180,7 @@ class SettingsViewModel(
     fun toggleAutoRetry() {
         val newValue = !uiState.autoRetryEnabled
         uiState = uiState.copy(autoRetryEnabled = newValue)
-        prefs.edit().putBoolean(KEY_AUTO_RETRY, newValue).apply()
+        prefs.edit { putBoolean(KEY_AUTO_RETRY, newValue) }
 
         viewModelScope.launch {
             val result = sessionController.setAutoRetry(newValue)
@@ -191,7 +192,7 @@ class SettingsViewModel(
                         autoRetryEnabled = revertedValue,
                         errorMessage = "Failed to update auto-retry",
                     )
-                prefs.edit().putBoolean(KEY_AUTO_RETRY, revertedValue).apply()
+                prefs.edit { putBoolean(KEY_AUTO_RETRY, revertedValue) }
             }
         }
     }
@@ -200,7 +201,7 @@ class SettingsViewModel(
         if (preference == uiState.transportPreference) return
 
         sessionController.setTransportPreference(preference)
-        prefs.edit().putString(KEY_TRANSPORT_PREFERENCE, preference.value).apply()
+        prefs.edit { putString(KEY_TRANSPORT_PREFERENCE, preference.value) }
 
         val effectiveTransport = sessionController.getEffectiveTransportPreference()
         uiState =
@@ -214,13 +215,13 @@ class SettingsViewModel(
     fun setThemePreference(preference: ThemePreference) {
         if (preference == uiState.themePreference) return
 
-        prefs.edit().putString(KEY_THEME_PREFERENCE, preference.value).apply()
+        prefs.edit { putString(KEY_THEME_PREFERENCE, preference.value) }
         uiState = uiState.copy(themePreference = preference)
     }
 
     fun toggleExtensionStatusStrip() {
         val newValue = !uiState.showExtensionStatusStrip
-        prefs.edit().putBoolean(KEY_SHOW_EXTENSION_STATUS_STRIP, newValue).apply()
+        prefs.edit { putBoolean(KEY_SHOW_EXTENSION_STATUS_STRIP, newValue) }
         uiState = uiState.copy(showExtensionStatusStrip = newValue)
     }
 

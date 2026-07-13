@@ -13,6 +13,7 @@ import com.ayagmar.pimobile.sessions.ForkableMessage
 import com.ayagmar.pimobile.sessions.ModelInfo
 import com.ayagmar.pimobile.sessions.SessionController
 import com.ayagmar.pimobile.sessions.SessionFreshnessSnapshot
+import com.ayagmar.pimobile.sessions.SessionSyncMetrics
 import com.ayagmar.pimobile.sessions.SessionTreeSnapshot
 import com.ayagmar.pimobile.sessions.SlashCommandInfo
 import com.ayagmar.pimobile.sessions.TransportPreference
@@ -30,6 +31,8 @@ class FakeSessionController : SessionController {
     private val streamingState = MutableStateFlow(false)
     private val connectionStateFlow = MutableStateFlow(ConnectionState.DISCONNECTED)
     private val _sessionChanged = MutableSharedFlow<String?>(extraBufferCapacity = 16)
+    private val _timelineInvalidated = MutableSharedFlow<Unit>(extraBufferCapacity = 16)
+    private val _syncMetrics = MutableStateFlow(SessionSyncMetrics())
 
     var availableCommands: List<SlashCommandInfo> = emptyList()
     var getCommandsCallCount: Int = 0
@@ -95,6 +98,8 @@ class FakeSessionController : SessionController {
     override val connectionState: StateFlow<ConnectionState> = connectionStateFlow
     override val isStreaming: StateFlow<Boolean> = streamingState
     override val sessionChanged: SharedFlow<String?> = _sessionChanged
+    override val timelineInvalidated: SharedFlow<Unit> = _timelineInvalidated
+    override val syncMetrics: StateFlow<SessionSyncMetrics> = _syncMetrics
 
     suspend fun emitEvent(event: RpcIncomingMessage) {
         events.emit(event)
@@ -114,6 +119,10 @@ class FakeSessionController : SessionController {
 
     override fun setTransportPreference(preference: TransportPreference) {
         lastTransportPreference = preference
+    }
+
+    override fun recordSafetyPoll() {
+        _syncMetrics.value = _syncMetrics.value.copy(safetyPolls = _syncMetrics.value.safetyPolls + 1)
     }
 
     override fun getTransportPreference(): TransportPreference = lastTransportPreference

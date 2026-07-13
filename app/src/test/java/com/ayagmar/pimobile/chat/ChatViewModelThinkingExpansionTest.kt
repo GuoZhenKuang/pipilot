@@ -4,10 +4,10 @@ package com.ayagmar.pimobile.chat
 
 import androidx.lifecycle.viewModelScope
 import com.ayagmar.pimobile.corerpc.AgentEndEvent
+import com.ayagmar.pimobile.corerpc.AgentSettledEvent
 import com.ayagmar.pimobile.corerpc.AssistantMessageEvent
 import com.ayagmar.pimobile.corerpc.MessageEndEvent
 import com.ayagmar.pimobile.corerpc.MessageUpdateEvent
-import com.ayagmar.pimobile.corerpc.TurnEndEvent
 import com.ayagmar.pimobile.sessions.SlashCommandInfo
 import com.ayagmar.pimobile.sessions.TreeNavigationResult
 import com.ayagmar.pimobile.testutil.FakeSessionController
@@ -603,7 +603,7 @@ class ChatViewModelThinkingExpansionTest {
         }
 
     @Test
-    fun turnEndClearsStreamingIndicatorsAndPendingQueue() =
+    fun agentSettledClearsStreamingIndicatorsAndPendingQueue() =
         runTest(dispatcher) {
             val controller = FakeSessionController()
             val viewModel = createViewModel(controller)
@@ -626,7 +626,12 @@ class ChatViewModelThinkingExpansionTest {
             assertTrue(viewModel.singleAssistantItem().isStreaming)
             assertTrue(viewModel.uiState.value.pendingQueueItems.isNotEmpty())
 
-            controller.emitEvent(TurnEndEvent(type = "turn_end"))
+            controller.emitEvent(AgentEndEvent(type = "agent_end"))
+            dispatcher.scheduler.advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.isStreaming)
+            assertTrue(viewModel.uiState.value.pendingQueueItems.isNotEmpty())
+
+            controller.emitEvent(AgentSettledEvent(type = "agent_settled"))
             dispatcher.scheduler.advanceUntilIdle()
 
             val finalState = viewModel.uiState.value

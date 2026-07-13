@@ -1,5 +1,7 @@
 # Final Acceptance Report
 
+> **Historical report (2025-02-14).** This records the implementation state at the commit range below. It is superseded as current acceptance evidence and must not be used as a description of current Pi capabilities.
+
 Pi Mobile Android Client - Phase 1-8 Completion
 
 ## Summary

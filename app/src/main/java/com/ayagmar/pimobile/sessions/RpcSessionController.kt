@@ -8,7 +8,7 @@ import com.ayagmar.pimobile.corenet.WebSocketTarget
 import com.ayagmar.pimobile.corerpc.AbortBashCommand
 import com.ayagmar.pimobile.corerpc.AbortCommand
 import com.ayagmar.pimobile.corerpc.AbortRetryCommand
-import com.ayagmar.pimobile.corerpc.AgentEndEvent
+import com.ayagmar.pimobile.corerpc.AgentSettledEvent
 import com.ayagmar.pimobile.corerpc.AgentStartEvent
 import com.ayagmar.pimobile.corerpc.AvailableModel
 import com.ayagmar.pimobile.corerpc.BashCommand
@@ -41,7 +41,6 @@ import com.ayagmar.pimobile.corerpc.SetSteeringModeCommand
 import com.ayagmar.pimobile.corerpc.SetThinkingLevelCommand
 import com.ayagmar.pimobile.corerpc.SteerCommand
 import com.ayagmar.pimobile.corerpc.SwitchSessionCommand
-import com.ayagmar.pimobile.corerpc.TurnEndEvent
 import com.ayagmar.pimobile.coresessions.SessionRecord
 import com.ayagmar.pimobile.hosts.HostProfile
 import kotlinx.coroutines.CoroutineScope
@@ -63,16 +62,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.util.UUID
-import kotlin.math.roundToInt
 
 @Suppress("TooManyFunctions", "LargeClass")
 class RpcSessionController(
@@ -87,7 +83,11 @@ class RpcSessionController(
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     private val _isStreaming = MutableStateFlow(false)
     private val _sessionChanged = MutableSharedFlow<String?>(extraBufferCapacity = 16)
+    private val _timelineInvalidated = MutableSharedFlow<Unit>(extraBufferCapacity = 16)
+    private val _syncMetrics = MutableStateFlow(SessionSyncMetrics())
+    private val entryProjection = SessionEntryProjection()
 
+    private var projectedMessagesResponse: RpcResponse? = null
     private var activeConnection: PiRpcConnection? = null
     private var activeContext: ActiveConnectionContext? = null
     private var transportPreference: TransportPreference = TransportPreference.AUTO
@@ -95,15 +95,22 @@ class RpcSessionController(
     private var connectionStateJob: Job? = null
     private var streamingMonitorJob: Job? = null
     private var resyncMonitorJob: Job? = null
+    private var invalidationMonitorJob: Job? = null
     private var reconnectRecoveryJob: Job? = null
 
     override val rpcEvents: SharedFlow<RpcIncomingMessage> = _rpcEvents
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
     override val isStreaming: StateFlow<Boolean> = _isStreaming.asStateFlow()
     override val sessionChanged: SharedFlow<String?> = _sessionChanged
+    override val timelineInvalidated: SharedFlow<Unit> = _timelineInvalidated
+    override val syncMetrics: StateFlow<SessionSyncMetrics> = _syncMetrics.asStateFlow()
 
     override fun setTransportPreference(preference: TransportPreference) {
         transportPreference = preference
+    }
+
+    override fun recordSafetyPoll() {
+        _syncMetrics.value = _syncMetrics.value.copy(safetyPolls = _syncMetrics.value.safetyPolls + 1)
     }
 
     override fun getTransportPreference(): TransportPreference = transportPreference
@@ -169,6 +176,7 @@ class RpcSessionController(
                 }
 
                 val newPath = refreshCurrentSessionPath(connection)
+                resetSessionProjection()
                 _sessionChanged.emit(newPath)
                 newPath
             }
@@ -179,7 +187,8 @@ class RpcSessionController(
         return mutex.withLock {
             runCatching {
                 val connection = ensureActiveConnection()
-                connection.requestMessages().requireSuccess("Failed to load messages")
+                projectedMessagesResponse
+                    ?: connection.requestMessages().requireSuccess("Failed to load messages")
             }
         }
     }
@@ -299,6 +308,16 @@ class RpcSessionController(
         return mutex.withLock {
             runCatching {
                 val connection = ensureActiveConnection()
+                val activeSessionPath = refreshCurrentSessionPath(connection)
+                if (sessionPath.isNullOrBlank() || sessionPath == activeSessionPath) {
+                    val response = connection.requestTree().requireSuccess("Failed to load active session tree")
+                    return@runCatching parseRpcSessionTreeSnapshot(
+                        data = response.data,
+                        sessionPath = activeSessionPath.orEmpty(),
+                        filter = filter,
+                    )
+                }
+
                 val bridgePayload =
                     buildJsonObject {
                         put("type", BRIDGE_GET_SESSION_TREE_TYPE)
@@ -380,6 +399,7 @@ class RpcSessionController(
         }
 
         val newPath = refreshCurrentSessionPath(connection)
+        resetSessionProjection()
         _sessionChanged.emit(newPath)
         return newPath
     }
@@ -577,6 +597,7 @@ class RpcSessionController(
                 newSessionResponse.requireNotCancelled("New session was cancelled")
 
                 val newPath = refreshCurrentSessionPath(connection)
+                resetSessionProjection()
                 _sessionChanged.emit(newPath)
                 Unit
             }
@@ -642,6 +663,7 @@ class RpcSessionController(
                     )
 
                 val sessionPath = bridgeResponse.payload.stringField("sessionPath")
+                resetSessionProjection()
                 _sessionChanged.emit(sessionPath)
                 sessionPath
             }
@@ -914,11 +936,13 @@ class RpcSessionController(
         connectionStateJob?.cancel()
         streamingMonitorJob?.cancel()
         resyncMonitorJob?.cancel()
+        invalidationMonitorJob?.cancel()
         reconnectRecoveryJob?.cancel()
         rpcEventsJob = null
         connectionStateJob = null
         streamingMonitorJob = null
         resyncMonitorJob = null
+        invalidationMonitorJob = null
         reconnectRecoveryJob = null
 
         activeConnection?.disconnect()
@@ -935,6 +959,7 @@ class RpcSessionController(
         connectionStateJob?.cancel()
         streamingMonitorJob?.cancel()
         resyncMonitorJob?.cancel()
+        invalidationMonitorJob?.cancel()
         reconnectRecoveryJob?.cancel()
         reconnectRecoveryJob = null
 
@@ -979,22 +1004,85 @@ class RpcSessionController(
                 connection.rpcEvents.collect { event ->
                     when (event) {
                         is AgentStartEvent -> _isStreaming.value = true
-                        is AgentEndEvent,
-                        is TurnEndEvent,
-                        -> _isStreaming.value = false
+                        is AgentSettledEvent -> _isStreaming.value = false
 
                         else -> Unit
                     }
                 }
             }
 
-        resyncMonitorJob =
-            scope.launch {
-                connection.resyncEvents.collect { snapshot ->
-                    val isStreaming = snapshot.stateResponse.data.booleanField("isStreaming") ?: false
-                    _isStreaming.value = isStreaming
+        resyncMonitorJob = observeEntryResync(connection)
+        invalidationMonitorJob = observeSessionInvalidations(connection)
+    }
+
+    private fun resetSessionProjection() {
+        entryProjection.reset()
+        projectedMessagesResponse = null
+    }
+
+    private fun observeEntryResync(connection: PiRpcConnection): Job {
+        return scope.launch {
+            connection.resyncEvents.collect { snapshot ->
+                val isStreaming = snapshot.stateResponse.data.booleanField("isStreaming") ?: false
+                _isStreaming.value = isStreaming
+                applyEntrySnapshot(connection, snapshot.entriesResponse, snapshot.fullRebuild)
+            }
+        }
+    }
+
+    private suspend fun applyEntrySnapshot(
+        connection: PiRpcConnection,
+        response: RpcResponse,
+        fullRebuild: Boolean,
+    ) {
+        val entryCount = runCatching { response.data?.get("entries")?.jsonArray?.size }.getOrNull() ?: 0
+        val update = entryProjection.apply(response.data, fullRebuild)
+        if (update is ProjectionUpdate.Applied) {
+            projectedMessagesResponse = update.toMessagesResponse()
+            _syncMetrics.value =
+                _syncMetrics.value.copy(
+                    fullRebuilds = _syncMetrics.value.fullRebuilds + if (fullRebuild) 1 else 0,
+                    incrementalEntries = _syncMetrics.value.incrementalEntries + if (fullRebuild) 0 else entryCount,
+                )
+            _timelineInvalidated.emit(Unit)
+            return
+        }
+
+        val rebuildResponse = connection.requestEntries().requireSuccess("Failed to rebuild session entries")
+        val rebuilt = entryProjection.apply(rebuildResponse.data, fullRebuild = true)
+        _syncMetrics.value = _syncMetrics.value.copy(fullRebuilds = _syncMetrics.value.fullRebuilds + 1)
+        projectedMessagesResponse =
+            if (rebuilt is ProjectionUpdate.Applied) {
+                rebuilt.toMessagesResponse()
+            } else {
+                connection.requestMessages().requireSuccess("Failed to rebuild session timeline")
+            }
+        _timelineInvalidated.emit(Unit)
+    }
+
+    private fun ProjectionUpdate.Applied.toMessagesResponse(): RpcResponse {
+        return RpcResponse(
+            type = "response",
+            command = "get_messages",
+            success = true,
+            data = buildJsonObject { put("messages", messages) },
+        )
+    }
+
+    private fun observeSessionInvalidations(connection: PiRpcConnection): Job {
+        return scope.launch {
+            connection.bridgeEvents.collect { event ->
+                if (event.type == BRIDGE_SESSION_INVALIDATED_TYPE) {
+                    runCatching { connection.resync() }
+                        .onFailure { error ->
+                            Log.w(
+                                TRANSPORT_LOG_TAG,
+                                "Session invalidation resync failed: ${error.message ?: "unknown"}",
+                            )
+                        }
                 }
             }
+        }
     }
 
     private fun scheduleReconnectRecovery(connection: PiRpcConnection) {
@@ -1095,6 +1183,7 @@ class RpcSessionController(
         private const val BRIDGE_SESSION_IMPORTED_TYPE = "bridge_session_imported"
         private const val BRIDGE_NAVIGATE_TREE_TYPE = "bridge_navigate_tree"
         private const val BRIDGE_TREE_NAVIGATION_RESULT_TYPE = "bridge_tree_navigation_result"
+        private const val BRIDGE_SESSION_INVALIDATED_TYPE = "bridge_session_invalidated"
         private const val EVENT_BUFFER_CAPACITY = 256
         private const val DEFAULT_TIMEOUT_MS = 10_000L
         private const val BASH_TIMEOUT_MS = 60_000L
@@ -1145,315 +1234,10 @@ private fun RpcResponse.requireNotCancelled(defaultError: String): RpcResponse {
     return this
 }
 
-private fun parseForkableMessages(data: JsonObject?): List<ForkableMessage> {
-    val messages = runCatching { data?.get("messages")?.jsonArray }.getOrNull() ?: JsonArray(emptyList())
-
-    return messages.mapNotNull { messageElement ->
-        val messageObject = messageElement.jsonObject
-        val entryId = messageObject.stringField("entryId") ?: return@mapNotNull null
-        // pi RPC currently returns "text" for fork messages; keep "preview" as fallback.
-        val preview = messageObject.stringField("text") ?: messageObject.stringField("preview") ?: "(no preview)"
-        val timestamp = messageObject["timestamp"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
-
-        ForkableMessage(
-            entryId = entryId,
-            preview = preview,
-            timestamp = timestamp,
-        )
-    }
-}
-
-private fun parseSessionTreeSnapshot(payload: JsonObject): SessionTreeSnapshot {
-    val sessionPath = payload.stringField("sessionPath") ?: error("Session tree response missing sessionPath")
-    val rootIds =
-        runCatching {
-            payload["rootIds"]?.jsonArray?.mapNotNull { element ->
-                element.jsonPrimitive.contentOrNull
-            }
-        }.getOrNull() ?: emptyList()
-
-    val entries =
-        runCatching {
-            payload["entries"]?.jsonArray?.mapNotNull { element ->
-                val entryObject = element.jsonObject
-                val entryId = entryObject.stringField("entryId") ?: return@mapNotNull null
-                SessionTreeEntry(
-                    entryId = entryId,
-                    parentId = entryObject.stringField("parentId"),
-                    entryType = entryObject.stringField("entryType") ?: "entry",
-                    role = entryObject.stringField("role"),
-                    timestamp = entryObject.stringField("timestamp"),
-                    preview = entryObject.stringField("preview") ?: "entry",
-                    label = entryObject.stringField("label"),
-                    isBookmarked = entryObject.booleanField("isBookmarked") ?: false,
-                )
-            }
-        }.getOrNull() ?: emptyList()
-
-    return SessionTreeSnapshot(
-        sessionPath = sessionPath,
-        rootIds = rootIds,
-        currentLeafId = payload.stringField("currentLeafId"),
-        entries = entries,
-    )
-}
-
-private fun parseSessionFreshnessSnapshot(payload: JsonObject): SessionFreshnessSnapshot {
-    val sessionPath = payload.stringField("sessionPath") ?: error("Session freshness response missing sessionPath")
-    val cwd = payload.stringField("cwd") ?: error("Session freshness response missing cwd")
-
-    val fingerprintPayload = runCatching { payload["fingerprint"]?.jsonObject }.getOrNull()
-    val lockPayload = runCatching { payload["lock"]?.jsonObject }.getOrNull()
-
-    val fingerprint =
-        SessionFreshnessFingerprint(
-            mtimeMs = fingerprintPayload.longField("mtimeMs") ?: 0L,
-            sizeBytes = fingerprintPayload.longField("sizeBytes") ?: 0L,
-            entryCount = fingerprintPayload.intField("entryCount") ?: 0,
-            lastEntryId = fingerprintPayload.stringField("lastEntryId"),
-            lastEntriesHash = fingerprintPayload.stringField("lastEntriesHash"),
-        )
-
-    val lock =
-        SessionLockMetadata(
-            cwdOwnerClientId = lockPayload.stringField("cwdOwnerClientId"),
-            sessionOwnerClientId = lockPayload.stringField("sessionOwnerClientId"),
-            isCurrentClientCwdOwner = lockPayload.booleanField("isCurrentClientCwdOwner") ?: false,
-            isCurrentClientSessionOwner = lockPayload.booleanField("isCurrentClientSessionOwner") ?: false,
-        )
-
-    return SessionFreshnessSnapshot(
-        sessionPath = sessionPath,
-        cwd = cwd,
-        fingerprint = fingerprint,
-        lock = lock,
-    )
-}
-
-private fun parseTreeNavigationResult(payload: JsonObject): TreeNavigationResult {
-    return TreeNavigationResult(
-        cancelled = payload.booleanField("cancelled") ?: false,
-        editorText = payload.stringField("editorText"),
-        currentLeafId = payload.stringField("currentLeafId"),
-        sessionPath = payload.stringField("sessionPath"),
-    )
-}
-
 private fun JsonObject?.stringField(fieldName: String): String? {
-    val jsonObject = this ?: return null
-    return jsonObject[fieldName]?.jsonPrimitive?.contentOrNull
+    return runCatching { this?.get(fieldName)?.jsonPrimitive?.contentOrNull }.getOrNull()
 }
 
 private fun JsonObject?.booleanField(fieldName: String): Boolean? {
-    val value = this?.get(fieldName)?.jsonPrimitive?.contentOrNull ?: return null
-    return value.toBooleanStrictOrNull()
-}
-
-private fun parseModelInfo(data: JsonObject?): ModelInfo? {
-    val nestedModel = data?.get("model") as? JsonObject
-    val model = nestedModel ?: data?.takeIf { it.stringField("id") != null } ?: return null
-
-    return ModelInfo(
-        id = model.stringField("id") ?: "unknown",
-        name = model.stringField("name") ?: "Unknown Model",
-        provider = model.stringField("provider") ?: "unknown",
-        thinkingLevel = data.stringField("thinkingLevel") ?: "off",
-        contextWindow = model.intField("contextWindow"),
-    )
-}
-
-private fun parseSlashCommands(data: JsonObject?): List<SlashCommandInfo> {
-    val commands = runCatching { data?.get("commands")?.jsonArray }.getOrNull() ?: JsonArray(emptyList())
-
-    return commands.mapNotNull { commandElement ->
-        val commandObject = commandElement.jsonObject
-        val name = commandObject.stringField("name") ?: return@mapNotNull null
-        SlashCommandInfo(
-            name = name,
-            description = commandObject.stringField("description"),
-            source = commandObject.stringField("source") ?: "unknown",
-            location = commandObject.stringField("location"),
-            path = commandObject.stringField("path"),
-        )
-    }
-}
-
-private fun parseBashResult(data: JsonObject?): BashResult {
-    return BashResult(
-        output = data?.stringField("output") ?: "",
-        exitCode = data?.get("exitCode")?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: -1,
-        // pi RPC uses "truncated" and "fullOutputPath".
-        wasTruncated = data?.booleanField("truncated") ?: data?.booleanField("wasTruncated") ?: false,
-        fullLogPath = data?.stringField("fullOutputPath") ?: data?.stringField("fullLogPath"),
-    )
-}
-
-@Suppress("MagicNumber", "LongMethod")
-private fun parseSessionStats(data: JsonObject?): SessionStats {
-    val tokens = runCatching { data?.get("tokens")?.jsonObject }.getOrNull()
-
-    val inputTokens =
-        coalesceLong(
-            tokens?.longField("input"),
-            data?.longField("inputTokens"),
-        )
-    val outputTokens =
-        coalesceLong(
-            tokens?.longField("output"),
-            data?.longField("outputTokens"),
-        )
-    val cacheReadTokens =
-        coalesceLong(
-            tokens?.longField("cacheRead"),
-            data?.longField("cacheReadTokens"),
-        )
-    val cacheWriteTokens =
-        coalesceLong(
-            tokens?.longField("cacheWrite"),
-            data?.longField("cacheWriteTokens"),
-        )
-    val totalCost =
-        coalesceDouble(
-            data?.doubleField("cost"),
-            data?.doubleField("totalCost"),
-        )
-
-    val messageCount =
-        coalesceInt(
-            data?.intField("totalMessages"),
-            data?.intField("messageCount"),
-        )
-    val userMessageCount =
-        coalesceInt(
-            data?.intField("userMessages"),
-            data?.intField("userMessageCount"),
-        )
-    val assistantMessageCount =
-        coalesceInt(
-            data?.intField("assistantMessages"),
-            data?.intField("assistantMessageCount"),
-        )
-    val toolResultCount =
-        coalesceInt(
-            data?.intField("toolResults"),
-            data?.intField("toolResultCount"),
-            data?.intField("toolCalls"),
-        )
-    val sessionPath =
-        coalesceString(
-            data?.stringField("sessionFile"),
-            data?.stringField("sessionPath"),
-        )
-    val compactionCount =
-        coalesceInt(
-            data?.intField("compactions"),
-            data?.intField("compactionCount"),
-            data?.intField("autoCompactions"),
-        )
-
-    val context = runCatching { data?.get("context")?.jsonObject }.getOrNull()
-    val contextUsedTokens =
-        coalesceLongOrNull(
-            context?.longField("used"),
-            context?.longField("tokens"),
-            context?.longField("current"),
-            data?.longField("contextUsedTokens"),
-            data?.longField("contextTokens"),
-            data?.longField("activeContextTokens"),
-        )
-    val contextWindowTokens =
-        coalesceLongOrNull(
-            context?.longField("window"),
-            context?.longField("max"),
-            data?.longField("contextWindow"),
-        )
-    val contextUsagePercent =
-        coalesceIntOrNull(
-            context?.intField("percent"),
-            context?.doubleField("percent")?.roundToInt(),
-            data?.intField("contextPercent"),
-            data?.doubleField("contextPercent")?.roundToInt(),
-            data?.intField("contextUsagePercent"),
-            data?.doubleField("contextUsagePercent")?.roundToInt(),
-        )
-
-    return SessionStats(
-        inputTokens = inputTokens,
-        outputTokens = outputTokens,
-        cacheReadTokens = cacheReadTokens,
-        cacheWriteTokens = cacheWriteTokens,
-        totalCost = totalCost,
-        messageCount = messageCount,
-        userMessageCount = userMessageCount,
-        assistantMessageCount = assistantMessageCount,
-        toolResultCount = toolResultCount,
-        sessionPath = sessionPath,
-        compactionCount = compactionCount,
-        contextUsedTokens = contextUsedTokens,
-        contextWindowTokens = contextWindowTokens,
-        contextUsagePercent = contextUsagePercent,
-    )
-}
-
-private fun parseAvailableModels(data: JsonObject?): List<AvailableModel> {
-    val models = runCatching { data?.get("models")?.jsonArray }.getOrNull() ?: JsonArray(emptyList())
-
-    return models.mapNotNull { modelElement ->
-        val modelObject = runCatching { modelElement.jsonObject }.getOrNull() ?: return@mapNotNull null
-        val id = modelObject.stringField("id") ?: return@mapNotNull null
-        val cost = runCatching { modelObject["cost"]?.jsonObject }.getOrNull()
-
-        AvailableModel(
-            id = id,
-            name = modelObject.stringField("name") ?: id,
-            provider = modelObject.stringField("provider") ?: "unknown",
-            contextWindow = modelObject.intField("contextWindow"),
-            maxOutputTokens = modelObject.intField("maxTokens") ?: modelObject.intField("maxOutputTokens"),
-            supportsThinking =
-                modelObject.booleanField("reasoning")
-                    ?: modelObject.booleanField("supportsThinking")
-                    ?: false,
-            inputCostPer1k = cost?.doubleField("input") ?: modelObject.doubleField("inputCostPer1k"),
-            outputCostPer1k = cost?.doubleField("output") ?: modelObject.doubleField("outputCostPer1k"),
-        )
-    }
-}
-
-private fun coalesceLong(vararg values: Long?): Long {
-    return values.firstOrNull { it != null } ?: 0L
-}
-
-private fun coalesceLongOrNull(vararg values: Long?): Long? {
-    return values.firstOrNull { it != null }
-}
-
-private fun coalesceInt(vararg values: Int?): Int {
-    return values.firstOrNull { it != null } ?: 0
-}
-
-private fun coalesceIntOrNull(vararg values: Int?): Int? {
-    return values.firstOrNull { it != null }
-}
-
-private fun coalesceDouble(vararg values: Double?): Double {
-    return values.firstOrNull { it != null } ?: 0.0
-}
-
-private fun coalesceString(vararg values: String?): String? {
-    return values.firstOrNull { !it.isNullOrBlank() }
-}
-
-private fun JsonObject?.longField(fieldName: String): Long? {
-    val value = this?.get(fieldName)?.jsonPrimitive?.contentOrNull ?: return null
-    return value.toLongOrNull()
-}
-
-private fun JsonObject?.intField(fieldName: String): Int? {
-    val value = this?.get(fieldName)?.jsonPrimitive?.contentOrNull ?: return null
-    return value.toIntOrNull()
-}
-
-private fun JsonObject?.doubleField(fieldName: String): Double? {
-    val value = this?.get(fieldName)?.jsonPrimitive?.contentOrNull ?: return null
-    return value.toDoubleOrNull()
+    return runCatching { this?.get(fieldName)?.jsonPrimitive?.contentOrNull?.toBooleanStrictOrNull() }.getOrNull()
 }

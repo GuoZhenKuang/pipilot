@@ -31,7 +31,7 @@ Introduce a Node.js bridge as the network-facing endpoint.
 
 - Clean separation of mobile control plane from raw RPC stream.
 - Central place for auth, process lifecycle, and protocol validation.
-- Enables features unavailable in raw RPC (session list/tree/freshness from JSONL files).
+- Enables features unavailable in raw RPC (cross-project session listing, network policy, and external-file freshness checks). Current Pi RPC provides tree reads.
 - Keeps Android code simpler and transport-focused.
 
 ### Negative

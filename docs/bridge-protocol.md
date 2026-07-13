@@ -103,6 +103,8 @@ If reconnecting with same `clientId`, `resumed` may be `true` and previous `cwd`
 | `bridge_acquire_control` | `bridge_control_acquired` | Acquires write lock for cwd/session |
 | `bridge_release_control` | `bridge_control_released` | Releases held lock |
 
+The bridge also pushes `bridge_session_invalidated { reason }` to the controlling client after mutations observed through the active Pi process, session import/switch, or tree navigation. Clients should immediately run cursor synchronization.
+
 ### `bridge_get_session_tree` filters
 
 Allowed values:
@@ -114,6 +116,8 @@ Allowed values:
 - `labeled-only`
 
 Unknown filter -> `bridge_error` (`invalid_tree_filter`).
+
+The bridge rejects WebSocket messages larger than `BRIDGE_WEBSOCKET_MAX_PAYLOAD_BYTES` (16 MiB by default).
 
 ### `bridge_get_session_freshness`
 
@@ -176,6 +180,7 @@ Notes:
 - writes the uploaded JSONL into the bridge session directory
 - switches the active pi runtime to the imported session
 - filename is sanitized and uniqued server-side to avoid path traversal and overwrites
+- UTF-8 content is limited by `BRIDGE_IMPORT_MAX_BYTES` (10 MiB by default); oversized content returns `import_payload_too_large` without closing the connection
 
 ### `bridge_navigate_tree`
 
@@ -202,7 +207,7 @@ Response payload:
 
 ## RPC Channel Messages
 
-`rpc` channel forwards pi RPC commands/events.
+`rpc` channel forwards pi RPC commands/events unchanged. Android uses `get_entries` for active-session synchronization and `get_tree` for active topology. Cross-project session listing and inactive-session tree browsing remain bridge-owned. Direct tree navigation remains bridge-owned because Pi 0.80.6 does not expose a navigation RPC command.
 
 ### Preconditions for sending RPC payloads
 
@@ -253,6 +258,7 @@ Common codes:
 - `session_tree_failed`
 - `session_freshness_failed`
 - `session_import_failed`
+- `import_payload_too_large`
 
 ## Health Endpoint
 

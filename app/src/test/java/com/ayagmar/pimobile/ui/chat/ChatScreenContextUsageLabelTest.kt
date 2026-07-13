@@ -117,15 +117,5 @@ class ChatScreenContextUsageLabelTest {
     private fun formatContextLabel(
         stats: SessionStats?,
         currentModel: ModelInfo?,
-    ): String {
-        val method =
-            Class.forName(CHAT_SCREEN_FILE_CLASS)
-                .getDeclaredMethod("formatContextUsageLabel", SessionStats::class.java, ModelInfo::class.java)
-        method.isAccessible = true
-        return method.invoke(null, stats, currentModel) as String
-    }
-
-    companion object {
-        private const val CHAT_SCREEN_FILE_CLASS = "com.ayagmar.pimobile.ui.chat.ChatScreenKt"
-    }
+    ): String = formatContextUsageLabel(stats, currentModel)
 }

@@ -1,0 +1,5 @@
+{"type":"agent_start","futureField":"ignored"}
+{"type":"agent_end","messages":[],"willRetry":true,"futureField":"ignored"}
+{"type":"agent_settled","futureField":"ignored"}
+{"type":"compaction_start","reason":"overflow"}
+{"type":"compaction_end","reason":"overflow","result":null,"aborted":false,"willRetry":false,"errorMessage":"quota"}

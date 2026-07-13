@@ -12,6 +12,27 @@ class RpcMessageParserTest {
     private val parser = RpcMessageParser()
 
     @Test
+    fun `parse all sanitized conformance fixtures`() {
+        val fixtureNames = listOf("lifecycle.jsonl", "session-commands.jsonl")
+
+        fixtureNames.forEach { fixtureName ->
+            val resource = checkNotNull(javaClass.getResourceAsStream("/rpc/$fixtureName"))
+            resource.bufferedReader().useLines { lines ->
+                lines.filter { it.isNotBlank() }.forEach { parser.parse(it) }
+            }
+        }
+    }
+
+    @Test
+    fun `parse agent settled event and retry hint`() {
+        val end = assertIs<AgentEndEvent>(parser.parse("""{"type":"agent_end","willRetry":true}"""))
+        val settled = assertIs<AgentSettledEvent>(parser.parse("""{"type":"agent_settled"}"""))
+
+        assertTrue(end.willRetry)
+        assertEquals("agent_settled", settled.type)
+    }
+
+    @Test
     fun `parse response success`() {
         val line =
             """

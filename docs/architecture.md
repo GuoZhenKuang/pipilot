@@ -59,7 +59,7 @@ sequenceDiagram
     A->>B: bridge_acquire_control
     B-->>A: bridge_control_acquired
 
-    A->>B: rpc:get_state + rpc:get_messages
+    A->>B: rpc:get_state + rpc:get_entries
     B->>P: forward RPC
     P-->>B: response events
     B-->>A: rpc envelopes
@@ -83,8 +83,8 @@ flowchart TD
     C -- Yes --> H[Wait for new bridge_hello]
     H --> S[Re-run bridge_set_cwd]
     S --> L[Re-acquire control lock]
-    L --> G[get_state + get_messages]
-    G --> U[Emit RpcResyncSnapshot]
+    L --> G[get_state + get_entries since lastEntryId]
+    G --> U[Reconcile entries against leafId]
     U --> V[ChatViewModel refreshes timeline/streaming state]
 ```
 
@@ -94,7 +94,7 @@ flowchart TD
 flowchart LR
     A[User selects tree entry] --> B[Android sends bridge_navigate_tree]
     B --> C[Bridge validates cwd + control lock]
-    C --> D[Bridge checks get_commands for pi-mobile-tree]
+    C --> D[Bridge invokes internal pi-mobile-tree command]
     D --> E[Bridge sends rpc prompt: pi-mobile-tree entryId statusKey]
     E --> F[Extension navigates tree + setEditorText + setStatus]
     F --> G[Bridge captures setStatus payload]
@@ -119,6 +119,8 @@ stateDiagram-v2
 - **Bridge is mandatory**: pi RPC is stdio-based; the bridge provides network transport + policy.
 - **Per-cwd subprocesses**: isolates project state and keeps tool cwd semantics correct.
 - **Control lock before RPC**: prevents concurrent writers to the same cwd/session.
-- **Resync after reconnect**: avoids stale UI after transient network failures.
-- **Freshness polling in chat**: detects cross-device/session-file drift and prompts user to sync.
+- **Resync after reconnect**: uses durable entry IDs as cursors and performs one explicit full rebuild when the cursor or local projection is invalid.
+- **Current tree paths**: active sessions use Pi `get_tree`; bridge-owned filesystem reads remain only for inactive-session browsing. The internal extension remains solely for navigation because Pi 0.80.6 has no navigation RPC command.
+- **Freshness monitoring**: bridge-observed mutations push `bridge_session_invalidated` for immediate entry resync. A 60-second foreground-only safety poll covers terminal and other external file edits.
+- **Retained boundary**: [ADR-0004](adr/ADR-0004-retain-rpc-subprocess-boundary.md) records Android → authenticated bridge → one `pi --mode rpc` process per cwd.
 - Decision rationale is captured in [ADRs](adr/README.md).

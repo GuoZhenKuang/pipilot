@@ -2,6 +2,7 @@ package com.ayagmar.pimobile.hosts
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -42,7 +43,7 @@ class SharedPreferencesHostProfileStore(
     }
 
     private fun persist(profiles: List<HostProfile>) {
-        preferences.edit().putString(PROFILES_KEY, encodeProfiles(profiles)).apply()
+        preferences.edit { putString(PROFILES_KEY, encodeProfiles(profiles)) }
     }
 
     private fun encodeProfiles(profiles: List<HostProfile>): String {

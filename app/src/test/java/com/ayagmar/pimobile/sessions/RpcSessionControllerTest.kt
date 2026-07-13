@@ -521,7 +521,11 @@ class RpcSessionControllerTest {
         functionName: String,
         data: JsonObject,
     ): T {
-        val method = sessionControllerKtClass.getDeclaredMethod(functionName, JsonObject::class.java)
+        val method =
+            parserClasses
+                .firstNotNullOfOrNull { parserClass ->
+                    runCatching { parserClass.getDeclaredMethod(functionName, JsonObject::class.java) }.getOrNull()
+                } ?: error("Parser not found: $functionName")
         method.isAccessible = true
         return method.invoke(null, data) as T
     }
@@ -552,6 +556,12 @@ class RpcSessionControllerTest {
     }
 
     private companion object {
-        val sessionControllerKtClass: Class<*> = Class.forName("com.ayagmar.pimobile.sessions.RpcSessionControllerKt")
+        val sessionControllerKtClass: Class<*> =
+            Class.forName("com.ayagmar.pimobile.sessions.RpcSessionControllerKt")
+        val parserClasses =
+            listOf(
+                Class.forName("com.ayagmar.pimobile.sessions.RpcSessionResponseMappersKt"),
+                Class.forName("com.ayagmar.pimobile.sessions.RpcAuxiliaryResponseMappersKt"),
+            )
     }
 }

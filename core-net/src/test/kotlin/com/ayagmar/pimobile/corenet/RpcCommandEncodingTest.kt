@@ -1,9 +1,12 @@
 package com.ayagmar.pimobile.corenet
 
 import com.ayagmar.pimobile.corerpc.AbortRetryCommand
+import com.ayagmar.pimobile.corerpc.CloneCommand
 import com.ayagmar.pimobile.corerpc.CycleModelCommand
 import com.ayagmar.pimobile.corerpc.CycleThinkingLevelCommand
+import com.ayagmar.pimobile.corerpc.GetEntriesCommand
 import com.ayagmar.pimobile.corerpc.GetLastAssistantTextCommand
+import com.ayagmar.pimobile.corerpc.GetTreeCommand
 import com.ayagmar.pimobile.corerpc.NewSessionCommand
 import com.ayagmar.pimobile.corerpc.SetFollowUpModeCommand
 import com.ayagmar.pimobile.corerpc.SetSteeringModeCommand
@@ -14,6 +17,18 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class RpcCommandEncodingTest {
+    @Test
+    fun `encodes current session topology commands`() {
+        val entries = encodeRpcCommand(Json, GetEntriesCommand(id = "entries-1", since = "entry-1"))
+        val tree = encodeRpcCommand(Json, GetTreeCommand(id = "tree-1"))
+        val clone = encodeRpcCommand(Json, CloneCommand(id = "clone-1"))
+
+        assertEquals("get_entries", entries["type"]?.jsonPrimitive?.content)
+        assertEquals("entry-1", entries["since"]?.jsonPrimitive?.content)
+        assertEquals("get_tree", tree["type"]?.jsonPrimitive?.content)
+        assertEquals("clone", clone["type"]?.jsonPrimitive?.content)
+    }
+
     @Test
     fun `encodes cycle model command`() {
         val encoded = encodeRpcCommand(Json, CycleModelCommand(id = "cycle-1"))

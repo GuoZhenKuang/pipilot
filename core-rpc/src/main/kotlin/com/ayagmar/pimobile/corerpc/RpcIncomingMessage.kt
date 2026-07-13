@@ -122,6 +122,12 @@ data class AgentStartEvent(
 data class AgentEndEvent(
     override val type: String,
     val messages: List<JsonObject>? = null,
+    val willRetry: Boolean = false,
+) : RpcEvent
+
+@Serializable
+data class AgentSettledEvent(
+    override val type: String,
 ) : RpcEvent
 
 @Serializable

@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { access, mkdir, unlink, writeFile } from "node:fs/promises";
 import http from "node:http";
@@ -33,6 +34,7 @@ export interface BridgeServer {
 interface BridgeServerDependencies {
     processManager?: PiProcessManager;
     sessionIndexer?: SessionIndexer;
+    probePiVersion?: (command: string) => Promise<string>;
 }
 
 interface ClientConnectionContext {
@@ -82,7 +84,28 @@ const BRIDGE_GET_SESSION_FRESHNESS_TYPE = "bridge_get_session_freshness";
 const BRIDGE_SESSION_FRESHNESS_TYPE = "bridge_session_freshness";
 const BRIDGE_IMPORT_SESSION_JSONL_TYPE = "bridge_import_session_jsonl";
 const BRIDGE_SESSION_IMPORTED_TYPE = "bridge_session_imported";
+const BRIDGE_SESSION_INVALIDATED_TYPE = "bridge_session_invalidated";
 const BRIDGE_INTERNAL_RPC_TIMEOUT_MS = 10_000;
+const PI_VERSION_PROBE_TIMEOUT_MS = 3_000;
+
+export async function probePiVersion(command: string): Promise<string> {
+    return await new Promise<string>((resolve, reject) => {
+        execFile(command, ["--version"], { timeout: PI_VERSION_PROBE_TIMEOUT_MS }, (error, stdout) => {
+            if (error) {
+                reject(new Error(`Unable to run ${command} --version: ${error.message}`));
+                return;
+            }
+
+            const version = stdout.trim();
+            if (!version) {
+                reject(new Error(`${command} --version returned no version`));
+                return;
+            }
+
+            resolve(version);
+        });
+    });
+}
 
 export function buildPiRpcArgs(sessionDirectory: string): string[] {
     return [
@@ -104,7 +127,11 @@ export function createBridgeServer(
 ): BridgeServer {
     const startedAt = Date.now();
 
-    const wsServer = new WebSocketServer({ noServer: true });
+    const wsServer = new WebSocketServer({
+        noServer: true,
+        maxPayload: config.websocketMaxPayloadBytes,
+    });
+    const piVersionProbe = dependencies.probePiVersion ?? probePiVersion;
     const processManager = dependencies.processManager ??
         createPiProcessManager({
             idleTtlMs: config.processIdleTtlMs,
@@ -112,7 +139,7 @@ export function createBridgeServer(
             forwarderFactory: (cwd: string) => {
                 return createPiRpcForwarder(
                     {
-                        command: "pi",
+                        command: config.piCommand,
                         args: buildPiRpcArgs(config.sessionDirectory),
                         cwd,
                     },
@@ -240,6 +267,20 @@ export function createBridgeServer(
             clearRuntimeLeafOverridesForCwd(event.cwd);
         }
 
+        if (isSessionMutationEvent(event.payload)) {
+            const invalidationEnvelope = JSON.stringify(
+                createBridgeEnvelope({
+                    type: BRIDGE_SESSION_INVALIDATED_TYPE,
+                    reason: sessionMutationReason(event.payload),
+                }),
+            );
+            for (const [client, context] of clientContexts.entries()) {
+                if (client.readyState !== WsWebSocket.OPEN) continue;
+                if (!canReceiveRpcEvent(context, event.cwd, processManager)) continue;
+                client.send(invalidationEnvelope);
+            }
+        }
+
         if (consumedByInternalWaiter) {
             return;
         }
@@ -339,6 +380,9 @@ export function createBridgeServer(
 
     return {
         async start(): Promise<BridgeServerStartInfo> {
+            const piVersion = await piVersionProbe(config.piCommand);
+            logger.info({ command: config.piCommand, version: piVersion }, "Detected Pi executable");
+
             await new Promise<void>((resolve) => {
                 server.listen(config.port, config.host, () => {
                     resolve();
@@ -666,6 +710,19 @@ async function handleBridgeControlMessage(
             return;
         }
 
+        const contentBytes = Buffer.byteLength(content, "utf8");
+        if (contentBytes > config.importMaxBytes) {
+            client.send(
+                JSON.stringify(
+                    createBridgeErrorEnvelope(
+                        "import_payload_too_large",
+                        `Import exceeds the ${config.importMaxBytes} byte limit`,
+                    ),
+                ),
+            );
+            return;
+        }
+
         const requestedFileName = typeof payload.fileName === "string" ? payload.fileName : undefined;
 
         try {
@@ -759,6 +816,14 @@ async function handleBridgeControlMessage(
                 );
             }
 
+            client.send(
+                JSON.stringify(
+                    createBridgeEnvelope({
+                        type: BRIDGE_SESSION_INVALIDATED_TYPE,
+                        reason: "navigation",
+                    }),
+                ),
+            );
             client.send(
                 JSON.stringify(
                     createBridgeEnvelope({
@@ -908,25 +973,6 @@ async function navigateTreeUsingCommand(options: {
 }): Promise<TreeNavigationResultPayload> {
     const { cwd, entryId, processManager, awaitRpcEvent } = options;
 
-    const getCommandsRequestId = randomUUID();
-    const getCommandsResponsePromise = awaitRpcEvent(
-        cwd,
-        (payload) => isRpcResponseForId(payload, getCommandsRequestId),
-        { consume: true },
-    );
-
-    processManager.sendRpc(cwd, {
-        id: getCommandsRequestId,
-        type: "get_commands",
-    });
-
-    const getCommandsResponse = await getCommandsResponsePromise;
-    ensureSuccessfulRpcResponse(getCommandsResponse, "get_commands");
-
-    if (!hasTreeNavigationCommand(getCommandsResponse, TREE_NAVIGATION_COMMAND)) {
-        throw new Error("Tree navigation command is unavailable in this runtime");
-    }
-
     const navigationRequestId = randomUUID();
     const operationId = randomUUID();
     const statusKey = `${TREE_NAVIGATION_STATUS_PREFIX}${operationId}`;
@@ -954,16 +1000,6 @@ async function navigateTreeUsingCommand(options: {
 
     const statusResponse = await statusResponsePromise;
     return parseTreeNavigationResult(statusResponse);
-}
-
-function hasTreeNavigationCommand(responsePayload: Record<string, unknown>, commandName: string): boolean {
-    const data = asRecord(responsePayload.data);
-    const commands = Array.isArray(data?.commands) ? data.commands : [];
-
-    return commands.some((command) => {
-        const commandObject = asRecord(command);
-        return commandObject?.name === commandName;
-    });
 }
 
 function isTreeNavigationStatusEvent(payload: Record<string, unknown>, statusKey: string): boolean {
@@ -1187,6 +1223,34 @@ function handleRpcEnvelope(
             ),
         );
     }
+}
+
+function isSessionMutationEvent(payload: Record<string, unknown>): boolean {
+    if (payload.type === "message_end" || payload.type === "compaction_end") {
+        return true;
+    }
+
+    if (payload.type !== "response" || payload.success !== true) {
+        return false;
+    }
+
+    return typeof payload.command === "string" && [
+        "prompt",
+        "bash",
+        "compact",
+        "fork",
+        "clone",
+        "new_session",
+        "switch_session",
+        "set_session_name",
+    ].includes(payload.command);
+}
+
+function sessionMutationReason(payload: Record<string, unknown>): string {
+    if (typeof payload.command === "string") {
+        return payload.command;
+    }
+    return typeof payload.type === "string" ? payload.type : "runtime";
 }
 
 function restoreOrCreateContext(

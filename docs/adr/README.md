@@ -9,6 +9,7 @@ This directory tracks durable architecture decisions for Pi Mobile.
 | [ADR-0001](ADR-0001-bridge-required.md) | Use a bridge between Android and pi RPC | Accepted | 2026-02-18 |
 | [ADR-0002](ADR-0002-cwd-process-and-locking.md) | Isolate runtime by cwd and enforce control locks | Accepted | 2026-02-18 |
 | [ADR-0003](ADR-0003-reconnect-resync-and-freshness.md) | Recover with resync and protect against cross-device drift | Accepted | 2026-02-18 |
+| [ADR-0004](ADR-0004-retain-rpc-subprocess-boundary.md) | Retain the RPC subprocess boundary | Accepted | 2026-07-13 |
 
 ## Notes
 

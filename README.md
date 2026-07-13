@@ -58,6 +58,7 @@ The bridge is a small Node.js service that translates WebSocket to pi's stdin/st
 - [Custom extensions](docs/extensions.md)
 - [Bridge protocol reference](docs/bridge-protocol.md)
 - [Testing guide](docs/testing.md)
+- [Onboarding and recovery](docs/onboarding.md)
 
 > Note: `docs/ai/` contains planning/progress artifacts used during development. User-facing and maintenance docs live in the top-level `docs/` files above.
 
@@ -67,16 +68,19 @@ The bridge is a small Node.js service that translates WebSocket to pi's stdin/st
 
 Install pi if you haven't:
 ```bash
-npm install -g @mariozechner/pi-coding-agent
+npm install -g @earendil-works/pi-coding-agent@^0.80.6
+pi --version # minimum and tested version: 0.80.6
 ```
 
 Clone and start the bridge:
 ```bash
-git clone https://github.com/yourusername/pi-mobile.git
+git clone https://github.com/ayagmar/pi-mobile.git
 cd pi-mobile/bridge
 pnpm install
 # create .env and set BRIDGE_AUTH_TOKEN (see Configuration section below)
 pnpm start
+# In another shell, when BRIDGE_ENABLE_HEALTH_ENDPOINT=true:
+curl --fail http://127.0.0.1:8787/health
 ```
 
 The bridge binds to `127.0.0.1:8787` by default. Set `BRIDGE_HOST` to your laptop Tailscale IP to allow phone access (avoid `0.0.0.0` unless you enforce firewall restrictions). It spawns pi processes on demand per working directory.
@@ -91,15 +95,24 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 ### 3. Connect
 
-1. Add a host in the app:
+1. With the bridge configured, print a pairing code:
+
+   ```bash
+   cd bridge
+   pnpm pair
+   ```
+
+2. In Pi Mobile, open **Hosts**, tap **Scan QR**, scan the terminal code, review the populated connection, and save it. The QR uses the existing `BRIDGE_AUTH_TOKEN`; keep it private. If automatic Tailscale hostname discovery is unavailable, run `pnpm pair -- --host <reachable-hostname>`.
+
+3. Manual entry remains available:
    - Host: your laptop's Tailscale MagicDNS hostname (`<device>.<tailnet>.ts.net`)
    - Port: `8787` (or whatever the bridge uses)
    - Use TLS: off for local/Tailscale bridge unless you've put TLS in front
-   - Token: set this in `bridge/.env` as `BRIDGE_AUTH_TOKEN`
+   - Token: set this in `bridge/.env` as `BRIDGE_AUTH_TOKEN`; stored tokens are never displayed
 
-2. The app will fetch your sessions from `~/.pi/agent/sessions/` (or `BRIDGE_SESSION_DIR` if overridden)
+4. Use the connection test to distinguish network, authentication, and Pi readiness failures. The app fetches sessions from `~/.pi/agent/sessions/` (or `BRIDGE_SESSION_DIR` if overridden).
 
-3. Tap a session to resume it
+5. Tap a session to resume it.
 
 ## How It Works
 
@@ -191,7 +204,7 @@ benchmark/        - Macrobenchmark / baseline profile scaffolding
 
 ### Running Tests
 
-Use JDK 21 for Android and Gradle work in this repo.
+Use JDK 21, Android SDK 36, Node 22+, and pnpm 10 for this repo. See [the dependency matrix](docs/dependency-matrix.md).
 
 ```bash
 # Android tests
@@ -203,8 +216,8 @@ cd bridge && pnpm test
 # Bridge full checks (lint + typecheck + tests)
 cd bridge && pnpm run check
 
-# All Android quality checks
-./gradlew ktlintCheck detekt test
+# Complete non-device Android gate
+./gradlew clean ktlintCheck detekt test :app:lintDebug :app:assembleDebug :app:assembleRelease
 ```
 
 ### Logs to Watch
@@ -238,6 +251,9 @@ BRIDGE_RECONNECT_GRACE_MS=30000     # Keep control locks after disconnect (ms)
 BRIDGE_SESSION_DIR=/absolute/path/to/.pi/agent/sessions  # Override the session dir used for indexing and spawned pi runtimes
 BRIDGE_LOG_LEVEL=info               # fatal,error,warn,info,debug,trace,silent
 BRIDGE_ENABLE_HEALTH_ENDPOINT=true  # set false to disable /health endpoint
+BRIDGE_WEBSOCKET_MAX_PAYLOAD_BYTES=16777216 # maximum WebSocket message size (16 MiB)
+BRIDGE_IMPORT_MAX_BYTES=10485760     # maximum UTF-8 JSONL import size (10 MiB)
+BRIDGE_PI_COMMAND=pi                 # Pi executable path/name; probed with --version at startup
 ```
 
 ### App Build Variants

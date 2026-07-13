@@ -9,6 +9,9 @@ const DEFAULT_LOG_LEVEL: LevelWithSilent = "info";
 const DEFAULT_PROCESS_IDLE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_RECONNECT_GRACE_MS = 30 * 1000;
 const DEFAULT_SESSION_DIRECTORY = path.join(os.homedir(), ".pi", "agent", "sessions");
+const DEFAULT_WEBSOCKET_MAX_PAYLOAD_BYTES = 16 * 1024 * 1024;
+const DEFAULT_IMPORT_MAX_BYTES = 10 * 1024 * 1024;
+const DEFAULT_PI_COMMAND = "pi";
 
 export interface BridgeConfig {
     host: string;
@@ -19,6 +22,9 @@ export interface BridgeConfig {
     reconnectGraceMs: number;
     sessionDirectory: string;
     enableHealthEndpoint: boolean;
+    websocketMaxPayloadBytes: number;
+    importMaxBytes: number;
+    piCommand: string;
 }
 
 export function parseBridgeConfig(env: NodeJS.ProcessEnv = process.env): BridgeConfig {
@@ -30,6 +36,17 @@ export function parseBridgeConfig(env: NodeJS.ProcessEnv = process.env): BridgeC
     const reconnectGraceMs = parseReconnectGraceMs(env.BRIDGE_RECONNECT_GRACE_MS);
     const sessionDirectory = parseSessionDirectory(env.BRIDGE_SESSION_DIR);
     const enableHealthEndpoint = parseEnableHealthEndpoint(env.BRIDGE_ENABLE_HEALTH_ENDPOINT);
+    const websocketMaxPayloadBytes = parsePositiveInteger(
+        "BRIDGE_WEBSOCKET_MAX_PAYLOAD_BYTES",
+        env.BRIDGE_WEBSOCKET_MAX_PAYLOAD_BYTES,
+        DEFAULT_WEBSOCKET_MAX_PAYLOAD_BYTES,
+    );
+    const importMaxBytes = parsePositiveInteger(
+        "BRIDGE_IMPORT_MAX_BYTES",
+        env.BRIDGE_IMPORT_MAX_BYTES,
+        DEFAULT_IMPORT_MAX_BYTES,
+    );
+    const piCommand = env.BRIDGE_PI_COMMAND?.trim() || DEFAULT_PI_COMMAND;
 
     return {
         host,
@@ -40,7 +57,21 @@ export function parseBridgeConfig(env: NodeJS.ProcessEnv = process.env): BridgeC
         reconnectGraceMs,
         sessionDirectory,
         enableHealthEndpoint,
+        websocketMaxPayloadBytes,
+        importMaxBytes,
+        piCommand,
     };
+}
+
+function parsePositiveInteger(name: string, raw: string | undefined, defaultValue: number): number {
+    if (!raw) return defaultValue;
+
+    const value = Number(raw);
+    if (!Number.isSafeInteger(value) || value <= 0) {
+        throw new Error(`Invalid ${name}: ${raw}`);
+    }
+
+    return value;
 }
 
 function parsePort(portRaw: string | undefined): number {

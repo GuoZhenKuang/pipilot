@@ -1,10 +1,10 @@
 package com.ayagmar.pimobile.chat
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.ayagmar.pimobile.corenet.ConnectionState
 import com.ayagmar.pimobile.corerpc.AgentEndEvent
+import com.ayagmar.pimobile.corerpc.AgentSettledEvent
 import com.ayagmar.pimobile.corerpc.AssistantTextAssembler
 import com.ayagmar.pimobile.corerpc.AssistantTextUpdate
 import com.ayagmar.pimobile.corerpc.AutoCompactionEndEvent
@@ -19,7 +19,6 @@ import com.ayagmar.pimobile.corerpc.MessageEndEvent
 import com.ayagmar.pimobile.corerpc.MessageStartEvent
 import com.ayagmar.pimobile.corerpc.MessageUpdateEvent
 import com.ayagmar.pimobile.corerpc.RpcResponse
-import com.ayagmar.pimobile.corerpc.SessionStats
 import com.ayagmar.pimobile.corerpc.ToolExecutionEndEvent
 import com.ayagmar.pimobile.corerpc.ToolExecutionStartEvent
 import com.ayagmar.pimobile.corerpc.ToolExecutionUpdateEvent
@@ -27,11 +26,9 @@ import com.ayagmar.pimobile.corerpc.TurnEndEvent
 import com.ayagmar.pimobile.corerpc.TurnStartEvent
 import com.ayagmar.pimobile.corerpc.UiUpdateThrottler
 import com.ayagmar.pimobile.perf.PerformanceMetrics
-import com.ayagmar.pimobile.sessions.ModelInfo
 import com.ayagmar.pimobile.sessions.SessionController
 import com.ayagmar.pimobile.sessions.SessionFreshnessFingerprint
 import com.ayagmar.pimobile.sessions.SessionFreshnessSnapshot
-import com.ayagmar.pimobile.sessions.SessionTreeSnapshot
 import com.ayagmar.pimobile.sessions.SlashCommandInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -45,17 +42,11 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import java.util.UUID
 
-private const val HISTORY_WINDOW_MAX_ITEMS = 1_200
+internal const val HISTORY_WINDOW_MAX_ITEMS = 1_200
 
 @Suppress("TooManyFunctions", "LargeClass")
 class ChatViewModel(
@@ -80,6 +71,7 @@ class ChatViewModel(
     private var streamingDiagnosticsRunActive = false
     private var streamingDiagnosticsRunStartedAtMs: Long = 0
     private var sessionFreshnessMonitorJob: Job? = null
+    private var isChatActive = false
     private var latestSessionPath: String? = null
     private var lastKnownSessionFreshness: SessionFreshnessFingerprint? = null
     private var localSessionMutationGraceUntilMs: Long = 0
@@ -209,10 +201,11 @@ class ChatViewModel(
     }
 
     private suspend fun encodePendingImages(pendingImages: List<PendingImage>): List<ImagePayload> {
+        val encoder = imageEncoder
+        if (encoder == null || pendingImages.isEmpty()) return emptyList()
+
         return withContext(Dispatchers.Default) {
-            pendingImages.mapNotNull { pending ->
-                imageEncoder?.encodeToPayload(pending)
-            }
+            pendingImages.mapNotNull(encoder::encodeToPayload)
         }
     }
 
@@ -713,8 +706,17 @@ class ChatViewModel(
         }
     }
 
+    fun onChatActiveChanged(active: Boolean) {
+        isChatActive = active
+        if (active && sessionController.connectionState.value == ConnectionState.CONNECTED) {
+            startSessionFreshnessMonitor()
+        } else if (!active) {
+            stopSessionFreshnessMonitor()
+        }
+    }
+
     private fun startSessionFreshnessMonitor() {
-        if (sessionFreshnessMonitorJob?.isActive == true || isSessionFreshnessUnsupported) {
+        if (!isChatActive || sessionFreshnessMonitorJob?.isActive == true || isSessionFreshnessUnsupported) {
             return
         }
 
@@ -733,6 +735,9 @@ class ChatViewModel(
     }
 
     private suspend fun refreshSessionFreshness(trigger: FreshnessCheckTrigger) {
+        if (trigger == FreshnessCheckTrigger.POLL) {
+            sessionController.recordSafetyPoll()
+        }
         if (isSessionFreshnessUnsupported) {
             return
         }
@@ -940,6 +945,14 @@ class ChatViewModel(
         }
 
         viewModelScope.launch {
+            sessionController.timelineInvalidated.collect {
+                if (initialLoadJob?.isActive != true) {
+                    loadInitialMessages(reason = TimelineReloadReason.CONNECTION_RECOVERY)
+                }
+            }
+        }
+
+        viewModelScope.launch {
             sessionController.rpcEvents.collect { event ->
                 when (event) {
                     is MessageUpdateEvent -> handleMessageUpdate(event)
@@ -977,6 +990,7 @@ class ChatViewModel(
                         logThinkingDiagnostics(reason = "agent_end")
                         logStreamingDiagnostics(reason = "agent_end")
                     }
+                    is AgentSettledEvent -> handleAgentSettled()
                     else -> Unit
                 }
             }
@@ -1151,6 +1165,11 @@ class ChatViewModel(
     }
 
     private fun handleTurnEnd() {
+        // Refresh stats after each low-level turn while keeping the run active until agent_settled.
+        loadSessionStats()
+    }
+
+    private fun handleAgentSettled() {
         clearStreamingTimelineFlags()
         _uiState.update {
             it.copy(
@@ -1158,9 +1177,6 @@ class ChatViewModel(
                 pendingQueueItems = emptyList(),
             )
         }
-
-        // Refresh stats at turn end so context/cost indicators stay current.
-        loadSessionStats()
     }
 
     private fun handleExtensionError(event: ExtensionErrorEvent) {
@@ -2776,477 +2792,10 @@ class ChatViewModel(
         private const val STREAMING_DIAGNOSTICS_LOG_TAG = "StreamingDiagnostics"
         private const val SESSION_COHERENCY_WARNING_MESSAGE =
             "Potential cross-device session edits detected. Use Sync now before continuing."
-        private const val SESSION_FRESHNESS_POLL_INTERVAL_MS = 4_000L
+
+        // Safety fallback for edits made outside the bridge; bridge-observed mutations resync separately.
+        private const val SESSION_FRESHNESS_POLL_INTERVAL_MS = 60_000L
         private const val SESSION_FRESHNESS_WARNING_COOLDOWN_MS = 20_000L
         private const val LOCAL_SESSION_MUTATION_GRACE_MS = 90_000L
     }
-}
-
-data class ChatUiState(
-    val isLoading: Boolean = false,
-    val connectionState: ConnectionState = ConnectionState.DISCONNECTED,
-    val isStreaming: Boolean = false,
-    val isRetrying: Boolean = false,
-    val timeline: List<ChatTimelineItem> = emptyList(),
-    val hasOlderMessages: Boolean = false,
-    val hiddenHistoryCount: Int = 0,
-    val inputText: String = "",
-    val errorMessage: String? = null,
-    val currentModel: ModelInfo? = null,
-    val thinkingLevel: String? = null,
-    val sessionName: String? = null,
-    val pendingMessageCount: Int = 0,
-    val activeExtensionRequest: ExtensionUiRequest? = null,
-    val notifications: List<ExtensionNotification> = emptyList(),
-    val extensionWidgets: Map<String, ExtensionWidget> = emptyMap(),
-    val extensionStatuses: Map<String, String> = emptyMap(),
-    val extensionTitle: String? = null,
-    val isCommandPaletteVisible: Boolean = false,
-    val isCommandPaletteAutoOpened: Boolean = false,
-    val commands: List<SlashCommandInfo> = emptyList(),
-    val commandsQuery: String = "",
-    val isLoadingCommands: Boolean = false,
-    val steeringMode: String = ChatViewModel.DELIVERY_MODE_ONE_AT_A_TIME,
-    val followUpMode: String = ChatViewModel.DELIVERY_MODE_ONE_AT_A_TIME,
-    val pendingQueueItems: List<PendingQueueItem> = emptyList(),
-    val pendingClipboardText: String? = null,
-    val pendingImportRequestToken: String? = null,
-    val isSyncingSession: Boolean = false,
-    val sessionCoherencyWarning: String? = null,
-    // Bash dialog state
-    val isBashDialogVisible: Boolean = false,
-    val bashCommand: String = "",
-    val bashOutput: String = "",
-    val bashExitCode: Int? = null,
-    val isBashExecuting: Boolean = false,
-    val bashWasTruncated: Boolean = false,
-    val bashFullLogPath: String? = null,
-    val bashHistory: List<String> = emptyList(),
-    // Tool argument expansion state (per tool ID)
-    val expandedToolArguments: Set<String> = emptySet(),
-    // Session stats state
-    val isStatsSheetVisible: Boolean = false,
-    val sessionStats: SessionStats? = null,
-    val isLoadingStats: Boolean = false,
-    // Model picker state
-    val isModelPickerVisible: Boolean = false,
-    val availableModels: List<AvailableModel> = emptyList(),
-    val modelsQuery: String = "",
-    val isLoadingModels: Boolean = false,
-    // Session tree state
-    val isTreeSheetVisible: Boolean = false,
-    val treeFilter: String = ChatViewModel.TREE_FILTER_DEFAULT,
-    val sessionTree: SessionTreeSnapshot? = null,
-    val isLoadingTree: Boolean = false,
-    val treeErrorMessage: String? = null,
-    // Image attachments
-    val pendingImages: List<PendingImage> = emptyList(),
-)
-
-data class PendingImage(
-    val uri: String,
-    val mimeType: String,
-    val sizeBytes: Long,
-    val displayName: String?,
-)
-
-data class PendingQueueItem(
-    val id: String,
-    val type: PendingQueueType,
-    val message: String,
-    val mode: String,
-)
-
-enum class PendingQueueType {
-    STEER,
-    FOLLOW_UP,
-}
-
-data class ExtensionNotification(
-    val message: String,
-    val type: String,
-)
-
-data class ExtensionWidget(
-    val lines: List<String>,
-    val placement: String,
-)
-
-sealed interface ExtensionUiRequest {
-    val requestId: String
-
-    data class Select(
-        override val requestId: String,
-        val title: String,
-        val options: List<String>,
-    ) : ExtensionUiRequest
-
-    data class Confirm(
-        override val requestId: String,
-        val title: String,
-        val message: String,
-    ) : ExtensionUiRequest
-
-    data class Input(
-        override val requestId: String,
-        val title: String,
-        val placeholder: String?,
-    ) : ExtensionUiRequest
-
-    data class Editor(
-        override val requestId: String,
-        val title: String,
-        val prefill: String,
-    ) : ExtensionUiRequest
-}
-
-sealed interface ChatTimelineItem {
-    val id: String
-
-    data class User(
-        override val id: String,
-        val text: String,
-        val imageCount: Int = 0,
-        val imageUris: List<String> = emptyList(),
-    ) : ChatTimelineItem
-
-    data class Assistant(
-        override val id: String,
-        val text: String,
-        val thinking: String? = null,
-        val isThinkingExpanded: Boolean = false,
-        val isThinkingComplete: Boolean = false,
-        val isStreaming: Boolean,
-    ) : ChatTimelineItem
-
-    data class Tool(
-        override val id: String,
-        val toolName: String,
-        val output: String,
-        val isCollapsed: Boolean,
-        val isStreaming: Boolean,
-        val isError: Boolean,
-        val arguments: Map<String, String> = emptyMap(),
-        val editDiff: EditDiffInfo? = null,
-        val isDiffExpanded: Boolean = false,
-    ) : ChatTimelineItem
-}
-
-/**
- * Information about a file edit for diff display.
- */
-data class EditDiffInfo(
-    val path: String,
-    val oldString: String,
-    val newString: String,
-)
-
-class ChatViewModelFactory(
-    private val sessionController: SessionController,
-    private val imageEncoder: ImageEncoder? = null,
-) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        check(modelClass == ChatViewModel::class.java) {
-            "Unsupported ViewModel class: ${modelClass.name}"
-        }
-
-        @Suppress("UNCHECKED_CAST")
-        return ChatViewModel(
-            sessionController = sessionController,
-            imageEncoder = imageEncoder,
-        ) as T
-    }
-}
-
-private data class InitialLoadMetadata(
-    val modelInfo: ModelInfo?,
-    val thinkingLevel: String?,
-    val isStreaming: Boolean,
-    val steeringMode: String,
-    val followUpMode: String,
-    val sessionPath: String?,
-    val sessionName: String?,
-    val pendingMessageCount: Int,
-)
-
-private data class DraftClearState(
-    val inputWasCleared: Boolean,
-    val imagesWereCleared: Boolean,
-)
-
-private data class ThinkingDiagnosticsCounters(
-    val startEvents: Int = 0,
-    val deltaEvents: Int = 0,
-    val deltaChars: Int = 0,
-    val endEvents: Int = 0,
-    val endPayloadEvents: Int = 0,
-    val endPayloadChars: Int = 0,
-    val renderedThinkingUpdates: Int = 0,
-    val renderedThinkingCompleteEvents: Int = 0,
-)
-
-private data class StreamingDeltaDiagnosticsCounters(
-    val messageUpdateEvents: Int = 0,
-    val assistantDeltaEvents: Int = 0,
-    val textDeltaEvents: Int = 0,
-    val thinkingDeltaEvents: Int = 0,
-    val assistantNonDeltaEvents: Int = 0,
-    val coalescedDeltaEvents: Int = 0,
-    val emittedImmediateDeltaEvents: Int = 0,
-    val emittedFlushedDeltaEvents: Int = 0,
-)
-
-private data class HistoryMessageWindow(
-    val messages: List<JsonObject>,
-    val absoluteOffset: Int,
-)
-
-private fun historyWindowSignature(messages: List<JsonObject>): String {
-    if (messages.isEmpty()) return "empty"
-
-    val marker =
-        messages
-            .joinToString(separator = "|") { message ->
-                val role = message.stringField("role").orEmpty()
-                val entryId = message.stringField("entryId").orEmpty()
-                "$role:$entryId:${message.toString().hashCode()}"
-            }
-
-    return "${messages.size}:$marker"
-}
-
-private fun extractHistoryMessageWindow(data: JsonObject?): HistoryMessageWindow {
-    val rawMessages = runCatching { data?.get("messages")?.jsonArray }.getOrNull() ?: JsonArray(emptyList())
-    val startIndex = (rawMessages.size - HISTORY_WINDOW_MAX_ITEMS).coerceAtLeast(0)
-
-    val messages =
-        rawMessages
-            .drop(startIndex)
-            .mapNotNull { messageElement ->
-                runCatching { messageElement.jsonObject }.getOrNull()
-            }
-
-    return HistoryMessageWindow(
-        messages = messages,
-        absoluteOffset = startIndex,
-    )
-}
-
-private fun parseHistoryItems(
-    messages: List<JsonObject>,
-    absoluteIndexOffset: Int,
-    startIndex: Int = 0,
-    endExclusive: Int = messages.size,
-): List<ChatTimelineItem> {
-    if (messages.isEmpty()) {
-        return emptyList()
-    }
-
-    val boundedStart = startIndex.coerceIn(0, messages.size)
-    val boundedEnd = endExclusive.coerceIn(boundedStart, messages.size)
-
-    return (boundedStart until boundedEnd).mapNotNull { index ->
-        val message = messages[index]
-        val absoluteIndex = absoluteIndexOffset + index
-
-        when (message.stringField("role")) {
-            "user" -> {
-                val content = message["content"]
-                val text = extractUserText(content)
-                val imageCount = extractUserImageCount(content)
-                ChatTimelineItem.User(
-                    id = "history-user-$absoluteIndex",
-                    text = text,
-                    imageCount = imageCount,
-                )
-            }
-
-            "assistant" -> {
-                val text = extractAssistantText(message["content"])
-                val thinking = extractAssistantThinking(message["content"])
-                ChatTimelineItem.Assistant(
-                    id = "history-assistant-$absoluteIndex",
-                    text = text,
-                    thinking = thinking,
-                    isThinkingComplete = thinking != null,
-                    isStreaming = false,
-                )
-            }
-
-            "toolResult" -> {
-                val output = extractToolOutput(message)
-                ChatTimelineItem.Tool(
-                    id = "history-tool-$absoluteIndex",
-                    toolName = message.stringField("toolName") ?: "tool",
-                    output = output,
-                    isCollapsed = output.length > 400,
-                    isStreaming = false,
-                    isError = message.booleanField("isError") ?: false,
-                    arguments = emptyMap(),
-                    editDiff = null,
-                )
-            }
-
-            else -> null
-        }
-    }
-}
-
-private fun extractUserText(content: JsonElement?): String {
-    return when (content) {
-        null -> ""
-        is JsonObject -> content.stringField("text").orEmpty()
-        else -> {
-            runCatching {
-                when (content) {
-                    is kotlinx.serialization.json.JsonPrimitive -> content.contentOrNull.orEmpty()
-                    else -> {
-                        content.jsonArray
-                            .mapNotNull { block ->
-                                block.jsonObject.takeIf { it.stringField("type") == "text" }?.stringField("text")
-                            }.joinToString("\n")
-                    }
-                }
-            }.getOrDefault("")
-        }
-    }
-}
-
-private fun extractUserImageCount(content: JsonElement?): Int {
-    return runCatching {
-        when (content) {
-            null -> 0
-            is kotlinx.serialization.json.JsonPrimitive -> 0
-            is JsonObject -> {
-                val type = content.stringField("type")?.lowercase().orEmpty()
-                if ("image" in type) 1 else 0
-            }
-            else -> {
-                content.jsonArray.count { block ->
-                    val blockObject = runCatching { block.jsonObject }.getOrNull() ?: return@count false
-                    val type = blockObject.stringField("type")?.lowercase().orEmpty()
-                    type.contains("image") ||
-                        blockObject["image"] != null ||
-                        blockObject["imageUrl"] != null ||
-                        blockObject["image_url"] != null
-                }
-            }
-        }
-    }.getOrDefault(0)
-}
-
-private fun extractAssistantText(content: JsonElement?): String {
-    val contentArray = runCatching { content?.jsonArray }.getOrNull() ?: return ""
-    return contentArray
-        .mapNotNull { block ->
-            val blockObject = block.jsonObject
-            if (blockObject.stringField("type") == "text") {
-                blockObject.stringField("text")
-            } else {
-                null
-            }
-        }.joinToString("\n")
-}
-
-private fun extractAssistantThinking(content: JsonElement?): String? {
-    val contentArray = runCatching { content?.jsonArray }.getOrNull() ?: return null
-    val thinkingBlocks =
-        contentArray
-            .mapNotNull { block ->
-                val blockObject = block.jsonObject
-                if (blockObject.stringField("type") == "thinking") {
-                    blockObject.stringField("thinking")
-                } else {
-                    null
-                }
-            }
-    return thinkingBlocks.takeIf { it.isNotEmpty() }?.joinToString("\n")
-}
-
-private fun extractToolOutput(source: JsonObject?): String {
-    return source?.let { jsonSource ->
-        val fromContent =
-            runCatching {
-                jsonSource["content"]?.jsonArray
-                    ?.mapNotNull { block ->
-                        val blockObject = block.jsonObject
-                        if (blockObject.stringField("type") == "text") {
-                            blockObject.stringField("text")
-                        } else {
-                            null
-                        }
-                    }?.joinToString("\n")
-            }.getOrNull()
-
-        fromContent?.takeIf { it.isNotBlank() } ?: jsonSource.stringField("output").orEmpty()
-    }.orEmpty()
-}
-
-private fun JsonObject.stringField(fieldName: String): String? {
-    return this[fieldName]?.jsonPrimitive?.contentOrNull
-}
-
-private fun JsonObject.booleanField(fieldName: String): Boolean? {
-    return this[fieldName]?.jsonPrimitive?.contentOrNull?.toBooleanStrictOrNull()
-}
-
-private fun JsonObject.intField(fieldName: String): Int? {
-    return this[fieldName]?.jsonPrimitive?.intOrNull
-}
-
-private fun JsonObject?.deliveryModeField(
-    camelCaseKey: String,
-    snakeCaseKey: String,
-): String {
-    val value =
-        this?.get(camelCaseKey)?.jsonPrimitive?.contentOrNull
-            ?: this?.get(snakeCaseKey)?.jsonPrimitive?.contentOrNull
-
-    return value?.takeIf {
-        it == ChatViewModel.DELIVERY_MODE_ALL || it == ChatViewModel.DELIVERY_MODE_ONE_AT_A_TIME
-    } ?: ChatViewModel.DELIVERY_MODE_ONE_AT_A_TIME
-}
-
-private fun parseModelInfo(data: JsonObject?): ModelInfo? {
-    val model = data?.get("model") as? JsonObject ?: return null
-    return ModelInfo(
-        id = model.stringField("id") ?: "unknown",
-        name = model.stringField("name") ?: "Unknown Model",
-        provider = model.stringField("provider") ?: "unknown",
-        thinkingLevel = data.stringField("thinkingLevel") ?: "off",
-        contextWindow = model.intField("contextWindow"),
-    )
-}
-
-/**
- * Extracts tool arguments from JSON object as a map of string keys to string values.
- * Only extracts primitive string arguments for display purposes.
- */
-private fun extractToolArguments(args: JsonObject?): Map<String, String> {
-    if (args == null) return emptyMap()
-    return args
-        .mapNotNull { (key, value) ->
-            when {
-                value is kotlinx.serialization.json.JsonPrimitive &&
-                    value.isString -> key to value.content
-                else -> null
-            }
-        }.toMap()
-}
-
-/**
- * Extracts edit tool diff information from arguments.
- * Returns null if not an edit tool or required fields are missing.
- */
-@Suppress("ReturnCount")
-private fun extractEditDiff(args: JsonObject?): EditDiffInfo? {
-    if (args == null) return null
-    val path = args.stringField("path") ?: return null
-    val oldString = args.stringField("oldString") ?: return null
-    val newString = args.stringField("newString") ?: return null
-    return EditDiffInfo(
-        path = path,
-        oldString = oldString,
-        newString = newString,
-    )
 }

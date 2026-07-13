@@ -10,17 +10,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.MenuOpen
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.MenuOpen
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.DrawerValue
@@ -84,7 +83,7 @@ private val destinations =
         AppDestination(
             route = "chat",
             label = "Chat",
-            icon = Icons.Default.Chat,
+            icon = Icons.AutoMirrored.Filled.Chat,
         ),
         AppDestination(
             route = "settings",
@@ -177,7 +176,7 @@ private fun DrawerDestinationItem(
 
 @Suppress("LongMethod")
 @Composable
-fun piMobileApp(appGraph: AppGraph) {
+fun PiMobileApp(appGraph: AppGraph) {
     val context = LocalContext.current
     val settingsPrefs =
         remember(context) {
@@ -230,19 +229,13 @@ fun piMobileApp(appGraph: AppGraph) {
             }
         }
 
-        val startDestination =
-            remember(appGraph) {
-                if (appGraph.hostProfileStore.list().isEmpty()) {
-                    "hosts"
-                } else {
-                    "sessions"
-                }
-            }
+        val hasConfiguredHost = remember(appGraph) { appGraph.hostProfileStore.list().isNotEmpty() }
+        val startDestination = if (hasConfiguredHost) "sessions" else "hosts"
+        val availableDestinations = destinations.filter { destination -> destination.route != "chat" }
 
         ModalNavigationDrawer(
             drawerState = drawerState,
             gesturesEnabled = drawerState.isOpen,
-            scrimColor = Color.Transparent,
             drawerContent = {
                 ModalDrawerSheet(
                     modifier = Modifier.widthIn(min = 220.dp, max = 270.dp),
@@ -281,7 +274,7 @@ fun piMobileApp(appGraph: AppGraph) {
                             modifier = Modifier.padding(horizontal = 8.dp),
                         )
 
-                        destinations.forEach { destination ->
+                        availableDestinations.forEach { destination ->
                             DrawerDestinationItem(
                                 destination = destination,
                                 selected = currentRoute == destination.route,
@@ -302,13 +295,16 @@ fun piMobileApp(appGraph: AppGraph) {
                     NavHost(
                         navController = navController,
                         startDestination = startDestination,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().padding(top = 56.dp),
                     ) {
                         composable(route = "hosts") {
                             HostsRoute(
                                 profileStore = appGraph.hostProfileStore,
                                 tokenStore = appGraph.hostTokenStore,
                                 diagnostics = appGraph.connectionDiagnostics,
+                                onHostSaved = {
+                                    navigateTo("sessions")
+                                },
                             )
                         }
                         composable(route = "sessions") {
@@ -341,11 +337,11 @@ fun piMobileApp(appGraph: AppGraph) {
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
                         modifier =
                             Modifier
-                                .align(Alignment.CenterStart)
-                                .offset(x = (-8).dp),
+                                .align(Alignment.TopStart)
+                                .padding(8.dp),
                     ) {
                         FilledTonalIconButton(
-                            modifier = Modifier.size(34.dp),
+                            modifier = Modifier.size(48.dp),
                             onClick = {
                                 scope.launch {
                                     if (drawerState.isOpen) {
@@ -357,7 +353,12 @@ fun piMobileApp(appGraph: AppGraph) {
                             },
                         ) {
                             Icon(
-                                imageVector = if (drawerState.isOpen) Icons.Default.MenuOpen else Icons.Default.Menu,
+                                imageVector =
+                                    if (drawerState.isOpen) {
+                                        Icons.AutoMirrored.Filled.MenuOpen
+                                    } else {
+                                        Icons.Default.Menu
+                                    },
                                 contentDescription =
                                     if (drawerState.isOpen) {
                                         "Close left navigation"

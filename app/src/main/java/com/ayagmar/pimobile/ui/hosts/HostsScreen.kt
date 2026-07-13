@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -18,6 +19,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -29,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -43,12 +46,20 @@ import com.ayagmar.pimobile.hosts.HostTokenStore
 import com.ayagmar.pimobile.hosts.HostsUiState
 import com.ayagmar.pimobile.hosts.HostsViewModel
 import com.ayagmar.pimobile.hosts.HostsViewModelFactory
+import com.ayagmar.pimobile.hosts.parseHostPairingPayload
+import com.ayagmar.pimobile.hosts.toRecoveryMessage
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.CommonStatusCodes
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 
 @Composable
 fun HostsRoute(
     profileStore: HostProfileStore,
     tokenStore: HostTokenStore,
     diagnostics: ConnectionDiagnostics,
+    onHostSaved: () -> Unit = {},
 ) {
     val factory =
         remember(profileStore, tokenStore, diagnostics) {
@@ -62,28 +73,32 @@ fun HostsRoute(
     val uiState by hostsViewModel.uiState.collectAsStateWithLifecycle()
 
     var editorDraft by remember { mutableStateOf<HostDraft?>(null) }
+    var scanError by remember { mutableStateOf<String?>(null) }
+    val scanPairingCode =
+        rememberPairingScanner { result ->
+            result
+                .onSuccess { draft -> editorDraft = draft }
+                .onFailure { error -> scanError = error.message ?: "Could not read pairing QR" }
+        }
+    val actions =
+        HostsScreenActions(
+            onAddClick = {
+                scanError = null
+                editorDraft = HostDraft()
+            },
+            onScanClick = {
+                scanError = null
+                scanPairingCode()
+            },
+            onEditClick = { item -> editorDraft = item.toDraft() },
+            onDeleteClick = hostsViewModel::deleteHost,
+            onTestClick = hostsViewModel::testConnection,
+        )
 
     HostsScreen(
         state = uiState,
-        onAddClick = {
-            editorDraft = HostDraft()
-        },
-        onEditClick = { item ->
-            editorDraft =
-                HostDraft(
-                    id = item.profile.id,
-                    name = item.profile.name,
-                    host = item.profile.host,
-                    port = item.profile.port.toString(),
-                    useTls = item.profile.useTls,
-                )
-        },
-        onDeleteClick = { hostId ->
-            hostsViewModel.deleteHost(hostId)
-        },
-        onTestClick = { hostId ->
-            hostsViewModel.testConnection(hostId)
-        },
+        scanError = scanError,
+        actions = actions,
     )
 
     val activeDraft = editorDraft
@@ -94,42 +109,81 @@ fun HostsRoute(
                 editorDraft = null
             },
             onSave = { draft ->
-                hostsViewModel.saveHost(draft)
-                editorDraft = null
+                hostsViewModel.saveHost(draft) {
+                    onHostSaved()
+                    editorDraft = null
+                }
             },
         )
     }
 }
 
 @Composable
+private fun rememberPairingScanner(onResult: (Result<HostDraft>) -> Unit): () -> Unit {
+    val context = LocalContext.current
+    val scanner =
+        remember(context) {
+            val options =
+                GmsBarcodeScannerOptions.Builder()
+                    .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                    .enableAutoZoom()
+                    .build()
+            GmsBarcodeScanning.getClient(context, options)
+        }
+
+    return {
+        scanner.startScan()
+            .addOnSuccessListener { barcode ->
+                val rawValue = barcode.rawValue
+                val result =
+                    if (rawValue == null) {
+                        Result.failure(IllegalArgumentException("The QR code did not contain connection details"))
+                    } else {
+                        parseHostPairingPayload(rawValue)
+                    }
+                onResult(result)
+            }
+            .addOnFailureListener { error ->
+                if (error !is ApiException || error.statusCode != CommonStatusCodes.CANCELED) {
+                    onResult(Result.failure(IllegalStateException("Could not open the QR scanner")))
+                }
+            }
+    }
+}
+
+private fun HostProfileItem.toDraft(): HostDraft =
+    HostDraft(
+        id = profile.id,
+        name = profile.name,
+        host = profile.host,
+        port = profile.port.toString(),
+        useTls = profile.useTls,
+    )
+
+private data class HostsScreenActions(
+    val onAddClick: () -> Unit,
+    val onScanClick: () -> Unit,
+    val onEditClick: (HostProfileItem) -> Unit,
+    val onDeleteClick: (String) -> Unit,
+    val onTestClick: (String) -> Unit,
+)
+
+@Composable
 private fun HostsScreen(
     state: HostsUiState,
-    onAddClick: () -> Unit,
-    onEditClick: (HostProfileItem) -> Unit,
-    onDeleteClick: (String) -> Unit,
-    onTestClick: (String) -> Unit,
+    scanError: String?,
+    actions: HostsScreenActions,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Hosts",
-                style = MaterialTheme.typography.headlineSmall,
-            )
-            Button(onClick = onAddClick) {
-                Text("Add host")
-            }
-        }
+        HostsHeader(actions = actions)
 
-        state.errorMessage?.let { errorMessage ->
+        HostStateMessages(state)
+        scanError?.let { message ->
             Text(
-                text = errorMessage,
+                text = message,
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -146,9 +200,9 @@ private fun HostsScreen(
         }
 
         if (state.profiles.isEmpty()) {
-            Text(
-                text = "No hosts configured yet.",
-                style = MaterialTheme.typography.bodyLarge,
+            FirstRunConnectionCard(
+                onScanClick = actions.onScanClick,
+                onAddClick = actions.onAddClick,
             )
             return
         }
@@ -163,10 +217,92 @@ private fun HostsScreen(
                 HostCard(
                     item = item,
                     diagnosticResult = state.diagnosticResults[item.profile.id],
-                    onEditClick = { onEditClick(item) },
-                    onDeleteClick = { onDeleteClick(item.profile.id) },
-                    onTestClick = { onTestClick(item.profile.id) },
+                    onEditClick = { actions.onEditClick(item) },
+                    onDeleteClick = { actions.onDeleteClick(item.profile.id) },
+                    onTestClick = { actions.onTestClick(item.profile.id) },
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HostsHeader(actions: HostsScreenActions) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "Hosts",
+            style = MaterialTheme.typography.headlineSmall,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = actions.onScanClick) {
+                Icon(
+                    imageVector = Icons.Default.QrCodeScanner,
+                    contentDescription = null,
+                )
+                Text("Scan QR")
+            }
+            Button(onClick = actions.onAddClick) {
+                Text("Add host")
+            }
+        }
+    }
+}
+
+@Composable
+private fun HostStateMessages(state: HostsUiState) {
+    if (state.requiresTokenReentry) {
+        Text(
+            text = "Token protection was updated. Re-enter a token when you next use each connection.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    state.errorMessage?.let { errorMessage ->
+        Text(
+            text = errorMessage,
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+}
+
+@Composable
+private fun FirstRunConnectionCard(
+    onScanClick: () -> Unit,
+    onAddClick: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Connect your computer", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                text =
+                    "Before continuing, start the Pi Mobile bridge on your computer " +
+                        "and connect both devices through Tailscale.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text("Run pnpm pair in the bridge folder, then scan the code shown in your terminal.")
+            Button(
+                onClick = onScanClick,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.QrCodeScanner,
+                    contentDescription = null,
+                )
+                Text("Scan pairing QR")
+            }
+            TextButton(
+                onClick = onAddClick,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Enter connection manually")
             }
         }
     }
@@ -269,11 +405,12 @@ private fun DiagnosticStatusIcon(status: DiagnosticStatus) {
 
 @Composable
 private fun DiagnosticResultDetail(result: DiagnosticsResult) {
+    val recovery = result.toRecoveryMessage()
     when (result) {
         is DiagnosticsResult.Success -> {
             Column {
                 Text(
-                    text = "Connected",
+                    text = recovery.title,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -293,21 +430,21 @@ private fun DiagnosticResultDetail(result: DiagnosticsResult) {
         }
         is DiagnosticsResult.NetworkError -> {
             Text(
-                text = "Network: ${result.message}",
+                text = "${recovery.title}. ${recovery.explanation}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
         }
         is DiagnosticsResult.AuthError -> {
             Text(
-                text = "Auth: ${result.message}",
+                text = "${recovery.title}. ${recovery.explanation}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
         }
         is DiagnosticsResult.RpcError -> {
             Text(
-                text = "RPC: ${result.message}",
+                text = "${recovery.title}. ${recovery.explanation}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
@@ -326,7 +463,7 @@ private fun HostEditorDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(if (initialDraft.id == null) "Add host" else "Edit host")
+            Text(if (initialDraft.id == null) "Connect your computer" else "Edit connection")
         },
         text = {
             HostDraftFields(
@@ -338,7 +475,7 @@ private fun HostEditorDialog(
         },
         confirmButton = {
             TextButton(onClick = { onSave(draft) }) {
-                Text("Save")
+                Text(if (initialDraft.id == null) "Save connection" else "Save")
             }
         },
         dismissButton = {

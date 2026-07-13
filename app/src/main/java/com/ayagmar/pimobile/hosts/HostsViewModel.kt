@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 class HostsViewModel(
@@ -51,6 +52,7 @@ class HostsViewModel(
                     profiles = items,
                     errorMessage = null,
                     diagnosticResults = emptyMap(),
+                    requiresTokenReentry = tokenStore.requiresTokenReentry,
                 )
         }
     }
@@ -114,7 +116,10 @@ class HostsViewModel(
         }
     }
 
-    fun saveHost(draft: HostDraft) {
+    fun saveHost(
+        draft: HostDraft,
+        onSaved: () -> Unit = {},
+    ) {
         when (val validation = draft.validate()) {
             is HostValidationResult.Invalid -> {
                 _uiState.update { state -> state.copy(errorMessage = validation.reason) }
@@ -137,12 +142,15 @@ class HostsViewModel(
                     return
                 }
 
-                viewModelScope.launch(Dispatchers.IO) {
-                    profileStore.upsert(profile)
-                    if (hasProvidedToken) {
-                        tokenStore.setToken(profile.id, draft.token)
+                viewModelScope.launch {
+                    withContext(Dispatchers.IO) {
+                        profileStore.upsert(profile)
+                        if (hasProvidedToken) {
+                            tokenStore.setToken(profile.id, draft.token)
+                        }
                     }
                     refresh()
+                    onSaved()
                 }
             }
         }
@@ -162,6 +170,7 @@ data class HostsUiState(
     val profiles: List<HostProfileItem> = emptyList(),
     val errorMessage: String? = null,
     val diagnosticResults: Map<String, DiagnosticsResult> = emptyMap(),
+    val requiresTokenReentry: Boolean = false,
 )
 
 class HostsViewModelFactory(
