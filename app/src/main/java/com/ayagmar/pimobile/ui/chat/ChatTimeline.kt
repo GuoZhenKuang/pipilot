@@ -23,9 +23,12 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
@@ -65,6 +68,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import com.ayagmar.pimobile.chat.ChatTimelineItem
+import com.ayagmar.pimobile.chat.ChatTurn
+import com.ayagmar.pimobile.chat.projectChatTurns
 import dev.jeziellago.compose.markdowntext.MarkdownText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -146,6 +151,7 @@ private fun ChatTimeline(
 ) {
     var previewImageUri by rememberSaveable { mutableStateOf<String?>(null) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val turns = remember(timeline) { projectChatTurns(timeline) }
     val autoScrollUi =
         rememberTimelineAutoScrollUi(
             listState = listState,
@@ -153,12 +159,13 @@ private fun ChatTimeline(
             hasOlderMessages = hasOlderMessages,
             showInlineRunProgress = showInlineRunProgress,
             isRunActive = isRunActive,
+            renderedTimelineSize = turns.size,
         )
 
     Box(modifier = modifier.fillMaxWidth()) {
         ChatTimelineList(
             listState = listState,
-            timeline = timeline,
+            turns = turns,
             hasOlderMessages = hasOlderMessages,
             hiddenHistoryCount = hiddenHistoryCount,
             expandedToolArguments = expandedToolArguments,
@@ -185,7 +192,7 @@ private fun ChatTimeline(
                 onClick = autoScrollUi.onJumpToLatest,
                 modifier = Modifier.testTag(CHAT_JUMP_TO_LATEST_TAG),
             ) {
-                Text("Jump to latest")
+                Text("↓ Latest")
             }
         }
 
@@ -203,7 +210,7 @@ private data class TimelineAutoScrollUi(
     val onJumpToLatest: () -> Unit,
 )
 
-@Suppress("LongMethod")
+@Suppress("LongMethod", "LongParameterList")
 @Composable
 private fun rememberTimelineAutoScrollUi(
     listState: androidx.compose.foundation.lazy.LazyListState,
@@ -211,9 +218,10 @@ private fun rememberTimelineAutoScrollUi(
     hasOlderMessages: Boolean,
     showInlineRunProgress: Boolean,
     isRunActive: Boolean,
+    renderedTimelineSize: Int,
 ): TimelineAutoScrollUi {
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
-    val bottomAnchorIndex = timelineBottomAnchorIndex(timeline.size, hasOlderMessages, showInlineRunProgress)
+    val bottomAnchorIndex = timelineBottomAnchorIndex(renderedTimelineSize, hasOlderMessages, showInlineRunProgress)
     val renderedItemsCount = bottomAnchorIndex + 1
     val latestTimelineActivityKey =
         remember(timeline, showInlineRunProgress) {
@@ -392,7 +400,7 @@ private fun RunStreamingAutoScroll(
 @Composable
 private fun ChatTimelineList(
     listState: androidx.compose.foundation.lazy.LazyListState,
-    timeline: List<ChatTimelineItem>,
+    turns: List<ChatTurn>,
     hasOlderMessages: Boolean,
     hiddenHistoryCount: Int,
     expandedToolArguments: Set<String>,
@@ -422,9 +430,9 @@ private fun ChatTimelineList(
             }
         }
 
-        items(items = timeline, key = { item -> item.id }) { item ->
-            ChatTimelineRow(
-                item = item,
+        items(items = turns, key = { turn -> turn.key }) { turn ->
+            ChatTurnRow(
+                turn = turn,
                 expandedToolArguments = expandedToolArguments,
                 onToggleToolExpansion = onToggleToolExpansion,
                 onToggleThinkingExpansion = onToggleThinkingExpansion,
@@ -451,8 +459,8 @@ private fun ChatTimelineList(
 
 @Suppress("LongParameterList")
 @Composable
-private fun ChatTimelineRow(
-    item: ChatTimelineItem,
+private fun ChatTurnRow(
+    turn: ChatTurn,
     expandedToolArguments: Set<String>,
     onToggleToolExpansion: (String) -> Unit,
     onToggleThinkingExpansion: (String) -> Unit,
@@ -460,35 +468,130 @@ private fun ChatTimelineRow(
     onToggleToolArgumentsExpansion: (String) -> Unit,
     onPreviewImage: (String) -> Unit,
 ) {
-    when (item) {
-        is ChatTimelineItem.User -> {
+    var showTools by rememberSaveable(turn.key) { mutableStateOf(turn.tools.any { it.isError || it.isStreaming }) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        turn.user?.let { user ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
                 UserCard(
-                    text = item.text,
-                    imageCount = item.imageCount,
-                    imageUris = item.imageUris,
+                    text = user.text,
+                    imageCount = user.imageCount,
+                    imageUris = user.imageUris,
                     onImageClick = onPreviewImage,
                 )
             }
         }
 
-        is ChatTimelineItem.Assistant -> {
-            AssistantCard(
-                item = item,
-                onToggleThinkingExpansion = onToggleThinkingExpansion,
-            )
+        var renderedToolGroup = false
+        turn.activity.forEach { item ->
+            when (item) {
+                is ChatTimelineItem.Assistant ->
+                    AssistantCard(
+                        item = item,
+                        onToggleThinkingExpansion = onToggleThinkingExpansion,
+                    )
+                is ChatTimelineItem.Tool -> {
+                    if (!renderedToolGroup) {
+                        ToolGroupDisclosure(
+                            tools = turn.tools,
+                            expanded = showTools,
+                            onToggle = { showTools = !showTools },
+                        )
+                        if (showTools) {
+                            turn.tools.forEach { tool ->
+                                ToolActivityRow(
+                                    item = tool,
+                                    isArgumentsExpanded = tool.id in expandedToolArguments,
+                                    onToggleToolExpansion = onToggleToolExpansion,
+                                    onToggleDiffExpansion = onToggleDiffExpansion,
+                                    onToggleArgumentsExpansion = onToggleToolArgumentsExpansion,
+                                )
+                            }
+                        }
+                        renderedToolGroup = true
+                    }
+                }
+                is ChatTimelineItem.User -> Unit
+            }
         }
+    }
+}
 
-        is ChatTimelineItem.Tool -> {
+@Composable
+private fun ToolGroupDisclosure(
+    tools: List<ChatTimelineItem.Tool>,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val running = tools.count { it.isStreaming }
+    val errors = tools.count { it.isError }
+    val state =
+        when {
+            errors > 0 -> "$errors failed"
+            running > 0 -> "$running running"
+            else -> "completed"
+        }
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(
+            imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+            contentDescription = if (expanded) "Collapse tool activity" else "Expand tool activity",
+            modifier = Modifier.size(18.dp),
+        )
+        Text("${tools.size} tools used · $state", style = MaterialTheme.typography.labelMedium)
+    }
+}
+
+@Suppress("LongParameterList")
+@Composable
+private fun ToolActivityRow(
+    item: ChatTimelineItem.Tool,
+    isArgumentsExpanded: Boolean,
+    onToggleToolExpansion: (String) -> Unit,
+    onToggleDiffExpansion: (String) -> Unit,
+    onToggleArgumentsExpansion: (String) -> Unit,
+) {
+    val presentation = remember(item) { presentToolActivity(item) }
+    val statusIcon =
+        when (presentation.status) {
+            ToolActivityStatus.RUNNING -> Icons.Default.Terminal
+            ToolActivityStatus.SUCCESS -> Icons.Default.CheckCircle
+            ToolActivityStatus.ERROR -> Icons.Default.Error
+        }
+    Column {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = presentation.hasDetails) { onToggleToolExpansion(item.id) }
+                    .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(statusIcon, contentDescription = null, modifier = Modifier.size(18.dp))
+            Text(presentation.summary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+            if (item.isStreaming) CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+            if (presentation.hasDetails) {
+                Icon(
+                    if (item.isCollapsed) Icons.Default.ExpandMore else Icons.Default.ExpandLess,
+                    contentDescription = if (item.isCollapsed) "Show details" else "Hide details",
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+        if (!item.isCollapsed || item.isError) {
             ToolCard(
                 item = item,
-                isArgumentsExpanded = item.id in expandedToolArguments,
+                isArgumentsExpanded = isArgumentsExpanded,
                 onToggleToolExpansion = onToggleToolExpansion,
                 onToggleDiffExpansion = onToggleDiffExpansion,
-                onToggleArgumentsExpansion = onToggleToolArgumentsExpansion,
+                onToggleArgumentsExpansion = onToggleArgumentsExpansion,
             )
         }
     }
@@ -514,11 +617,6 @@ private fun UserCard(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(
-                text = "You",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
             Text(
                 text = text.ifBlank { "(empty)" },
                 style = MaterialTheme.typography.bodyMedium,
@@ -559,11 +657,21 @@ private fun UserCard(
             }
 
             if (imageCount > 0) {
-                Text(
-                    text = if (imageCount == 1) "📎 1 image attached" else "📎 $imageCount images attached",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Icon(
+                        Icons.Default.AttachFile,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Text(
+                        text = if (imageCount == 1) "1 image attached" else "$imageCount images attached",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                }
             }
         }
     }
@@ -615,37 +723,26 @@ private fun AssistantCard(
     item: ChatTimelineItem.Assistant,
     onToggleThinkingExpansion: (String) -> Unit,
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            ),
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            val title = if (item.isStreaming) "Assistant (streaming)" else "Assistant"
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
-
-            if (item.text.isNotBlank()) {
-                AssistantMessageContent(
-                    text = item.text,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-
-            ThinkingBlock(
-                thinking = item.thinking,
-                isThinkingComplete = item.isThinkingComplete,
-                isThinkingExpanded = item.isThinkingExpanded,
-                itemId = item.id,
-                onToggleThinkingExpansion = onToggleThinkingExpansion,
+        Text(
+            text = if (item.isStreaming) "Pi · responding" else "Pi",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        ThinkingBlock(
+            thinking = item.thinking,
+            isThinkingComplete = item.isThinkingComplete,
+            isThinkingExpanded = item.isThinkingExpanded,
+            itemId = item.id,
+            onToggleThinkingExpansion = onToggleThinkingExpansion,
+        )
+        if (item.text.isNotBlank()) {
+            AssistantMessageContent(
+                text = item.text,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
@@ -738,49 +835,30 @@ private fun ThinkingBlock(
 ) {
     if (thinking == null) return
 
-    val thinkingStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onTertiaryContainer)
-    val shouldCollapse = thinking.length > THINKING_COLLAPSE_THRESHOLD
-    val displayThinking =
-        if (!isThinkingExpanded && shouldCollapse) {
-            thinking.take(THINKING_COLLAPSE_THRESHOLD) + "…"
-        } else {
-            thinking
-        }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f),
-            ),
-        border =
-            androidx.compose.foundation.BorderStroke(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outlineVariant,
-            ),
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+    Column {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { onToggleThinkingExpansion(itemId) }
+                    .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             ThinkingHeader(isThinkingComplete)
-            MarkdownText(
-                markdown = displayThinking,
-                style = thinkingStyle,
-                syntaxHighlightColor = MaterialTheme.colorScheme.tertiaryContainer,
-                syntaxHighlightTextColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            Spacer(modifier = Modifier.weight(1f))
+            Icon(
+                if (isThinkingExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = if (isThinkingExpanded) "Hide thinking" else "Show thinking",
+                modifier = Modifier.size(18.dp),
             )
-
-            if (shouldCollapse || isThinkingExpanded) {
-                TextButton(
-                    onClick = { onToggleThinkingExpansion(itemId) },
-                    modifier = Modifier.padding(top = 4.dp),
-                ) {
-                    Text(
-                        if (isThinkingExpanded) "Show less" else "Show more",
-                    )
-                }
-            }
+        }
+        if (isThinkingExpanded) {
+            MarkdownText(
+                markdown = thinking,
+                style = MaterialTheme.typography.bodySmall,
+                syntaxHighlightColor = MaterialTheme.colorScheme.surfaceVariant,
+                syntaxHighlightTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
