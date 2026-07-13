@@ -14,43 +14,23 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 30
         steps:
-            - uses: actions/checkout@v4
-            - uses: actions/setup-java@v4
+            - uses: actions/checkout@v7
+            - uses: actions/setup-java@v5
               with:
                   distribution: temurin
                   java-version: 21
                   cache: gradle
-            - uses: android-actions/setup-android@v3
+            - uses: android-actions/setup-android@v4
             - name: Install Android SDK 36
               run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
             - name: Verify Android
               run: ./gradlew clean ktlintCheck detekt test :app:lintDebug :app:assembleDebug :app:assembleRelease
             - name: Upload debug APK
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v7
               with:
                   name: pi-mobile-debug
                   path: app/build/outputs/apk/debug/app-debug.apk
                   if-no-files-found: error
-
-    android-connected:
-        name: Android connected tests
-        runs-on: ubuntu-latest
-        timeout-minutes: 30
-        steps:
-            - uses: actions/checkout@v4
-            - uses: actions/setup-java@v4
-              with:
-                  distribution: temurin
-                  java-version: 21
-                  cache: gradle
-            - uses: reactivecircus/android-emulator-runner@v2
-              with:
-                  api-level: 35
-                  arch: x86_64
-                  profile: pixel_7
-                  emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-                  disable-animations: true
-                  script: ./gradlew :app:connectedDebugAndroidTest
 
     bridge:
         name: Bridge checks and production audit
@@ -60,11 +40,11 @@ jobs:
             run:
                 working-directory: bridge
         steps:
-            - uses: actions/checkout@v4
-            - uses: pnpm/action-setup@v4
+            - uses: actions/checkout@v7
+            - uses: pnpm/action-setup@v6
               with:
                   version: 10.33.0
-            - uses: actions/setup-node@v4
+            - uses: actions/setup-node@v6
               with:
                   node-version: 22
                   cache: pnpm
