@@ -299,6 +299,16 @@ class RpcSessionController(
         return mutex.withLock {
             runCatching {
                 val connection = ensureActiveConnection()
+                val activeSessionPath = refreshCurrentSessionPath(connection)
+                if (sessionPath.isNullOrBlank() || sessionPath == activeSessionPath) {
+                    val response = connection.requestTree().requireSuccess("Failed to load active session tree")
+                    return@runCatching parseRpcSessionTreeSnapshot(
+                        data = response.data,
+                        sessionPath = activeSessionPath.orEmpty(),
+                        filter = filter,
+                    )
+                }
+
                 val bridgePayload =
                     buildJsonObject {
                         put("type", BRIDGE_GET_SESSION_TREE_TYPE)

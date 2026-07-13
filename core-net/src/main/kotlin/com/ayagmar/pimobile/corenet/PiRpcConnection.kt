@@ -3,6 +3,7 @@ package com.ayagmar.pimobile.corenet
 import com.ayagmar.pimobile.corerpc.GetEntriesCommand
 import com.ayagmar.pimobile.corerpc.GetMessagesCommand
 import com.ayagmar.pimobile.corerpc.GetStateCommand
+import com.ayagmar.pimobile.corerpc.GetTreeCommand
 import com.ayagmar.pimobile.corerpc.RpcCommand
 import com.ayagmar.pimobile.corerpc.RpcIncomingMessage
 import com.ayagmar.pimobile.corerpc.RpcMessageParser
@@ -203,6 +204,10 @@ class PiRpcConnection(
 
     suspend fun requestEntries(since: String? = null): RpcResponse {
         return requestResponse(GetEntriesCommand(id = requestIdFactory(), since = since))
+    }
+
+    suspend fun requestTree(): RpcResponse {
+        return requestResponse(GetTreeCommand(id = requestIdFactory()))
     }
 
     suspend fun resync(): RpcResyncSnapshot {
