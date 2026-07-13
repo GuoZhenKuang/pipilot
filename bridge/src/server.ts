@@ -973,25 +973,6 @@ async function navigateTreeUsingCommand(options: {
 }): Promise<TreeNavigationResultPayload> {
     const { cwd, entryId, processManager, awaitRpcEvent } = options;
 
-    const getCommandsRequestId = randomUUID();
-    const getCommandsResponsePromise = awaitRpcEvent(
-        cwd,
-        (payload) => isRpcResponseForId(payload, getCommandsRequestId),
-        { consume: true },
-    );
-
-    processManager.sendRpc(cwd, {
-        id: getCommandsRequestId,
-        type: "get_commands",
-    });
-
-    const getCommandsResponse = await getCommandsResponsePromise;
-    ensureSuccessfulRpcResponse(getCommandsResponse, "get_commands");
-
-    if (!hasTreeNavigationCommand(getCommandsResponse, TREE_NAVIGATION_COMMAND)) {
-        throw new Error("Tree navigation command is unavailable in this runtime");
-    }
-
     const navigationRequestId = randomUUID();
     const operationId = randomUUID();
     const statusKey = `${TREE_NAVIGATION_STATUS_PREFIX}${operationId}`;
@@ -1019,16 +1000,6 @@ async function navigateTreeUsingCommand(options: {
 
     const statusResponse = await statusResponsePromise;
     return parseTreeNavigationResult(statusResponse);
-}
-
-function hasTreeNavigationCommand(responsePayload: Record<string, unknown>, commandName: string): boolean {
-    const data = asRecord(responsePayload.data);
-    const commands = Array.isArray(data?.commands) ? data.commands : [];
-
-    return commands.some((command) => {
-        const commandObject = asRecord(command);
-        return commandObject?.name === commandName;
-    });
 }
 
 function isTreeNavigationStatusEvent(payload: Record<string, unknown>, statusKey: string): boolean {

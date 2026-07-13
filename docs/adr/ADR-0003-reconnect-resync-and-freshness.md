@@ -20,15 +20,15 @@ Use a two-part consistency strategy:
 1. **Reconnect + deterministic resync**
    - transport reconnects with backoff
    - on reconnect, client waits for `bridge_hello`, reapplies cwd/control
-   - then fetches fresh `get_state` + `get_messages`
-   - emits a resync snapshot consumed by ViewModels
+   - then fetches `get_state` + `get_entries { since: lastEntryId }`
+   - reconciles the documented entry graph against `leafId`
+   - performs exactly one explicit full rebuild for an unknown cursor, branch move, session replacement, unsupported entry, or invalid projection
 
-2. **Session freshness monitoring**
-   - client polls `bridge_get_session_freshness` for active session
-   - bridge returns fingerprint (`mtime`, size, entryCount, lastEntryId, hash tail)
-   - on mismatch outside local mutation grace window:
-     - show coherency warning
-     - prompt user to **Sync now**
+2. **Session invalidation plus safety monitoring**
+   - bridge pushes `bridge_session_invalidated` for mutations observed through Pi, imports, and navigation
+   - client immediately performs cursor resync
+   - a 60-second safety poll runs only while chat is foreground-active to detect terminal or external file edits
+   - on unsafe mismatch while the user is busy, show a coherency warning and **Sync now** action
 
 ## Consequences
 
@@ -40,7 +40,7 @@ Use a two-part consistency strategy:
 
 ### Negative
 
-- Additional control traffic for polling.
+- A low-frequency safety request remains necessary for edits outside the active Pi process.
 - More client-side state/UX complexity (warning + sync paths).
 
 ## Alternatives considered
@@ -49,5 +49,5 @@ Use a two-part consistency strategy:
    - Rejected: stale local state can persist unnoticed.
 2. **Manual sync only (no polling)**
    - Rejected: poor UX; users often miss hidden divergence.
-3. **Server push freshness invalidation only**
-   - Rejected for now: would require broader bridge/runtime event contract changes.
+3. **Server push invalidation only**
+   - Rejected: the bridge cannot observe direct terminal writes to the session file.

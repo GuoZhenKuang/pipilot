@@ -125,7 +125,7 @@ On reconnect, `PiRpcConnection`:
 
 - waits for new `bridge_hello`
 - re-acquires cwd/control if needed
-- emits `RpcResyncSnapshot` after fresh `get_state + get_messages`
+- emits `RpcResyncSnapshot` after `get_state + get_entries`, using the last entry ID as a reconnect cursor
 
 This keeps timeline and streaming flags consistent after network interruptions.
 

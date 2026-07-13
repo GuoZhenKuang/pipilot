@@ -115,6 +115,30 @@ if (buffer.isBackpressuring()) {
 }
 ```
 
+## Synchronization Payload Baseline
+
+The synchronization counters are exposed as `SessionSyncMetrics`: `fullRebuilds`, `incrementalEntries`, and `safetyPolls`.
+
+Reproduce payload counts without a device:
+
+```bash
+./gradlew :core-net:test --tests com.ayagmar.pimobile.corenet.PiRpcConnectionTest
+./gradlew :app:testDebugUnitTest --tests com.ayagmar.pimobile.sessions.SessionEntryProjectionTest
+```
+
+For a session with 10,000 existing entries followed by 10 new entries:
+
+| Scenario | Before | After |
+|---|---:|---:|
+| Initial open | 1 `get_messages` full-history response | 1 full `get_entries` response |
+| Ordinary reconnect with no changes | 1 `get_messages` full-history response | 1 `get_entries` response containing 0 entries |
+| Reconnect after 10 appended entries | 1 `get_messages` full-history response | 1 `get_entries` response containing 10 entries |
+| Unknown cursor or branch movement | 1 full-history response | 1 failed/incompatible incremental response plus exactly 1 full rebuild |
+| Foreground safety checks per minute | 15 at the former 4-second interval | 1 at the 60-second interval |
+| Background/inactive safety checks | 15 per minute at the former interval | 0 |
+
+These are protocol payload counts derived from deterministic fixtures, not device timing claims.
+
 ## Current Baseline (v1.0)
 
 *To be populated with actual measurements*

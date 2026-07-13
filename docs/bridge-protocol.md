@@ -103,6 +103,8 @@ If reconnecting with same `clientId`, `resumed` may be `true` and previous `cwd`
 | `bridge_acquire_control` | `bridge_control_acquired` | Acquires write lock for cwd/session |
 | `bridge_release_control` | `bridge_control_released` | Releases held lock |
 
+The bridge also pushes `bridge_session_invalidated { reason }` to the controlling client after mutations observed through the active Pi process, session import/switch, or tree navigation. Clients should immediately run cursor synchronization.
+
 ### `bridge_get_session_tree` filters
 
 Allowed values:
@@ -205,7 +207,7 @@ Response payload:
 
 ## RPC Channel Messages
 
-`rpc` channel forwards pi RPC commands/events unchanged. Current Pi provides `get_entries`, `get_tree`, and `clone`; current Android source does not yet consume all of these paths. Cross-project session listing and direct tree navigation remain bridge-owned because current Pi RPC does not expose equivalent commands.
+`rpc` channel forwards pi RPC commands/events unchanged. Android uses `get_entries` for active-session synchronization and `get_tree` for active topology. Cross-project session listing and inactive-session tree browsing remain bridge-owned. Direct tree navigation remains bridge-owned because Pi 0.80.6 does not expose a navigation RPC command.
 
 ### Preconditions for sending RPC payloads
 

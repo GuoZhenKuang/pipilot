@@ -473,8 +473,7 @@ describe("bridge websocket server", () => {
         expect(navigationEnvelope.payload?.sessionPath).toBe("/tmp/session-tree.jsonl");
 
         const sentCommandTypes = fakeProcessManager.sentPayloads.map((entry) => entry.payload.type);
-        expect(sentCommandTypes).toContain("get_commands");
-        expect(sentCommandTypes).toContain("prompt");
+        expect(sentCommandTypes).toEqual(["prompt"]);
 
         const waitForTree = waitForEnvelope(ws, (envelope) => envelope.payload?.type === "bridge_session_tree");
         ws.send(
@@ -591,65 +590,6 @@ describe("bridge websocket server", () => {
 
         const treeEnvelope = await waitForTree;
         expect(treeEnvelope.payload?.currentLeafId).toBe("stale-leaf");
-
-        ws.close();
-    });
-
-    it("returns bridge_error when tree navigation command is unavailable", async () => {
-        const fakeProcessManager = new FakeProcessManager();
-        fakeProcessManager.availableCommandNames = [];
-
-        const { baseUrl, server } = await startBridgeServer({
-            processManager: fakeProcessManager,
-        });
-        bridgeServer = server;
-
-        const ws = await connectWebSocket(baseUrl, {
-            headers: {
-                authorization: "Bearer bridge-token",
-            },
-        });
-
-        const waitForCwdSet = waitForEnvelope(ws, (envelope) => envelope.payload?.type === "bridge_cwd_set");
-        ws.send(
-            JSON.stringify({
-                channel: "bridge",
-                payload: {
-                    type: "bridge_set_cwd",
-                    cwd: "/tmp/project",
-                },
-            }),
-        );
-        await waitForCwdSet;
-
-        const waitForControl = waitForEnvelope(ws, (envelope) => envelope.payload?.type === "bridge_control_acquired");
-        ws.send(
-            JSON.stringify({
-                channel: "bridge",
-                payload: {
-                    type: "bridge_acquire_control",
-                    cwd: "/tmp/project",
-                },
-            }),
-        );
-        await waitForControl;
-
-        const waitForError = waitForEnvelope(ws, (envelope) => {
-            return envelope.payload?.type === "bridge_error" && envelope.payload?.code === "tree_navigation_failed";
-        });
-
-        ws.send(
-            JSON.stringify({
-                channel: "bridge",
-                payload: {
-                    type: "bridge_navigate_tree",
-                    entryId: "entry-42",
-                },
-            }),
-        );
-
-        const errorEnvelope = await waitForError;
-        expect(errorEnvelope.payload?.message).toContain("unavailable");
 
         ws.close();
     });
@@ -1636,7 +1576,6 @@ class FakeSessionIndexer implements SessionIndexer {
 
 class FakeProcessManager implements PiProcessManager {
     sentPayloads: Array<{ cwd: string; payload: Record<string, unknown> }> = [];
-    availableCommandNames: string[] = ["pi-mobile-tree"];
     treeNavigationResult = {
         cancelled: false,
         editorText: "Retry with additional assertions",
@@ -1663,25 +1602,6 @@ class FakeProcessManager implements PiProcessManager {
 
     sendRpc(cwd: string, payload: Record<string, unknown>): void {
         this.sentPayloads.push({ cwd, payload });
-
-        if (payload.type === "get_commands") {
-            this.messageHandler({
-                cwd,
-                payload: {
-                    id: payload.id,
-                    type: "response",
-                    command: "get_commands",
-                    success: true,
-                    data: {
-                        commands: this.availableCommandNames.map((name) => ({
-                            name,
-                            source: "extension",
-                        })),
-                    },
-                },
-            });
-            return;
-        }
 
         if (payload.type === "prompt" && typeof payload.message === "string" &&
             payload.message.startsWith("/pi-mobile-tree ")) {
