@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
@@ -27,9 +28,9 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -52,122 +53,85 @@ import com.ayagmar.pimobile.sessions.ModelInfo
 import com.ayagmar.pimobile.sessions.SessionTreeEntry
 import com.ayagmar.pimobile.sessions.SessionTreeSnapshot
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Suppress("LongParameterList", "LongMethod")
 @Composable
 internal fun SessionStatsSheet(
     isVisible: Boolean,
     stats: SessionStats?,
     sessionName: String?,
+    sessionPath: String?,
+    model: ModelInfo?,
     pendingMessageCount: Int,
+    isRunActive: Boolean,
+    isRetrying: Boolean,
     isLoading: Boolean,
     onRefresh: () -> Unit,
+    onSync: () -> Unit,
+    onCompact: () -> Unit,
+    onCopyLatestResponse: () -> Unit,
+    onExportSession: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     if (!isVisible) return
 
     val clipboardManager = LocalClipboardManager.current
+    val path = sessionPath ?: stats?.sessionPath
+    val status =
+        when {
+            isRetrying -> HandoffRunStatus.WAITING
+            isRunActive -> HandoffRunStatus.WORKING
+            else -> HandoffRunStatus.IDLE
+        }
+    val summary =
+        formatHandoffSummary(
+            HandoffSummaryData(
+                sessionName = sessionName,
+                cwd = null,
+                sessionPath = path,
+                model = model?.let { "${it.provider}/${it.id}" },
+                runStatus = status,
+            ),
+        )
 
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Session Statistics")
-                IconButton(onClick = onRefresh) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Refresh",
-                    )
-                }
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Session details", style = MaterialTheme.typography.titleLarge)
+            StatsSection(title = "Session") {
+                sessionName?.let { StatRow("Name", it) }
+                model?.let { StatRow("Model", "${it.provider}/${it.id}") }
+                StatRow("Status", status.label)
+                StatRow("Queued", pendingMessageCount.toString())
+                path?.let { StatRow("Session file", it.takeLast(SESSION_PATH_DISPLAY_LENGTH)) }
             }
-        },
-        text = {
             if (isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().padding(32.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
-                }
-            } else if (stats == null) {
-                Text(
-                    text = "No statistics available",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            } else {
-                Column(
-                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    if (sessionName != null || pendingMessageCount > 0) {
-                        StatsSection(title = "Session") {
-                            sessionName?.let { StatRow("Name", it) }
-                            if (pendingMessageCount > 0) {
-                                StatRow("Queued Messages", pendingMessageCount.toString())
-                            }
-                        }
-                    }
-
-                    // Token stats
-                    StatsSection(title = "Tokens") {
-                        StatRow("Input Tokens", formatNumber(stats.inputTokens))
-                        StatRow("Output Tokens", formatNumber(stats.outputTokens))
-                        StatRow("Cache Read", formatNumber(stats.cacheReadTokens))
-                        StatRow("Cache Write", formatNumber(stats.cacheWriteTokens))
-                    }
-
-                    // Cost
-                    StatsSection(title = "Cost") {
-                        StatRow("Total Cost", formatCost(stats.totalCost))
-                    }
-
-                    // Messages
-                    StatsSection(title = "Messages") {
-                        StatRow("Total", stats.messageCount.toString())
-                        StatRow("User", stats.userMessageCount.toString())
-                        StatRow("Assistant", stats.assistantMessageCount.toString())
-                        StatRow("Tool Results", stats.toolResultCount.toString())
-                    }
-
-                    // Session path
-                    stats.sessionPath?.let { path ->
-                        StatsSection(title = "Session File") {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    text = path.takeLast(SESSION_PATH_DISPLAY_LENGTH),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontFamily = FontFamily.Monospace,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                IconButton(
-                                    onClick = { clipboardManager.setText(AnnotatedString(path)) },
-                                    modifier = Modifier.size(24.dp),
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.ContentCopy,
-                                        contentDescription = "Copy path",
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                }
-                            }
-                        }
-                    }
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+            } else if (stats != null) {
+                StatsSection(title = "Usage") {
+                    StatRow("Input tokens", formatNumber(stats.inputTokens))
+                    StatRow("Output tokens", formatNumber(stats.outputTokens))
+                    StatRow("Messages", stats.messageCount.toString())
+                    StatRow("Total cost", formatCost(stats.totalCost))
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Close")
+            Text("Handoff to computer", style = MaterialTheme.typography.titleMedium)
+            SelectionContainer { Text(summary, style = MaterialTheme.typography.bodySmall) }
+            TextButton(onClick = { clipboardManager.setText(AnnotatedString(summary)) }) {
+                Icon(Icons.Default.ContentCopy, contentDescription = null)
+                Text("Copy handoff summary")
             }
-        },
-    )
+            TextButton(onClick = onCopyLatestResponse) { Text("Copy latest response") }
+            TextButton(onClick = onExportSession) { Text("Export conversation/session") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onSync) { Text("Sync now") }
+                TextButton(onClick = onRefresh) { Text("Refresh stats") }
+                TextButton(onClick = onCompact) { Text("Compact") }
+            }
+        }
+    }
 }
 
 @Composable

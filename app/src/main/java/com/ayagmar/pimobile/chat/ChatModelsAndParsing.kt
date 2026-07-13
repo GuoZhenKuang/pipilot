@@ -24,6 +24,7 @@ data class ChatUiState(
     val currentModel: ModelInfo? = null,
     val thinkingLevel: String? = null,
     val sessionName: String? = null,
+    val sessionPath: String? = null,
     val pendingMessageCount: Int = 0,
     val activeExtensionRequest: ExtensionUiRequest? = null,
     val notifications: List<ExtensionNotification> = emptyList(),

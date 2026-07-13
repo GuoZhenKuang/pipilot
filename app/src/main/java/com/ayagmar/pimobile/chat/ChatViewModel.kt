@@ -539,6 +539,10 @@ class ChatViewModel(
         }
     }
 
+    fun exportSession() {
+        runExportSlashCommand()
+    }
+
     private fun runExportSlashCommand() {
         viewModelScope.launch {
             val result = sessionController.exportSession()
@@ -1771,6 +1775,7 @@ class ChatViewModel(
             steeringMode = metadata.steeringMode,
             followUpMode = metadata.followUpMode,
             sessionName = metadata.sessionName,
+            sessionPath = metadata.sessionPath,
             pendingMessageCount = metadata.pendingMessageCount,
         )
     }
@@ -1813,6 +1818,7 @@ class ChatViewModel(
             steeringMode = metadata.steeringMode,
             followUpMode = metadata.followUpMode,
             sessionName = metadata.sessionName,
+            sessionPath = metadata.sessionPath,
             pendingMessageCount = metadata.pendingMessageCount,
         )
     }

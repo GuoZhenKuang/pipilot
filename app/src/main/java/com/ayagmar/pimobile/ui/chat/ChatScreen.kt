@@ -132,6 +132,7 @@ internal data class ChatCallbacks(
     val onCommandsQueryChanged: (String) -> Unit,
     val onCommandSelected: (SlashCommandInfo) -> Unit,
     val onCopyLastResponse: () -> Unit,
+    val onExportSession: () -> Unit,
     // Bash callbacks
     val onShowBashDialog: () -> Unit,
     val onHideBashDialog: () -> Unit,
@@ -282,6 +283,7 @@ fun ChatRoute(
                 onCommandsQueryChanged = chatViewModel::onCommandsQueryChanged,
                 onCommandSelected = chatViewModel::onCommandSelected,
                 onCopyLastResponse = chatViewModel::copyLastResponse,
+                onExportSession = chatViewModel::exportSession,
                 onShowBashDialog = chatViewModel::showBashDialog,
                 onHideBashDialog = chatViewModel::hideBashDialog,
                 onBashCommandChanged = chatViewModel::onBashCommandChanged,
@@ -379,9 +381,17 @@ private fun ChatScreen(
         isVisible = state.isStatsSheetVisible,
         stats = state.sessionStats,
         sessionName = state.sessionName,
+        sessionPath = state.sessionPath,
+        model = state.currentModel,
         pendingMessageCount = state.pendingMessageCount,
+        isRunActive = state.isStreaming || state.isRetrying,
+        isRetrying = state.isRetrying,
         isLoading = state.isLoadingStats,
         onRefresh = callbacks.onRefreshStats,
+        onSync = callbacks.onSyncNow,
+        onCompact = callbacks.onCompactSession,
+        onCopyLatestResponse = callbacks.onCopyLastResponse,
+        onExportSession = callbacks.onExportSession,
         onDismiss = callbacks.onHideStatsSheet,
     )
 
@@ -645,7 +655,7 @@ private fun ChatHeader(
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("Stats") },
+                        text = { Text("Session details") },
                         onClick = {
                             showSecondaryActionsMenu = false
                             callbacks.onShowStatsSheet()
