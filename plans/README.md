@@ -15,7 +15,7 @@ These plans deliberately retain the current architecture: Android connects to a 
 | [005](005-decompose-chat-architecture.md) | Decompose chat state and UI without changing behavior | P2 | L | 003 | DONE |
 | [006](006-redesign-onboarding-and-navigation.md) | Redesign onboarding, navigation, and recovery UX | P2 | L | 005 | DONE (device acceptance pending — operator-owned) |
 | [007](007-modernize-android-and-release-dx.md) | Modernize Android, CI, release checks, and contributor DX | P2 | L | 004, 006 | DONE (device acceptance pending — operator-owned) |
-| [008](008-chat-experience-v2.md) | Deliver a compact, turn-centered mobile chat experience | P1 | L | 007 | IN PROGRESS |
+| [008](008-chat-experience-v2.md) | Deliver a compact, turn-centered mobile chat experience | P1 | L | 007 | DONE (device acceptance pending — operator debug mode) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (reason) | REJECTED (reason)
 

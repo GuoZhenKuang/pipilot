@@ -147,18 +147,21 @@ App renders streaming text/tools
 
 ## Chat UX Highlights
 
-- **Thinking blocks**: streaming reasoning appears separately and can be collapsed/expanded.
-- **Tool cards**: tool args/output are grouped with icons and expandable output.
+- **Turn-centered conversation**: each prompt groups its assistant activity and final answer into one coherent turn.
+- **Quiet thinking disclosures**: reasoning stays collapsed and low-emphasis unless explicitly opened.
+- **Compact tool activity**: completed tools collapse into tool-specific summaries; arguments, output, and diffs remain available on demand.
 - **Edit diff viewer**: `edit` tool calls show before/after content.
 - **Command palette**: insert slash commands quickly from the prompt field menu, including bridge-backed mobile commands.
-- **Quick copy action**: copy the last assistant response from the chat header menu without typing `/copy`.
+- **Stable active-run composer**: type inline during a run and deliver the draft as a follow-up or steer without a separate dialog.
+- **Reading-position controls**: loading older turns preserves position, while a `N new` control returns to live activity when you choose.
+- **Quick copy action**: copy an assistant answer inline or copy the latest response from session details.
 - **Bash dialog**: execute shell commands with timeout/truncation handling and history.
 - **Session status in chat**: shows the active session name and queued message count from pi state.
 - **Session names in session browser**: active named sessions are surfaced more clearly in the Sessions header, rename dialog, and cards.
-- **Session stats sheet**: token/cost/message/context counters, queued-message summary, and session path.
+- **Session details and handoff sheet**: stats, paths, secondary actions, safe handoff summary, latest-response copy, and export.
 - **Model picker**: provider-aware searchable model selection.
 - **Tree navigator**: inspect branch points, filter views, jump in-place, or fork from chosen entries.
-- **Session coherency guard**: warns on cross-device edits and offers **Sync now**.
+- **Session coherency guard**: routine freshness refreshes stay quiet; explicit other-client conflicts and reload failures remain actionable.
 - **Settings controls**: auto-compaction, auto-retry, steer/follow-up delivery modes, theme, and status-strip visibility.
 
 ## Troubleshooting

@@ -8,6 +8,7 @@
 
 ## Status
 
+- **State**: DONE (device acceptance pending — operator debug mode)
 - **Priority**: P1
 - **Effort**: L
 - **Risk**: MED

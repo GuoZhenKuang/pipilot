@@ -146,10 +146,16 @@ Complete non-device gate:
 (cd bridge && pnpm install --frozen-lockfile && pnpm run check && pnpm audit --prod)
 ```
 
+Focused Chat Experience v2 unit tests:
+
+```bash
+./gradlew :app:testDebugUnitTest --tests 'com.ayagmar.pimobile.chat.*' --tests 'com.ayagmar.pimobile.ui.chat.*'
+```
+
 Compile connected tests without launching an emulator/device:
 
 ```bash
 ./gradlew :app:compileDebugAndroidTestKotlin
 ```
 
-Device acceptance is operator-owned. Follow [`revival-acceptance.md`](revival-acceptance.md) rather than inventing results.
+Chat Experience v2 device acceptance is **pending operator-owned debug mode**. Do not run an emulator, connected tests, `adb`, install an APK, or claim manual acceptance until the operator explicitly enables debug mode. Follow [`revival-acceptance.md`](revival-acceptance.md) when enabled.
