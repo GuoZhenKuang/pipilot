@@ -150,6 +150,7 @@ private fun ChatTimeline(
         rememberTimelineAutoScrollUi(
             listState = listState,
             timeline = timeline,
+            hasOlderMessages = hasOlderMessages,
             showInlineRunProgress = showInlineRunProgress,
             isRunActive = isRunActive,
         )
@@ -207,12 +208,13 @@ private data class TimelineAutoScrollUi(
 private fun rememberTimelineAutoScrollUi(
     listState: androidx.compose.foundation.lazy.LazyListState,
     timeline: List<ChatTimelineItem>,
+    hasOlderMessages: Boolean,
     showInlineRunProgress: Boolean,
     isRunActive: Boolean,
 ): TimelineAutoScrollUi {
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
-    val contentItemsCount = timeline.size + if (showInlineRunProgress) 1 else 0
-    val renderedItemsCount = contentItemsCount + 1 // includes bottom anchor item
+    val bottomAnchorIndex = timelineBottomAnchorIndex(timeline.size, hasOlderMessages, showInlineRunProgress)
+    val renderedItemsCount = bottomAnchorIndex + 1
     val latestTimelineActivityKey =
         remember(timeline, showInlineRunProgress) {
             buildLatestTimelineActivityKey(
@@ -249,11 +251,20 @@ private fun rememberTimelineAutoScrollUi(
         onJumpToLatest = {
             shouldStickToBottom = true
             coroutineScope.launch {
-                listState.animateScrollToItem(renderedItemsCount - 1)
+                listState.scrollToItem(bottomAnchorIndex)
             }
         },
     )
 }
+
+internal fun timelineBottomAnchorIndex(
+    timelineSize: Int,
+    hasOlderMessages: Boolean,
+    showInlineRunProgress: Boolean,
+): Int =
+    timelineSize +
+        (if (hasOlderMessages) 1 else 0) +
+        (if (showInlineRunProgress) 1 else 0)
 
 private fun buildLatestTimelineActivityKey(
     timeline: List<ChatTimelineItem>,
@@ -622,10 +633,12 @@ private fun AssistantCard(
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
 
-            AssistantMessageContent(
-                text = item.text,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            if (item.text.isNotBlank()) {
+                AssistantMessageContent(
+                    text = item.text,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
             ThinkingBlock(
                 thinking = item.thinking,
@@ -643,16 +656,6 @@ private fun AssistantMessageContent(
     text: String,
     modifier: Modifier = Modifier,
 ) {
-    if (text.isBlank()) {
-        Text(
-            text = "(empty)",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = modifier,
-        )
-        return
-    }
-
     val blocks = remember(text) { parseAssistantMessageBlocks(text) }
 
     Column(

@@ -15,12 +15,12 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,13 +38,15 @@ import androidx.compose.ui.unit.dp
 import com.ayagmar.pimobile.chat.ExtensionWidget
 import com.ayagmar.pimobile.sessions.ModelInfo
 
-@Suppress("LongMethod")
+@Suppress("LongMethod", "LongParameterList")
 @Composable
 internal fun ModelThinkingControls(
     currentModel: ModelInfo?,
     thinkingLevel: String?,
+    contextUsageLabel: String,
     onSetThinkingLevel: (String) -> Unit,
     onShowModelPicker: () -> Unit,
+    onShowStats: () -> Unit,
 ) {
     var showThinkingMenu by remember { mutableStateOf(false) }
 
@@ -56,62 +58,44 @@ internal fun ModelThinkingControls(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        OutlinedButton(
+        AssistChip(
             onClick = onShowModelPicker,
             modifier = Modifier.weight(1f),
-            contentPadding =
-                androidx.compose.foundation.layout.PaddingValues(
-                    horizontal = 12.dp,
-                    vertical = 6.dp,
-                ),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
+            label = {
+                Text(
+                    text = modelText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+            leadingIcon = {
                 Icon(
                     imageVector = Icons.Default.Refresh,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
                 )
-                Text(
-                    text = modelText,
-                    style = MaterialTheme.typography.labelMedium,
-                    maxLines = 1,
-                )
-            }
-        }
+            },
+        )
 
-        // Thinking level selector
         Box(modifier = Modifier.wrapContentWidth()) {
-            OutlinedButton(
+            AssistChip(
                 onClick = { showThinkingMenu = true },
-                contentPadding =
-                    androidx.compose.foundation.layout.PaddingValues(
-                        horizontal = 12.dp,
-                        vertical = 6.dp,
-                    ),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
+                label = { Text(thinkingText) },
+                leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Menu,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                     )
-                    Text(
-                        text = thinkingText,
-                        style = MaterialTheme.typography.labelMedium,
-                    )
+                },
+                trailingIcon = {
                     Icon(
                         imageVector = Icons.Default.ExpandMore,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                     )
-                }
-            }
+                },
+            )
 
             DropdownMenu(
                 expanded = showThinkingMenu,
@@ -128,6 +112,16 @@ internal fun ModelThinkingControls(
                 }
             }
         }
+
+        AssistChip(
+            onClick = onShowStats,
+            label = {
+                Text(
+                    text = contextUsageLabel.substringBefore(" ·"),
+                    maxLines = 1,
+                )
+            },
+        )
     }
 }
 

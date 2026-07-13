@@ -4,7 +4,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -86,8 +85,7 @@ internal fun PromptControls(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .testTag(CHAT_PROMPT_CONTROLS_TAG)
-                .animateContentSize(),
+                .testTag(CHAT_PROMPT_CONTROLS_TAG),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         AnimatedVisibility(
@@ -360,57 +358,53 @@ internal fun PromptInputRow(
             )
         }
 
-        Row(
+        OutlinedTextField(
+            value = inputText,
+            onValueChange = onInputTextChanged,
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Attachment button
-            IconButton(
-                onClick = {
-                    photoPickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+            placeholder = { Text("Message Pi") },
+            singleLine = false,
+            minLines = 1,
+            maxLines = 5,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
+            enabled = !isStreaming,
+            leadingIcon = {
+                IconButton(
+                    onClick = {
+                        photoPickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                        )
+                    },
+                    enabled = !isStreaming,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AttachFile,
+                        contentDescription = "Attach image",
                     )
-                },
-                enabled = !isStreaming,
-            ) {
-                Icon(
-                    imageVector = Icons.Default.AttachFile,
-                    contentDescription = "Attach Image",
-                )
-            }
-
-            OutlinedTextField(
-                value = inputText,
-                onValueChange = onInputTextChanged,
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("Type a message...") },
-                singleLine = false,
-                maxLines = 8,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
-                enabled = !isStreaming,
-                trailingIcon = {
-                    if (inputText.isEmpty() && !isStreaming) {
-                        IconButton(onClick = onShowCommandPalette) {
-                            Icon(
-                                imageVector = Icons.Default.Menu,
-                                contentDescription = "Commands",
-                            )
-                        }
+                }
+            },
+            trailingIcon = {
+                val canSend = inputText.isNotBlank() || pendingImages.isNotEmpty()
+                if (!canSend && !isStreaming) {
+                    IconButton(onClick = onShowCommandPalette) {
+                        Icon(
+                            imageVector = Icons.Default.Menu,
+                            contentDescription = "Commands",
+                        )
                     }
-                },
-            )
-
-            IconButton(
-                onClick = submitPrompt,
-                enabled = (inputText.isNotBlank() || pendingImages.isNotEmpty()) && !isStreaming,
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Send,
-                    contentDescription = "Send",
-                )
-            }
-        }
+                } else {
+                    IconButton(
+                        onClick = submitPrompt,
+                        enabled = canSend && !isStreaming,
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = "Send",
+                        )
+                    }
+                }
+            },
+        )
 
         previewImageUri?.let { uri ->
             ImagePreviewDialog(

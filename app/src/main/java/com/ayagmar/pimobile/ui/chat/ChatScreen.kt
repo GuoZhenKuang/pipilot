@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -468,8 +467,12 @@ private fun ChatScreenContent(
         }
 
     Column(
-        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(16.dp).imePadding(),
-        verticalArrangement = Arrangement.spacedBy(if (isRunActive) 8.dp else 12.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         ChatHeader(
             isRunActive = isRunActive,
@@ -512,6 +515,10 @@ private fun ChatScreenContent(
             placement = "belowEditor",
         )
 
+        if (showExtensionStatusStrip) {
+            ExtensionStatusStrip(statuses = state.extensionStatuses)
+        }
+
         PromptControls(
             isStreaming = isRunActive,
             isRetrying = state.isRetrying,
@@ -535,10 +542,6 @@ private fun ChatScreenContent(
                     onClearPendingQueueItems = callbacks.onClearPendingQueueItems,
                 ),
         )
-
-        if (showExtensionStatusStrip) {
-            ExtensionStatusStrip(statuses = state.extensionStatuses)
-        }
     }
 }
 
@@ -678,34 +681,11 @@ private fun ChatHeader(
         ModelThinkingControls(
             currentModel = currentModel,
             thinkingLevel = thinkingLevel,
+            contextUsageLabel = contextUsageLabel,
             onSetThinkingLevel = callbacks.onSetThinkingLevel,
             onShowModelPicker = callbacks.onShowModelPicker,
+            onShowStats = callbacks.onShowStatsSheet,
         )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AssistChip(
-                    onClick = callbacks.onShowStatsSheet,
-                    label = { Text(contextUsageLabel) },
-                )
-                if (pendingMessageCount > 0) {
-                    AssistChip(
-                        onClick = callbacks.onShowStatsSheet,
-                        label = { Text(formatQueuedMessagesLabel(pendingMessageCount)) },
-                    )
-                }
-            }
-            TextButton(onClick = callbacks.onRefreshStats) {
-                Text("Refresh")
-            }
-        }
 
         // Error message if any
         errorMessage?.let { message ->
