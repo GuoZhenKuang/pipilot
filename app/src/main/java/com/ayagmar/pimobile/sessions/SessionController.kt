@@ -26,8 +26,12 @@ interface SessionController {
      * ChatViewModel observes this to reload the timeline.
      */
     val sessionChanged: SharedFlow<String?>
+    val timelineInvalidated: SharedFlow<Unit>
+    val syncMetrics: StateFlow<SessionSyncMetrics>
 
     fun setTransportPreference(preference: TransportPreference)
+
+    fun recordSafetyPoll()
 
     fun getTransportPreference(): TransportPreference
 
@@ -139,6 +143,12 @@ interface SessionController {
 /**
  * Information about a forkable message from get_fork_messages response.
  */
+data class SessionSyncMetrics(
+    val fullRebuilds: Int = 0,
+    val incrementalEntries: Int = 0,
+    val safetyPolls: Int = 0,
+)
+
 data class ForkableMessage(
     val entryId: String,
     val preview: String,

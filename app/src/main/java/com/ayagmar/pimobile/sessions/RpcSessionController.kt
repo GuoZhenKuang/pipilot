@@ -86,7 +86,11 @@ class RpcSessionController(
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     private val _isStreaming = MutableStateFlow(false)
     private val _sessionChanged = MutableSharedFlow<String?>(extraBufferCapacity = 16)
+    private val _timelineInvalidated = MutableSharedFlow<Unit>(extraBufferCapacity = 16)
+    private val _syncMetrics = MutableStateFlow(SessionSyncMetrics())
+    private val entryProjection = SessionEntryProjection()
 
+    private var projectedMessagesResponse: RpcResponse? = null
     private var activeConnection: PiRpcConnection? = null
     private var activeContext: ActiveConnectionContext? = null
     private var transportPreference: TransportPreference = TransportPreference.AUTO
@@ -101,9 +105,15 @@ class RpcSessionController(
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
     override val isStreaming: StateFlow<Boolean> = _isStreaming.asStateFlow()
     override val sessionChanged: SharedFlow<String?> = _sessionChanged
+    override val timelineInvalidated: SharedFlow<Unit> = _timelineInvalidated
+    override val syncMetrics: StateFlow<SessionSyncMetrics> = _syncMetrics.asStateFlow()
 
     override fun setTransportPreference(preference: TransportPreference) {
         transportPreference = preference
+    }
+
+    override fun recordSafetyPoll() {
+        _syncMetrics.value = _syncMetrics.value.copy(safetyPolls = _syncMetrics.value.safetyPolls + 1)
     }
 
     override fun getTransportPreference(): TransportPreference = transportPreference
@@ -169,6 +179,7 @@ class RpcSessionController(
                 }
 
                 val newPath = refreshCurrentSessionPath(connection)
+                resetSessionProjection()
                 _sessionChanged.emit(newPath)
                 newPath
             }
@@ -179,7 +190,8 @@ class RpcSessionController(
         return mutex.withLock {
             runCatching {
                 val connection = ensureActiveConnection()
-                connection.requestMessages().requireSuccess("Failed to load messages")
+                projectedMessagesResponse
+                    ?: connection.requestMessages().requireSuccess("Failed to load messages")
             }
         }
     }
@@ -390,6 +402,7 @@ class RpcSessionController(
         }
 
         val newPath = refreshCurrentSessionPath(connection)
+        resetSessionProjection()
         _sessionChanged.emit(newPath)
         return newPath
     }
@@ -587,6 +600,7 @@ class RpcSessionController(
                 newSessionResponse.requireNotCancelled("New session was cancelled")
 
                 val newPath = refreshCurrentSessionPath(connection)
+                resetSessionProjection()
                 _sessionChanged.emit(newPath)
                 Unit
             }
@@ -652,6 +666,7 @@ class RpcSessionController(
                     )
 
                 val sessionPath = bridgeResponse.payload.stringField("sessionPath")
+                resetSessionProjection()
                 _sessionChanged.emit(sessionPath)
                 sessionPath
             }
@@ -999,15 +1014,62 @@ class RpcSessionController(
                 }
             }
 
-        resyncMonitorJob =
-            scope.launch {
-                connection.resyncEvents.collect { snapshot ->
-                    val isStreaming = snapshot.stateResponse.data.booleanField("isStreaming") ?: false
-                    _isStreaming.value = isStreaming
-                }
-            }
-
+        resyncMonitorJob = observeEntryResync(connection)
         invalidationMonitorJob = observeSessionInvalidations(connection)
+    }
+
+    private fun resetSessionProjection() {
+        entryProjection.reset()
+        projectedMessagesResponse = null
+    }
+
+    private fun observeEntryResync(connection: PiRpcConnection): Job {
+        return scope.launch {
+            connection.resyncEvents.collect { snapshot ->
+                val isStreaming = snapshot.stateResponse.data.booleanField("isStreaming") ?: false
+                _isStreaming.value = isStreaming
+                applyEntrySnapshot(connection, snapshot.entriesResponse, snapshot.fullRebuild)
+            }
+        }
+    }
+
+    private suspend fun applyEntrySnapshot(
+        connection: PiRpcConnection,
+        response: RpcResponse,
+        fullRebuild: Boolean,
+    ) {
+        val entryCount = runCatching { response.data?.get("entries")?.jsonArray?.size }.getOrNull() ?: 0
+        val update = entryProjection.apply(response.data, fullRebuild)
+        if (update is ProjectionUpdate.Applied) {
+            projectedMessagesResponse = update.toMessagesResponse()
+            _syncMetrics.value =
+                _syncMetrics.value.copy(
+                    fullRebuilds = _syncMetrics.value.fullRebuilds + if (fullRebuild) 1 else 0,
+                    incrementalEntries = _syncMetrics.value.incrementalEntries + if (fullRebuild) 0 else entryCount,
+                )
+            _timelineInvalidated.emit(Unit)
+            return
+        }
+
+        val rebuildResponse = connection.requestEntries().requireSuccess("Failed to rebuild session entries")
+        val rebuilt = entryProjection.apply(rebuildResponse.data, fullRebuild = true)
+        _syncMetrics.value = _syncMetrics.value.copy(fullRebuilds = _syncMetrics.value.fullRebuilds + 1)
+        projectedMessagesResponse =
+            if (rebuilt is ProjectionUpdate.Applied) {
+                rebuilt.toMessagesResponse()
+            } else {
+                connection.requestMessages().requireSuccess("Failed to rebuild session timeline")
+            }
+        _timelineInvalidated.emit(Unit)
+    }
+
+    private fun ProjectionUpdate.Applied.toMessagesResponse(): RpcResponse {
+        return RpcResponse(
+            type = "response",
+            command = "get_messages",
+            success = true,
+            data = buildJsonObject { put("messages", messages) },
+        )
     }
 
     private fun observeSessionInvalidations(connection: PiRpcConnection): Job {

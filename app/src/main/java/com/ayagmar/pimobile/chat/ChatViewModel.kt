@@ -81,6 +81,7 @@ class ChatViewModel(
     private var streamingDiagnosticsRunActive = false
     private var streamingDiagnosticsRunStartedAtMs: Long = 0
     private var sessionFreshnessMonitorJob: Job? = null
+    private var isChatActive = false
     private var latestSessionPath: String? = null
     private var lastKnownSessionFreshness: SessionFreshnessFingerprint? = null
     private var localSessionMutationGraceUntilMs: Long = 0
@@ -714,8 +715,17 @@ class ChatViewModel(
         }
     }
 
+    fun onChatActiveChanged(active: Boolean) {
+        isChatActive = active
+        if (active && sessionController.connectionState.value == ConnectionState.CONNECTED) {
+            startSessionFreshnessMonitor()
+        } else if (!active) {
+            stopSessionFreshnessMonitor()
+        }
+    }
+
     private fun startSessionFreshnessMonitor() {
-        if (sessionFreshnessMonitorJob?.isActive == true || isSessionFreshnessUnsupported) {
+        if (!isChatActive || sessionFreshnessMonitorJob?.isActive == true || isSessionFreshnessUnsupported) {
             return
         }
 
@@ -734,6 +744,9 @@ class ChatViewModel(
     }
 
     private suspend fun refreshSessionFreshness(trigger: FreshnessCheckTrigger) {
+        if (trigger == FreshnessCheckTrigger.POLL) {
+            sessionController.recordSafetyPoll()
+        }
         if (isSessionFreshnessUnsupported) {
             return
         }
@@ -937,6 +950,14 @@ class ChatViewModel(
                     )
                 }
                 loadInitialMessages(reason = TimelineReloadReason.SESSION_CHANGED)
+            }
+        }
+
+        viewModelScope.launch {
+            sessionController.timelineInvalidated.collect {
+                if (initialLoadJob?.isActive != true) {
+                    loadInitialMessages(reason = TimelineReloadReason.CONNECTION_RECOVERY)
+                }
             }
         }
 
