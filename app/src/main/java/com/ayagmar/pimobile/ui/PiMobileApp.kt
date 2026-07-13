@@ -16,10 +16,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.MenuOpen
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.MenuOpen
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.DrawerValue
@@ -83,7 +83,7 @@ private val destinations =
         AppDestination(
             route = "chat",
             label = "Chat",
-            icon = Icons.Default.Chat,
+            icon = Icons.AutoMirrored.Filled.Chat,
         ),
         AppDestination(
             route = "settings",
@@ -176,7 +176,7 @@ private fun DrawerDestinationItem(
 
 @Suppress("LongMethod")
 @Composable
-fun piMobileApp(appGraph: AppGraph) {
+fun PiMobileApp(appGraph: AppGraph) {
     val context = LocalContext.current
     val settingsPrefs =
         remember(context) {
@@ -361,7 +361,12 @@ fun piMobileApp(appGraph: AppGraph) {
                             },
                         ) {
                             Icon(
-                                imageVector = if (drawerState.isOpen) Icons.Default.MenuOpen else Icons.Default.Menu,
+                                imageVector =
+                                    if (drawerState.isOpen) {
+                                        Icons.AutoMirrored.Filled.MenuOpen
+                                    } else {
+                                        Icons.Default.Menu
+                                    },
                                 contentDescription =
                                     if (drawerState.isOpen) {
                                         "Close left navigation"

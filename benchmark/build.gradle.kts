@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id("com.android.test")
     id("org.jetbrains.kotlin.android")
@@ -5,20 +7,20 @@ plugins {
 
 android {
     namespace = "com.ayagmar.pimobile.benchmark"
-    compileSdk = 34
+    compileSdk = 36
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
 
-    kotlinOptions {
-        jvmTarget = "21"
+    kotlin {
+        compilerOptions.jvmTarget.set(JvmTarget.JVM_21)
     }
 
     defaultConfig {
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

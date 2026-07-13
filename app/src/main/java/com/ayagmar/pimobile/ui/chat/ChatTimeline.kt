@@ -1,6 +1,5 @@
 package com.ayagmar.pimobile.ui.chat
 
-import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -63,6 +62,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import com.ayagmar.pimobile.chat.ChatTimelineItem
 import dev.jeziellago.compose.markdowntext.MarkdownText
@@ -563,7 +563,7 @@ private fun UserImagePreview(
     uriString: String,
     onClick: () -> Unit,
 ) {
-    val uri = remember(uriString) { Uri.parse(uriString) }
+    val uri = remember(uriString) { uriString.toUri() }
     var loadFailed by remember(uriString) { mutableStateOf(false) }
 
     if (loadFailed) {
@@ -864,7 +864,7 @@ private fun ToolCard(
             }
 
             // Show diff viewer for edit tools, otherwise show standard output
-            if (isEditTool && item.editDiff != null) {
+            if (isEditTool) {
                 DiffViewer(
                     diffInfo = item.editDiff,
                     isCollapsed = !item.isDiffExpanded,

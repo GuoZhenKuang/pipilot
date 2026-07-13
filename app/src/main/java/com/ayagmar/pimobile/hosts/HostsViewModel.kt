@@ -51,6 +51,7 @@ class HostsViewModel(
                     profiles = items,
                     errorMessage = null,
                     diagnosticResults = emptyMap(),
+                    requiresTokenReentry = tokenStore.requiresTokenReentry,
                 )
         }
     }
@@ -162,6 +163,7 @@ data class HostsUiState(
     val profiles: List<HostProfileItem> = emptyList(),
     val errorMessage: String? = null,
     val diagnosticResults: Map<String, DiagnosticsResult> = emptyMap(),
+    val requiresTokenReentry: Boolean = false,
 )
 
 class HostsViewModelFactory(

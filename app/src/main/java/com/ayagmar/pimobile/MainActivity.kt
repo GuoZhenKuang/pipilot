@@ -7,7 +7,7 @@ import androidx.lifecycle.lifecycleScope
 import com.ayagmar.pimobile.di.AppGraph
 import com.ayagmar.pimobile.perf.PerformanceMetrics
 import com.ayagmar.pimobile.perf.PerformanceMetrics.recordAppStart
-import com.ayagmar.pimobile.ui.piMobileApp
+import com.ayagmar.pimobile.ui.PiMobileApp
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -21,7 +21,7 @@ class MainActivity : ComponentActivity() {
 
         super.onCreate(savedInstanceState)
         setContent {
-            piMobileApp(appGraph = appGraph)
+            PiMobileApp(appGraph = appGraph)
         }
     }
 

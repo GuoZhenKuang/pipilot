@@ -137,17 +137,19 @@ Or use Android Studio's "Apply Changes" for hot reload of Compose previews.
 
 ## Running Tests
 
-Unit tests (on JVM):
+Use JDK 21, Android SDK 36, Node 22+, and pnpm 10.
+
+Complete non-device gate:
+
 ```bash
-./gradlew test
+./gradlew clean ktlintCheck detekt test :app:lintDebug :app:assembleDebug :app:assembleRelease
+(cd bridge && pnpm install --frozen-lockfile && pnpm run check && pnpm audit --prod)
 ```
 
-All quality checks:
+Compile connected tests without launching an emulator/device:
+
 ```bash
-./gradlew ktlintCheck detekt test
+./gradlew :app:compileDebugAndroidTestKotlin
 ```
 
-Bridge tests:
-```bash
-cd bridge && pnpm test
-```
+Device acceptance is operator-owned. Follow [`revival-acceptance.md`](revival-acceptance.md) rather than inventing results.

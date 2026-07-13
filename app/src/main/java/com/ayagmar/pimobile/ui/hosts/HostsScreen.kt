@@ -133,13 +133,7 @@ private fun HostsScreen(
             }
         }
 
-        state.errorMessage?.let { errorMessage ->
-            Text(
-                text = errorMessage,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
+        HostStateMessages(state)
 
         if (state.isLoading) {
             Row(
@@ -172,6 +166,24 @@ private fun HostsScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun HostStateMessages(state: HostsUiState) {
+    if (state.requiresTokenReentry) {
+        Text(
+            text = "Token protection was updated. Re-enter a token when you next use each connection.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    state.errorMessage?.let { errorMessage ->
+        Text(
+            text = errorMessage,
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodyMedium,
+        )
     }
 }
 

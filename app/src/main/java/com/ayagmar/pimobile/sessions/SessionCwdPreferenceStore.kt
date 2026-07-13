@@ -2,6 +2,7 @@ package com.ayagmar.pimobile.sessions
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 
 interface SessionCwdPreferenceStore {
     fun getPreferredCwd(hostId: String): String?
@@ -56,11 +57,11 @@ class SharedPreferencesSessionCwdPreferenceStore(
         hostId: String,
         cwd: String,
     ) {
-        preferences.edit().putString(cwdKey(hostId), cwd).apply()
+        preferences.edit { putString(cwdKey(hostId), cwd) }
     }
 
     override fun clearPreferredCwd(hostId: String) {
-        preferences.edit().remove(cwdKey(hostId)).apply()
+        preferences.edit { remove(cwdKey(hostId)) }
     }
 
     private fun cwdKey(hostId: String): String = "cwd_$hostId"

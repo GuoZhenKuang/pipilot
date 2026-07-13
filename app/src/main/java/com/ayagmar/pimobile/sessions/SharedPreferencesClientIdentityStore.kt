@@ -3,6 +3,7 @@ package com.ayagmar.pimobile.sessions
 import android.annotation.SuppressLint
 import android.content.Context
 import android.provider.Settings
+import androidx.core.content.edit
 import java.util.UUID
 
 class SharedPreferencesClientIdentityStore(
@@ -33,7 +34,7 @@ class SharedPreferencesClientIdentityStore(
                 UUID.randomUUID().toString()
             }
 
-        prefs.edit().putString("client_id", finalId).apply()
+        prefs.edit { putString("client_id", finalId) }
         return finalId
     }
 }

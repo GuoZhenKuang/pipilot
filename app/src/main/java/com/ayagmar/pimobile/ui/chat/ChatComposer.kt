@@ -1,6 +1,5 @@
 package com.ayagmar.pimobile.ui.chat
 
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -59,6 +58,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import com.ayagmar.pimobile.chat.ChatViewModel
 import com.ayagmar.pimobile.chat.ImageEncoder
@@ -458,7 +458,7 @@ private fun ImageThumbnail(
                 .clip(RoundedCornerShape(8.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant),
     ) {
-        val uri = remember(image.uri) { Uri.parse(image.uri) }
+        val uri = remember(image.uri) { image.uri.toUri() }
         AsyncImage(
             model = uri,
             contentDescription = image.displayName,
@@ -535,7 +535,7 @@ internal fun ImagePreviewDialog(
     uriString: String,
     onDismiss: () -> Unit,
 ) {
-    val uri = remember(uriString) { Uri.parse(uriString) }
+    val uri = remember(uriString) { uriString.toUri() }
 
     Dialog(
         onDismissRequest = onDismiss,

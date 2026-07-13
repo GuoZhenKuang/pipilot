@@ -196,7 +196,7 @@ benchmark/        - Macrobenchmark / baseline profile scaffolding
 
 ### Running Tests
 
-Use JDK 21 for Android and Gradle work in this repo.
+Use JDK 21, Android SDK 36, Node 22+, and pnpm 10 for this repo. See [the dependency matrix](docs/dependency-matrix.md).
 
 ```bash
 # Android tests
@@ -208,8 +208,8 @@ cd bridge && pnpm test
 # Bridge full checks (lint + typecheck + tests)
 cd bridge && pnpm run check
 
-# All Android quality checks
-./gradlew ktlintCheck detekt test
+# Complete non-device Android gate
+./gradlew clean ktlintCheck detekt test :app:lintDebug :app:assembleDebug :app:assembleRelease
 ```
 
 ### Logs to Watch
