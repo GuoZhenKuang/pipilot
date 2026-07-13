@@ -1319,7 +1319,7 @@ describe("bridge websocket server", () => {
                 piCommand: "pi",
             },
             logger,
-            { processManager: fakeProcessManager },
+            { processManager: fakeProcessManager, probePiVersion: async () => "0.80.6" },
         );
         bridgeServer = server;
 

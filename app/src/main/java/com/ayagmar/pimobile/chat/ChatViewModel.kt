@@ -201,10 +201,11 @@ class ChatViewModel(
     }
 
     private suspend fun encodePendingImages(pendingImages: List<PendingImage>): List<ImagePayload> {
+        val encoder = imageEncoder
+        if (encoder == null || pendingImages.isEmpty()) return emptyList()
+
         return withContext(Dispatchers.Default) {
-            pendingImages.mapNotNull { pending ->
-                imageEncoder?.encodeToPayload(pending)
-            }
+            pendingImages.mapNotNull(encoder::encodeToPayload)
         }
     }
 
