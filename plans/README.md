@@ -12,8 +12,8 @@ These plans deliberately retain the current architecture: Android connects to a 
 | [002](002-secure-and-pin-the-bridge.md) | Secure, pin, and bound the bridge runtime | P1 | M | 001 | DONE |
 | [003](003-current-pi-rpc-conformance.md) | Bring the client and bridge up to the current Pi RPC contract | P1 | L | 002 | DONE |
 | [004](004-simplify-tree-and-incremental-sync.md) | Simplify tree handling and implement incremental synchronization | P1 | L | 003 | DONE |
-| [005](005-decompose-chat-architecture.md) | Decompose chat state and UI without changing behavior | P2 | L | 003 | IN PROGRESS |
-| [006](006-redesign-onboarding-and-navigation.md) | Redesign onboarding, navigation, and recovery UX | P2 | L | 005 | TODO |
+| [005](005-decompose-chat-architecture.md) | Decompose chat state and UI without changing behavior | P2 | L | 003 | DONE |
+| [006](006-redesign-onboarding-and-navigation.md) | Redesign onboarding, navigation, and recovery UX | P2 | L | 005 | IN PROGRESS |
 | [007](007-modernize-android-and-release-dx.md) | Modernize Android, CI, release checks, and contributor DX | P2 | L | 004, 006 | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (reason) | REJECTED (reason)
