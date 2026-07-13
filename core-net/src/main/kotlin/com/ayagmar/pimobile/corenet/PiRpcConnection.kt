@@ -45,6 +45,7 @@ class PiRpcConnection(
 ) {
     private val lifecycleMutex = Mutex()
     private val reconnectSyncMutex = Mutex()
+    private val entrySyncMutex = Mutex()
     private val pendingResponses = ConcurrentHashMap<String, CompletableDeferred<RpcResponse>>()
     private val bridgeChannels = ConcurrentHashMap<String, Channel<BridgeMessage>>()
 
@@ -309,7 +310,12 @@ class PiRpcConnection(
         }
     }
 
-    private suspend fun buildResyncSnapshot(): RpcResyncSnapshot {
+    private suspend fun buildResyncSnapshot(): RpcResyncSnapshot =
+        entrySyncMutex.withLock {
+            buildResyncSnapshotLocked()
+        }
+
+    private suspend fun buildResyncSnapshotLocked(): RpcResyncSnapshot {
         val stateResponse = requestState()
         val sessionPath = stateResponse.data?.stringField("sessionFile")
         if (cursorSessionPath != sessionPath) {

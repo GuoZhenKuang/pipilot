@@ -84,6 +84,7 @@ const BRIDGE_GET_SESSION_FRESHNESS_TYPE = "bridge_get_session_freshness";
 const BRIDGE_SESSION_FRESHNESS_TYPE = "bridge_session_freshness";
 const BRIDGE_IMPORT_SESSION_JSONL_TYPE = "bridge_import_session_jsonl";
 const BRIDGE_SESSION_IMPORTED_TYPE = "bridge_session_imported";
+const BRIDGE_SESSION_INVALIDATED_TYPE = "bridge_session_invalidated";
 const BRIDGE_INTERNAL_RPC_TIMEOUT_MS = 10_000;
 const PI_VERSION_PROBE_TIMEOUT_MS = 3_000;
 
@@ -264,6 +265,20 @@ export function createBridgeServer(
 
         if (isSuccessfulRpcResponse(event.payload, "prompt")) {
             clearRuntimeLeafOverridesForCwd(event.cwd);
+        }
+
+        if (isSessionMutationEvent(event.payload)) {
+            const invalidationEnvelope = JSON.stringify(
+                createBridgeEnvelope({
+                    type: BRIDGE_SESSION_INVALIDATED_TYPE,
+                    reason: sessionMutationReason(event.payload),
+                }),
+            );
+            for (const [client, context] of clientContexts.entries()) {
+                if (client.readyState !== WsWebSocket.OPEN) continue;
+                if (!canReceiveRpcEvent(context, event.cwd, processManager)) continue;
+                client.send(invalidationEnvelope);
+            }
         }
 
         if (consumedByInternalWaiter) {
@@ -804,6 +819,14 @@ async function handleBridgeControlMessage(
             client.send(
                 JSON.stringify(
                     createBridgeEnvelope({
+                        type: BRIDGE_SESSION_INVALIDATED_TYPE,
+                        reason: "navigation",
+                    }),
+                ),
+            );
+            client.send(
+                JSON.stringify(
+                    createBridgeEnvelope({
                         type: BRIDGE_TREE_NAVIGATION_RESULT_TYPE,
                         cancelled: navigationResult.cancelled,
                         editorText: navigationResult.editorText,
@@ -1229,6 +1252,34 @@ function handleRpcEnvelope(
             ),
         );
     }
+}
+
+function isSessionMutationEvent(payload: Record<string, unknown>): boolean {
+    if (payload.type === "message_end" || payload.type === "compaction_end") {
+        return true;
+    }
+
+    if (payload.type !== "response" || payload.success !== true) {
+        return false;
+    }
+
+    return typeof payload.command === "string" && [
+        "prompt",
+        "bash",
+        "compact",
+        "fork",
+        "clone",
+        "new_session",
+        "switch_session",
+        "set_session_name",
+    ].includes(payload.command);
+}
+
+function sessionMutationReason(payload: Record<string, unknown>): string {
+    if (typeof payload.command === "string") {
+        return payload.command;
+    }
+    return typeof payload.type === "string" ? payload.type : "runtime";
 }
 
 function restoreOrCreateContext(

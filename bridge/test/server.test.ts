@@ -779,6 +779,69 @@ describe("bridge websocket server", () => {
         ws.close();
     });
 
+    it("pushes session invalidation for mutations observed through pi", async () => {
+        const fakeProcessManager = new FakeProcessManager();
+        const { baseUrl, server } = await startBridgeServer({ processManager: fakeProcessManager });
+        bridgeServer = server;
+
+        const ws = await connectWebSocket(baseUrl, {
+            headers: { authorization: "Bearer bridge-token" },
+        });
+
+        const waitForCwdSet = waitForEnvelope(ws, (envelope) => envelope.payload?.type === "bridge_cwd_set");
+        ws.send(JSON.stringify({
+            channel: "bridge",
+            payload: { type: "bridge_set_cwd", cwd: "/tmp/project-invalidation" },
+        }));
+        await waitForCwdSet;
+
+        const waitForControl = waitForEnvelope(ws, (envelope) => envelope.payload?.type === "bridge_control_acquired");
+        ws.send(JSON.stringify({
+            channel: "bridge",
+            payload: { type: "bridge_acquire_control", cwd: "/tmp/project-invalidation" },
+        }));
+        await waitForControl;
+
+        const waitForInvalidation = waitForEnvelope(
+            ws,
+            (envelope) => envelope.payload?.type === "bridge_session_invalidated",
+        );
+        fakeProcessManager.emitRpcEvent("/tmp/project-invalidation", {
+            type: "message_end",
+            message: { role: "assistant", content: [] },
+        });
+
+        const invalidation = await waitForInvalidation;
+        expect(invalidation.payload?.reason).toBe("message_end");
+
+        ws.close();
+    });
+
+    it("does not push session invalidation for read-only rpc responses", async () => {
+        const fakeProcessManager = new FakeProcessManager();
+        const { baseUrl, server } = await startBridgeServer({ processManager: fakeProcessManager });
+        bridgeServer = server;
+
+        const ws = await connectWebSocket(baseUrl, {
+            headers: { authorization: "Bearer bridge-token" },
+        });
+        const receivedTypes: string[] = [];
+        ws.on("message", (data) => {
+            const envelope = JSON.parse(data.toString()) as { payload?: { type?: string } };
+            if (envelope.payload?.type) receivedTypes.push(envelope.payload.type);
+        });
+
+        fakeProcessManager.emitRpcEvent("/tmp/uncontrolled", {
+            type: "response",
+            command: "get_entries",
+            success: true,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        expect(receivedTypes).not.toContain("bridge_session_invalidated");
+        ws.close();
+    });
+
     it("normalizes cwd paths for set_cwd, acquire_control, and rpc forwarding", async () => {
         const fakeProcessManager = new FakeProcessManager();
         const { baseUrl, server } = await startBridgeServer({ processManager: fakeProcessManager });

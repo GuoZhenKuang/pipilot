@@ -313,46 +313,51 @@ class PiRpcConnectionTest {
                 )
             }
             if (channel == "rpc" && type == "get_entries") {
-                if (rejectNextEntriesCursor && "since" in payload) {
-                    rejectNextEntriesCursor = false
-                    emitRpc(
-                        buildJsonObject {
-                            put("id", payload["id"]?.toString()?.trim('"').orEmpty())
-                            put("type", "response")
-                            put("command", "get_entries")
-                            put("success", false)
-                            put("error", "Unknown entry cursor")
-                        },
-                    )
-                    return
-                }
+                respondToEntries(payload)
+            }
+        }
+
+        private suspend fun respondToEntries(payload: JsonObject) {
+            if (rejectNextEntriesCursor && "since" in payload) {
+                rejectNextEntriesCursor = false
                 emitRpc(
                     buildJsonObject {
                         put("id", payload["id"]?.toString()?.trim('"').orEmpty())
                         put("type", "response")
                         put("command", "get_entries")
-                        put("success", true)
-                        put(
-                            "data",
-                            buildJsonObject {
-                                put(
-                                    "entries",
-                                    kotlinx.serialization.json.buildJsonArray {
-                                        add(
-                                            buildJsonObject {
-                                                put("type", "message")
-                                                put("id", "entry-1")
-                                                put("parentId", JsonNull)
-                                            },
-                                        )
-                                    },
-                                )
-                                put("leafId", "entry-1")
-                            },
-                        )
+                        put("success", false)
+                        put("error", "Unknown entry cursor")
                     },
                 )
+                return
             }
+
+            emitRpc(
+                buildJsonObject {
+                    put("id", payload["id"]?.toString()?.trim('"').orEmpty())
+                    put("type", "response")
+                    put("command", "get_entries")
+                    put("success", true)
+                    put(
+                        "data",
+                        buildJsonObject {
+                            put(
+                                "entries",
+                                kotlinx.serialization.json.buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("type", "message")
+                                            put("id", "entry-1")
+                                            put("parentId", JsonNull)
+                                        },
+                                    )
+                                },
+                            )
+                            put("leafId", "entry-1")
+                        },
+                    )
+                },
+            )
         }
 
         suspend fun respondToBridgeControlOnly(message: String) {

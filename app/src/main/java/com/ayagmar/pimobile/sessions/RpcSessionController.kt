@@ -94,6 +94,7 @@ class RpcSessionController(
     private var connectionStateJob: Job? = null
     private var streamingMonitorJob: Job? = null
     private var resyncMonitorJob: Job? = null
+    private var invalidationMonitorJob: Job? = null
     private var reconnectRecoveryJob: Job? = null
 
     override val rpcEvents: SharedFlow<RpcIncomingMessage> = _rpcEvents
@@ -913,11 +914,13 @@ class RpcSessionController(
         connectionStateJob?.cancel()
         streamingMonitorJob?.cancel()
         resyncMonitorJob?.cancel()
+        invalidationMonitorJob?.cancel()
         reconnectRecoveryJob?.cancel()
         rpcEventsJob = null
         connectionStateJob = null
         streamingMonitorJob = null
         resyncMonitorJob = null
+        invalidationMonitorJob = null
         reconnectRecoveryJob = null
 
         activeConnection?.disconnect()
@@ -934,6 +937,7 @@ class RpcSessionController(
         connectionStateJob?.cancel()
         streamingMonitorJob?.cancel()
         resyncMonitorJob?.cancel()
+        invalidationMonitorJob?.cancel()
         reconnectRecoveryJob?.cancel()
         reconnectRecoveryJob = null
 
@@ -992,6 +996,24 @@ class RpcSessionController(
                     _isStreaming.value = isStreaming
                 }
             }
+
+        invalidationMonitorJob = observeSessionInvalidations(connection)
+    }
+
+    private fun observeSessionInvalidations(connection: PiRpcConnection): Job {
+        return scope.launch {
+            connection.bridgeEvents.collect { event ->
+                if (event.type == BRIDGE_SESSION_INVALIDATED_TYPE) {
+                    runCatching { connection.resync() }
+                        .onFailure { error ->
+                            Log.w(
+                                TRANSPORT_LOG_TAG,
+                                "Session invalidation resync failed: ${error.message ?: "unknown"}",
+                            )
+                        }
+                }
+            }
+        }
     }
 
     private fun scheduleReconnectRecovery(connection: PiRpcConnection) {
@@ -1092,6 +1114,7 @@ class RpcSessionController(
         private const val BRIDGE_SESSION_IMPORTED_TYPE = "bridge_session_imported"
         private const val BRIDGE_NAVIGATE_TREE_TYPE = "bridge_navigate_tree"
         private const val BRIDGE_TREE_NAVIGATION_RESULT_TYPE = "bridge_tree_navigation_result"
+        private const val BRIDGE_SESSION_INVALIDATED_TYPE = "bridge_session_invalidated"
         private const val EVENT_BUFFER_CAPACITY = 256
         private const val DEFAULT_TIMEOUT_MS = 10_000L
         private const val BASH_TIMEOUT_MS = 60_000L
