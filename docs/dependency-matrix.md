@@ -14,6 +14,8 @@ Validated on 2026-07-13. Targets are stable releases; previews were excluded.
 | AndroidX Navigation Compose | 2.7.7 | 2.9.8 | Current stable Navigation release. |
 | compileSdk / targetSdk | 34 / 34 | 36 / 36 | Android 16 stable SDK and current target baseline. |
 | AndroidX security-crypto | 1.1.0-alpha06 | removed | The package is deprecated. Tokens now use platform Android Keystore AES-256-GCM. |
+| Google Code Scanner | — | 16.1.0 | Official permissionless Google Play services scanner used only for host pairing QR codes. |
+| Node QRCode | — | 1.5.4 | Terminal QR rendering for `pnpm pair`; no bridge runtime endpoint or pairing service is added. |
 | Node.js | 22 in CI | 22 LTS in CI | Bridge CI remains on a supported LTS runtime; local Node 24 also passes bridge checks. |
 | pnpm | 9 in CI | 10.33.0 | Matches the lockfile/tool used for final frozen installs. |
 | Pi | implicit | 0.80.6 minimum | Required compatibility baseline for lifecycle, entries, tree, and session-format behavior. |
@@ -38,3 +40,5 @@ Validated on 2026-07-13. Targets are stable releases; previews were excluded.
 - Android 16 SDK setup: https://developer.android.com/about/versions/16/setup-sdk
 - Android Keystore: https://developer.android.com/privacy-and-security/keystore
 - Deprecated EncryptedSharedPreferences: https://developer.android.com/reference/androidx/security/crypto/EncryptedSharedPreferences
+- Google Code Scanner: https://developers.google.com/ml-kit/vision/barcode-scanning/code-scanner
+- Node QRCode package: https://www.npmjs.com/package/qrcode

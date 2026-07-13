@@ -3,10 +3,13 @@
 ## First successful connection
 
 1. **Prepare the computer** — install Pi 0.80.6 or newer, start the authenticated bridge, and connect the phone and computer to the same Tailnet.
-2. **Add bridge connection** — enter a friendly computer name, MagicDNS hostname, port `8787`, TLS choice, and bridge token. The token field is masked and a stored token is never read back into UI state.
-3. **Validate readiness** — connection diagnostics distinguish reachability, authentication, and Pi RPC readiness. Save the connection, then use **Test** to verify all stages.
-4. **Choose work** — the app opens Sessions after the first connection is saved. Choose a recent project/session or create a session.
-5. **Chat** — an active session makes Chat primary. Back returns to Sessions.
+2. **Print pairing QR** — from `bridge/`, run `pnpm pair`. The command reads the existing `.env`, discovers the computer's Tailscale MagicDNS name, and prints a QR containing the host, port, TLS setting, and existing bridge token. If Tailscale discovery is unavailable, run `pnpm pair -- --host <reachable-hostname>`.
+3. **Scan and save** — in Pi Mobile, open **Hosts**, tap **Scan QR**, scan the terminal code, review the populated connection, and save it. Manual entry remains available as a fallback. Keep the terminal QR private because it contains the bridge token.
+4. **Validate readiness** — connection diagnostics distinguish reachability, authentication, and Pi RPC readiness. Use **Test** to verify all stages.
+5. **Choose work** — the app opens Sessions after the first connection is saved. Choose a recent project/session or create a session.
+6. **Chat** — an active session makes Chat primary. Back returns to Sessions.
+
+**Hosts** remains available in the navigation drawer after setup so a broken connection can always be edited, tested, deleted, or replaced.
 
 Non-secret connection fields may be re-entered when editing. Existing tokens remain encrypted unless the user explicitly types a replacement.
 

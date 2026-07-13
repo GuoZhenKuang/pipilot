@@ -229,16 +229,9 @@ fun PiMobileApp(appGraph: AppGraph) {
             }
         }
 
-        var hasConfiguredHost by remember(appGraph) {
-            mutableStateOf(appGraph.hostProfileStore.list().isNotEmpty())
-        }
+        val hasConfiguredHost = remember(appGraph) { appGraph.hostProfileStore.list().isNotEmpty() }
         val startDestination = if (hasConfiguredHost) "sessions" else "hosts"
-        val availableDestinations =
-            if (hasConfiguredHost) {
-                destinations.filter { destination -> destination.route != "hosts" && destination.route != "chat" }
-            } else {
-                destinations.filter { destination -> destination.route == "hosts" }
-            }
+        val availableDestinations = destinations.filter { destination -> destination.route != "chat" }
 
         ModalNavigationDrawer(
             drawerState = drawerState,
@@ -302,7 +295,7 @@ fun PiMobileApp(appGraph: AppGraph) {
                     NavHost(
                         navController = navController,
                         startDestination = startDestination,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().padding(top = 56.dp),
                     ) {
                         composable(route = "hosts") {
                             HostsRoute(
@@ -310,7 +303,6 @@ fun PiMobileApp(appGraph: AppGraph) {
                                 tokenStore = appGraph.hostTokenStore,
                                 diagnostics = appGraph.connectionDiagnostics,
                                 onHostSaved = {
-                                    hasConfiguredHost = true
                                     navigateTo("sessions")
                                 },
                             )

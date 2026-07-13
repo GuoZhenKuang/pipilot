@@ -95,16 +95,24 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 ### 3. Connect
 
-1. Follow the first-run **Connect your computer** guide:
+1. With the bridge configured, print a pairing code:
+
+   ```bash
+   cd bridge
+   pnpm pair
+   ```
+
+2. In Pi Mobile, open **Hosts**, tap **Scan QR**, scan the terminal code, review the populated connection, and save it. The QR uses the existing `BRIDGE_AUTH_TOKEN`; keep it private. If automatic Tailscale hostname discovery is unavailable, run `pnpm pair -- --host <reachable-hostname>`.
+
+3. Manual entry remains available:
    - Host: your laptop's Tailscale MagicDNS hostname (`<device>.<tailnet>.ts.net`)
    - Port: `8787` (or whatever the bridge uses)
    - Use TLS: off for local/Tailscale bridge unless you've put TLS in front
    - Token: set this in `bridge/.env` as `BRIDGE_AUTH_TOKEN`; stored tokens are never displayed
-   - Use the staged connection test to distinguish network, authentication, and Pi readiness failures
 
-2. The app will fetch your sessions from `~/.pi/agent/sessions/` (or `BRIDGE_SESSION_DIR` if overridden)
+4. Use the connection test to distinguish network, authentication, and Pi readiness failures. The app fetches sessions from `~/.pi/agent/sessions/` (or `BRIDGE_SESSION_DIR` if overridden).
 
-3. Tap a session to resume it
+5. Tap a session to resume it.
 
 ## How It Works
 
