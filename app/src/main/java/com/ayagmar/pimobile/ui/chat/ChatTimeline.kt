@@ -69,6 +69,7 @@ import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import com.ayagmar.pimobile.chat.ChatTimelineItem
 import com.ayagmar.pimobile.chat.ChatTurn
+import com.ayagmar.pimobile.chat.ChatTurnSection
 import com.ayagmar.pimobile.chat.projectChatTurns
 import dev.jeziellago.compose.markdowntext.MarkdownText
 import kotlinx.coroutines.delay
@@ -131,7 +132,7 @@ internal fun ChatBody(
     }
 }
 
-@Suppress("LongParameterList")
+@Suppress("LongMethod", "LongParameterList")
 @Composable
 private fun ChatTimeline(
     timeline: List<ChatTimelineItem>,
@@ -152,6 +153,23 @@ private fun ChatTimeline(
     var previewImageUri by rememberSaveable { mutableStateOf<String?>(null) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val turns = remember(timeline) { projectChatTurns(timeline) }
+    var prependAnchor by remember { mutableStateOf<TimelinePrependAnchor?>(null) }
+
+    LaunchedEffect(turns, timeline.size, hasOlderMessages, prependAnchor) {
+        val anchor = prependAnchor ?: return@LaunchedEffect
+        val timelineGrew = timeline.size > anchor.timelineItemCount
+        val loadOlderAvailabilityChanged = hasOlderMessages != anchor.hadOlderMessages
+        if (!timelineGrew && !loadOlderAvailabilityChanged) return@LaunchedEffect
+        if (timelineGrew) {
+            val turnIndex = turns.indexOfFirst { turn -> turn.containsItem(anchor.itemId) }
+            if (turnIndex >= 0) {
+                val loadOlderOffset = if (hasOlderMessages) 1 else 0
+                listState.scrollToItem(turnIndex + loadOlderOffset, anchor.scrollOffset)
+            }
+        }
+        prependAnchor = null
+    }
+
     val autoScrollUi =
         rememberTimelineAutoScrollUi(
             listState = listState,
@@ -160,6 +178,7 @@ private fun ChatTimeline(
             showInlineRunProgress = showInlineRunProgress,
             isRunActive = isRunActive,
             renderedTimelineSize = turns.size,
+            isPreservingPrepend = prependAnchor != null,
         )
 
     Box(modifier = modifier.fillMaxWidth()) {
@@ -172,7 +191,15 @@ private fun ChatTimeline(
             showInlineRunProgress = showInlineRunProgress,
             runPhase = runPhase,
             runElapsedSeconds = runElapsedSeconds,
-            onLoadOlderMessages = onLoadOlderMessages,
+            onLoadOlderMessages = {
+                prependAnchor =
+                    listState.capturePrependAnchor(
+                        turns = turns,
+                        timelineItemCount = timeline.size,
+                        hasOlderMessages = hasOlderMessages,
+                    )
+                onLoadOlderMessages()
+            },
             onToggleToolExpansion = onToggleToolExpansion,
             onToggleThinkingExpansion = onToggleThinkingExpansion,
             onToggleDiffExpansion = onToggleDiffExpansion,
@@ -206,6 +233,41 @@ private fun ChatTimeline(
     }
 }
 
+private data class TimelinePrependAnchor(
+    val itemId: String,
+    val scrollOffset: Int,
+    val timelineItemCount: Int,
+    val hadOlderMessages: Boolean,
+)
+
+private fun ChatTurn.containsItem(itemId: String): Boolean =
+    user?.id == itemId || activity.any { item -> item.id == itemId }
+
+private fun androidx.compose.foundation.lazy.LazyListState.capturePrependAnchor(
+    turns: List<ChatTurn>,
+    timelineItemCount: Int,
+    hasOlderMessages: Boolean,
+): TimelinePrependAnchor? {
+    val turnsByKey = turns.associateBy(ChatTurn::key)
+    val visibleTurn =
+        layoutInfo.visibleItemsInfo
+            .mapNotNull { visibleItem ->
+                val turn = turnsByKey[visibleItem.key]
+                if (turn == null) null else turn to visibleItem.offset
+            }.firstOrNull()
+    return visibleTurn?.let { (turn, scrollOffset) ->
+        val itemId = turn.user?.id ?: turn.activity.firstOrNull()?.id
+        itemId?.let {
+            TimelinePrependAnchor(
+                itemId = it,
+                scrollOffset = scrollOffset,
+                timelineItemCount = timelineItemCount,
+                hadOlderMessages = hasOlderMessages,
+            )
+        }
+    }
+}
+
 private data class TimelineAutoScrollUi(
     val shouldShowJumpToLatest: Boolean,
     val unreadCount: Int,
@@ -221,6 +283,7 @@ private fun rememberTimelineAutoScrollUi(
     showInlineRunProgress: Boolean,
     isRunActive: Boolean,
     renderedTimelineSize: Int,
+    isPreservingPrepend: Boolean,
 ): TimelineAutoScrollUi {
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
     val bottomAnchorIndex = timelineBottomAnchorIndex(renderedTimelineSize, hasOlderMessages, showInlineRunProgress)
@@ -240,9 +303,10 @@ private fun rememberTimelineAutoScrollUi(
             renderedItemsCount = renderedItemsCount,
         )
 
-    val shouldAutoScrollToBottom = shouldStickToBottom || isNearBottom
+    val shouldAutoScrollToBottom = (shouldStickToBottom || isNearBottom) && !isPreservingPrepend
     var readingState by remember { mutableStateOf(TimelineReadingState()) }
-    var previousActivityKey by remember { mutableStateOf(latestTimelineActivityKey) }
+    val activityIdentities = remember(timeline) { timelineActivityIdentities(timeline) }
+    var previousActivityIdentities by remember { mutableStateOf(activityIdentities) }
 
     LaunchedEffect(isNearBottom, listState.isScrollInProgress) {
         if (isNearBottom) {
@@ -251,11 +315,16 @@ private fun rememberTimelineAutoScrollUi(
             readingState = reduceTimelineReadingState(readingState, TimelineReadingAction.ScrollAway)
         }
     }
-    LaunchedEffect(latestTimelineActivityKey) {
-        if (previousActivityKey != latestTimelineActivityKey && !shouldAutoScrollToBottom) {
-            readingState = reduceTimelineReadingState(readingState, TimelineReadingAction.NewActivity)
+    LaunchedEffect(activityIdentities) {
+        val newActivityCount = countNewTimelineActivities(previousActivityIdentities, activityIdentities)
+        if (!shouldAutoScrollToBottom && !isPreservingPrepend) {
+            readingState =
+                reduceTimelineReadingState(
+                    readingState,
+                    TimelineReadingAction.NewActivity(newActivityCount),
+                )
         }
-        previousActivityKey = latestTimelineActivityKey
+        previousActivityIdentities = activityIdentities
     }
 
     RunActivityAutoScroll(
@@ -488,8 +557,6 @@ private fun ChatTurnRow(
     onToggleToolArgumentsExpansion: (String) -> Unit,
     onPreviewImage: (String) -> Unit,
 ) {
-    var showTools by rememberSaveable(turn.key) { mutableStateOf(turn.tools.any { it.isError || it.isStreaming }) }
-
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         turn.user?.let { user ->
             Row(
@@ -505,37 +572,63 @@ private fun ChatTurnRow(
             }
         }
 
-        var renderedToolGroup = false
-        turn.activity.forEach { item ->
-            when (item) {
-                is ChatTimelineItem.Assistant ->
+        turn.sections.forEach { section ->
+            when (section) {
+                is ChatTurnSection.Assistant ->
                     AssistantCard(
-                        item = item,
+                        item = section.item,
                         onToggleThinkingExpansion = onToggleThinkingExpansion,
                     )
-                is ChatTimelineItem.Tool -> {
-                    if (!renderedToolGroup) {
-                        ToolGroupDisclosure(
-                            tools = turn.tools,
-                            expanded = showTools,
-                            onToggle = { showTools = !showTools },
-                        )
-                        if (showTools) {
-                            turn.tools.forEach { tool ->
-                                ToolActivityRow(
-                                    item = tool,
-                                    isArgumentsExpanded = tool.id in expandedToolArguments,
-                                    onToggleToolExpansion = onToggleToolExpansion,
-                                    onToggleDiffExpansion = onToggleDiffExpansion,
-                                    onToggleArgumentsExpansion = onToggleToolArgumentsExpansion,
-                                )
-                            }
-                        }
-                        renderedToolGroup = true
-                    }
-                }
-                is ChatTimelineItem.User -> Unit
+                is ChatTurnSection.Tools ->
+                    ToolActivityGroup(
+                        sectionKey = section.key,
+                        tools = section.items,
+                        expandedToolArguments = expandedToolArguments,
+                        onToggleToolExpansion = onToggleToolExpansion,
+                        onToggleDiffExpansion = onToggleDiffExpansion,
+                        onToggleToolArgumentsExpansion = onToggleToolArgumentsExpansion,
+                    )
             }
+        }
+    }
+}
+
+@Suppress("LongParameterList")
+@Composable
+private fun ToolActivityGroup(
+    sectionKey: String,
+    tools: List<ChatTimelineItem.Tool>,
+    expandedToolArguments: Set<String>,
+    onToggleToolExpansion: (String) -> Unit,
+    onToggleDiffExpansion: (String) -> Unit,
+    onToggleToolArgumentsExpansion: (String) -> Unit,
+) {
+    val isStreaming = tools.any { it.isStreaming }
+    val hasError = tools.any { it.isError }
+    var expanded by rememberSaveable(sectionKey) { mutableStateOf(isStreaming || hasError) }
+    var wasStreaming by remember(sectionKey) { mutableStateOf(isStreaming) }
+
+    LaunchedEffect(isStreaming) {
+        if (shouldCollapseSettledToolGroup(wasStreaming, isStreaming, hasError)) {
+            expanded = false
+        }
+        wasStreaming = isStreaming
+    }
+
+    ToolGroupDisclosure(
+        tools = tools,
+        expanded = expanded,
+        onToggle = { expanded = !expanded },
+    )
+    if (expanded) {
+        tools.forEach { tool ->
+            ToolActivityRow(
+                item = tool,
+                isArgumentsExpanded = tool.id in expandedToolArguments,
+                onToggleToolExpansion = onToggleToolExpansion,
+                onToggleDiffExpansion = onToggleDiffExpansion,
+                onToggleArgumentsExpansion = onToggleToolArgumentsExpansion,
+            )
         }
     }
 }

@@ -31,6 +31,17 @@ class HandoffSummaryTest {
     }
 
     @Test
+    fun `retrying state is explicit`() {
+        val summary =
+            formatHandoffSummary(
+                HandoffSummaryData(null, null, null, null, HandoffRunStatus.RETRYING),
+            )
+
+        assertTrue(summary.contains("Pi is retrying"))
+        assertFalse(summary.contains("Pi is waiting"))
+    }
+
+    @Test
     fun `model has no sensitive or internal handoff fields`() {
         val fields = HandoffSummaryData::class.java.declaredFields.map { it.name }
         assertFalse(fields.any { it.contains("token", ignoreCase = true) })
@@ -38,7 +49,7 @@ class HandoffSummaryTest {
         assertFalse(fields.any { it.contains("host", ignoreCase = true) })
         val summary =
             formatHandoffSummary(
-                HandoffSummaryData(null, null, null, null, HandoffRunStatus.WAITING),
+                HandoffSummaryData(null, null, null, null, HandoffRunStatus.RETRYING),
             )
         assertFalse(summary.contains("pi --"))
     }

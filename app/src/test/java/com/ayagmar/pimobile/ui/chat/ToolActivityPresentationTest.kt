@@ -38,6 +38,13 @@ class ToolActivityPresentationTest {
         assertTrue(presentation.hasDetails)
     }
 
+    @Test
+    fun `settled successful tool group collapses after live activity`() {
+        assertTrue(shouldCollapseSettledToolGroup(wasStreaming = true, isStreaming = false, hasError = false))
+        assertFalse(shouldCollapseSettledToolGroup(wasStreaming = true, isStreaming = false, hasError = true))
+        assertFalse(shouldCollapseSettledToolGroup(wasStreaming = false, isStreaming = false, hasError = false))
+    }
+
     private fun tool(
         name: String,
         arguments: Map<String, String> = emptyMap(),

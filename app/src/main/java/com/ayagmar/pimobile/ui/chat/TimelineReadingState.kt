@@ -10,7 +10,7 @@ sealed interface TimelineReadingAction {
 
     data object ReachBottom : TimelineReadingAction
 
-    data object NewActivity : TimelineReadingAction
+    data class NewActivity(val count: Int = 1) : TimelineReadingAction
 
     data object DisclosureChanged : TimelineReadingAction
 
@@ -23,15 +23,39 @@ fun reduceTimelineReadingState(
 ): TimelineReadingState =
     when (action) {
         TimelineReadingAction.ScrollAway -> state.copy(sticksToBottom = false)
-        TimelineReadingAction.NewActivity ->
-            if (state.sticksToBottom) state else state.copy(unreadCount = state.unreadCount + 1)
+        is TimelineReadingAction.NewActivity ->
+            if (state.sticksToBottom || action.count <= 0) {
+                state
+            } else {
+                state.copy(unreadCount = state.unreadCount + action.count)
+            }
         TimelineReadingAction.ReachBottom,
         TimelineReadingAction.JumpToLatest,
         -> TimelineReadingState()
         TimelineReadingAction.DisclosureChanged -> state
     }
 
-fun preservedIndexAfterPrepend(
-    previousIndex: Int,
-    prependedCount: Int,
-): Int = previousIndex + prependedCount.coerceAtLeast(0)
+fun timelineActivityIdentities(timeline: List<com.ayagmar.pimobile.chat.ChatTimelineItem>): List<String> =
+    timeline.mapNotNull { item ->
+        when (item) {
+            is com.ayagmar.pimobile.chat.ChatTimelineItem.Assistant ->
+                if (item.text.isNotBlank() || !item.thinking.isNullOrBlank() || !item.isStreaming) {
+                    "assistant:${item.id}"
+                } else {
+                    null
+                }
+            is com.ayagmar.pimobile.chat.ChatTimelineItem.Tool -> "tool:${item.id}"
+            is com.ayagmar.pimobile.chat.ChatTimelineItem.User -> "user:${item.id}"
+        }
+    }
+
+fun countNewTimelineActivities(
+    previous: List<String>,
+    current: List<String>,
+): Int {
+    if (previous.isEmpty()) return 0
+    val previousIdentities = previous.toHashSet()
+    val previousTailIndex = current.indexOfLast { it == previous.last() }
+    val appended = if (previousTailIndex >= 0) current.drop(previousTailIndex + 1) else current
+    return appended.count { it !in previousIdentities }
+}

@@ -16,15 +16,34 @@ class ChatTurnProjectionTest {
 
         assertSame(user, turn.user)
         assertEquals(listOf(thinking, tool, answer), turn.activity)
+        assertEquals(
+            listOf(
+                ChatTurnSection.Assistant(thinking),
+                ChatTurnSection.Tools(listOf(tool)),
+                ChatTurnSection.Assistant(answer),
+            ),
+            turn.sections,
+        )
         assertEquals(listOf(tool), turn.tools)
     }
 
     @Test
-    fun `retains multiple tools and tool errors`() {
-        val turns = projectChatTurns(listOf(user("u"), tool("one"), tool("two", error = true)))
+    fun `groups only contiguous tools`() {
+        val first = tool("one")
+        val middle = assistant("middle")
+        val second = tool("two", error = true)
 
-        assertEquals(2, turns.single().tools.size)
-        assertEquals(ChatTurnRunState.ERROR, turns.single().runState)
+        val turn = projectChatTurns(listOf(user("u"), first, middle, second)).single()
+
+        assertEquals(
+            listOf(
+                ChatTurnSection.Tools(listOf(first)),
+                ChatTurnSection.Assistant(middle),
+                ChatTurnSection.Tools(listOf(second)),
+            ),
+            turn.sections,
+        )
+        assertEquals(ChatTurnRunState.ERROR, turn.runState)
     }
 
     @Test

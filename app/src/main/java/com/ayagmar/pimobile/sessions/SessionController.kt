@@ -37,6 +37,8 @@ interface SessionController {
 
     fun getEffectiveTransportPreference(): TransportPreference
 
+    fun getActiveCwd(): String?
+
     suspend fun ensureConnected(
         hostProfile: HostProfile,
         token: String,

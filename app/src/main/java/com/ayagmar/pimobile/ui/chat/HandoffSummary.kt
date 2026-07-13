@@ -10,7 +10,7 @@ data class HandoffSummaryData(
 
 enum class HandoffRunStatus(val label: String) {
     WORKING("Pi is working"),
-    WAITING("Pi is waiting"),
+    RETRYING("Pi is retrying"),
     IDLE("Pi is idle"),
 }
 

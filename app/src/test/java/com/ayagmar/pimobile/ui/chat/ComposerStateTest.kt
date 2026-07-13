@@ -1,32 +1,29 @@
 package com.ayagmar.pimobile.ui.chat
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class ComposerStateTest {
     @Test
-    fun `follow up is the default and mode switching preserves draft`() {
-        val draft = reduceComposerState(ComposerState(), ComposerAction.ChangeDraft("next"))
-        val steered = reduceComposerState(draft, ComposerAction.SelectMode(ActiveRunDeliveryMode.STEER))
+    fun `follow up submission trims and preserves the message`() {
+        val submission = createActiveRunSubmission("  next  ", ActiveRunDeliveryMode.FOLLOW_UP)
 
-        assertEquals("next", steered.draft)
-        assertEquals(ActiveRunDeliveryMode.STEER, steered.deliveryMode)
+        assertEquals(
+            ActiveRunSubmission("next", ActiveRunDeliveryMode.FOLLOW_UP),
+            submission,
+        )
     }
 
     @Test
-    fun `submit clears non-empty draft`() {
-        val state = ComposerState(draft = "next")
-        assertEquals("", reduceComposerState(state, ComposerAction.Submit).draft)
+    fun `steer submission retains selected mode`() {
+        val submission = createActiveRunSubmission("narrow scope", ActiveRunDeliveryMode.STEER)
+
+        assertEquals(ActiveRunDeliveryMode.STEER, submission?.deliveryMode)
     }
 
     @Test
-    fun `empty submit is a no-op`() {
-        val state = ComposerState(draft = "  ", deliveryMode = ActiveRunDeliveryMode.STEER)
-        assertEquals(state, reduceComposerState(state, ComposerAction.Submit))
-    }
-
-    @Test
-    fun `queue count is represented by queue size`() {
-        assertEquals(3, listOf("one", "two", "three").size)
+    fun `empty submission is rejected`() {
+        assertNull(createActiveRunSubmission("  ", ActiveRunDeliveryMode.STEER))
     }
 }

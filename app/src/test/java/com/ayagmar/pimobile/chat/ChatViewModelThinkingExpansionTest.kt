@@ -570,6 +570,40 @@ class ChatViewModelThinkingExpansionTest {
         }
 
     @Test
+    fun activeRunDraftClearsOnlyAfterSuccessfulDispatch() =
+        runTest(dispatcher) {
+            val controller = FakeSessionController()
+            val viewModel = createViewModel(controller)
+            dispatcher.scheduler.advanceUntilIdle()
+            awaitInitialLoad(viewModel)
+
+            viewModel.onInputTextChanged("Keep concise")
+            viewModel.steer("Keep concise")
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals("", viewModel.uiState.value.inputText)
+        }
+
+    @Test
+    fun failedActiveRunDispatchPreservesDraft() =
+        runTest(dispatcher) {
+            val controller =
+                FakeSessionController().apply {
+                    followUpResult = Result.failure(IllegalStateException("dispatch failed"))
+                }
+            val viewModel = createViewModel(controller)
+            dispatcher.scheduler.advanceUntilIdle()
+            awaitInitialLoad(viewModel)
+
+            viewModel.onInputTextChanged("Run tests")
+            viewModel.followUp("Run tests")
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals("Run tests", viewModel.uiState.value.inputText)
+            assertEquals("dispatch failed", viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
     fun pendingQueueCanBeRemovedClearedAndResetsWhenStreamingStops() =
         runTest(dispatcher) {
             val controller = FakeSessionController()

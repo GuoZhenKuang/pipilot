@@ -119,6 +119,7 @@ class ChatViewModel(
         if (shouldLoadCommands) {
             loadCommands()
         }
+        applyDeferredFreshnessRefreshIfIdle()
     }
 
     @Suppress("ReturnCount")
@@ -293,7 +294,9 @@ class ChatViewModel(
             markLocalSessionMutationExpected()
             val queueItemId = maybeTrackStreamingQueueItem(PendingQueueType.STEER, trimmedMessage)
             val result = sessionController.steer(trimmedMessage)
-            if (result.isFailure) {
+            if (result.isSuccess) {
+                clearActiveRunDraftAfterDispatch(trimmedMessage)
+            } else {
                 queueItemId?.let(::removePendingQueueItem)
                 _uiState.update { it.copy(errorMessage = result.exceptionOrNull()?.message) }
             }
@@ -309,11 +312,20 @@ class ChatViewModel(
             markLocalSessionMutationExpected()
             val queueItemId = maybeTrackStreamingQueueItem(PendingQueueType.FOLLOW_UP, trimmedMessage)
             val result = sessionController.followUp(trimmedMessage)
-            if (result.isFailure) {
+            if (result.isSuccess) {
+                clearActiveRunDraftAfterDispatch(trimmedMessage)
+            } else {
                 queueItemId?.let(::removePendingQueueItem)
                 _uiState.update { it.copy(errorMessage = result.exceptionOrNull()?.message) }
             }
         }
+    }
+
+    private fun clearActiveRunDraftAfterDispatch(submittedMessage: String) {
+        _uiState.update { state ->
+            if (state.inputText.trim() == submittedMessage) state.copy(inputText = "") else state
+        }
+        applyDeferredFreshnessRefreshIfIdle()
     }
 
     fun cycleModel() {
@@ -773,13 +785,13 @@ class ChatViewModel(
             val action =
                 classifySessionFreshness(
                     SessionFreshnessPolicyInput(
-                        fingerprintChanged = previous != null && previous != freshness.fingerprint,
+                        fingerprintChanged =
+                            trigger != FreshnessCheckTrigger.POST_LOAD &&
+                                previous != null && previous != freshness.fingerprint,
                         currentClientOwnsLock =
                             lock.isCurrentClientCwdOwner || lock.isCurrentClientSessionOwner,
                         differentClientOwnsLock = differentClientOwnsLock,
-                        chatIsBusy =
-                            state.isStreaming || state.isRetrying || state.isSyncingSession ||
-                                state.inputText.isNotBlank() || state.pendingImages.isNotEmpty(),
+                        chatIsBusy = isChatBusy(state),
                         insideLocalMutationGraceWindow = isWithinLocalMutationGraceWindow(),
                     ),
                 )
@@ -795,7 +807,8 @@ class ChatViewModel(
             }
             lastKnownSessionFreshness = freshness.fingerprint
 
-            if (lock.isCurrentClientCwdOwner || lock.isCurrentClientSessionOwner) {
+            val currentClientOwnsLock = lock.isCurrentClientCwdOwner || lock.isCurrentClientSessionOwner
+            if (currentClientOwnsLock && !differentClientOwnsLock) {
                 _uiState.update { it.copy(sessionCoherencyWarning = null) }
             }
         }
@@ -862,13 +875,25 @@ class ChatViewModel(
                     )
                 }
 
-                if (!isStreaming && hasDeferredFreshnessRefresh) {
-                    hasDeferredFreshnessRefresh = false
-                    loadInitialMessages(reason = TimelineReloadReason.AUTO_FRESHNESS_REFRESH)
+                if (!isStreaming) {
+                    applyDeferredFreshnessRefreshIfIdle()
                 }
             }
         }
     }
+
+    private fun applyDeferredFreshnessRefreshIfIdle() {
+        if (!shouldApplyDeferredFreshnessRefresh(hasDeferredFreshnessRefresh, isChatBusy(_uiState.value))) return
+        hasDeferredFreshnessRefresh = false
+        loadInitialMessages(reason = TimelineReloadReason.AUTO_FRESHNESS_REFRESH)
+    }
+
+    private fun isChatBusy(state: ChatUiState): Boolean =
+        state.isStreaming ||
+            state.isRetrying ||
+            state.isSyncingSession ||
+            state.inputText.isNotBlank() ||
+            state.pendingImages.isNotEmpty()
 
     private fun maybeTrackStreamingQueueItem(
         type: PendingQueueType,
@@ -1130,6 +1155,7 @@ class ChatViewModel(
     private fun updateEditorText(event: ExtensionUiRequestEvent) {
         event.text?.let { text ->
             _uiState.update { it.copy(inputText = text) }
+            applyDeferredFreshnessRefreshIfIdle()
         }
     }
 
@@ -1174,6 +1200,7 @@ class ChatViewModel(
                 pendingQueueItems = emptyList(),
             )
         }
+        applyDeferredFreshnessRefreshIfIdle()
     }
 
     private fun handleExtensionError(event: ExtensionErrorEvent) {
@@ -1213,6 +1240,7 @@ class ChatViewModel(
 
     private fun handleRetryEnd(event: AutoRetryEndEvent) {
         _uiState.update { it.copy(isRetrying = false) }
+        applyDeferredFreshnessRefreshIfIdle()
         val message =
             if (event.success) {
                 "Retry successful (attempt ${event.attempt})"
@@ -1726,6 +1754,7 @@ class ChatViewModel(
                     if (messagesResult.isSuccess) {
                         resetFreshnessWarningThrottle()
                     }
+                    applyDeferredFreshnessRefreshIfIdle()
                 } else if (reason == TimelineReloadReason.AUTO_FRESHNESS_REFRESH) {
                     _uiState.update {
                         it.copy(
@@ -2534,21 +2563,25 @@ class ChatViewModel(
     }
 
     private fun visibleTimeline(): List<ChatTimelineItem> {
-        if (fullTimeline.isEmpty()) {
-            return emptyList()
-        }
+        if (fullTimeline.isEmpty()) return emptyList()
+        return fullTimeline.drop(visibleTimelineStartIndex())
+    }
 
+    private fun visibleTimelineStartIndex(): Int {
         val visibleCount = visibleTimelineSize.coerceIn(0, fullTimeline.size)
-        return fullTimeline.takeLast(visibleCount)
+        var startIndex = fullTimeline.size - visibleCount
+        while (startIndex > 0 && fullTimeline[startIndex] !is ChatTimelineItem.User) {
+            startIndex -= 1
+        }
+        return startIndex
     }
 
     private fun hasOlderMessages(): Boolean {
-        return historyParsedStartIndex > 0 || fullTimeline.size > visibleTimelineSize
+        return historyParsedStartIndex > 0 || visibleTimelineStartIndex() > 0
     }
 
     private fun hiddenHistoryCount(): Int {
-        val hiddenLoadedItems = (fullTimeline.size - visibleTimelineSize).coerceAtLeast(0)
-        return hiddenLoadedItems + historyParsedStartIndex
+        return visibleTimelineStartIndex() + historyParsedStartIndex
     }
 
     fun addImage(pendingImage: PendingImage) {
@@ -2567,6 +2600,7 @@ class ChatViewModel(
                 pendingImages = state.pendingImages.filterIndexed { i, _ -> i != index },
             )
         }
+        applyDeferredFreshnessRefreshIfIdle()
     }
 
     private data class SlashCommandInvocation(

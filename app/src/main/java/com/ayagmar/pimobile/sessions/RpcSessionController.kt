@@ -119,6 +119,8 @@ class RpcSessionController(
         return resolveEffectiveTransport(transportPreference)
     }
 
+    override fun getActiveCwd(): String? = activeContext?.cwd
+
     override suspend fun ensureConnected(
         hostProfile: HostProfile,
         token: String,

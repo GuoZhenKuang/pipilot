@@ -20,8 +20,8 @@ class SessionFreshnessPolicyTest {
     }
 
     @Test
-    fun `current ownership does not show conflict`() {
-        assertAction(SessionFreshnessAction.REFRESH_SILENTLY, currentOwns = true, otherOwns = true)
+    fun `other owner remains a conflict when current client owns another lock scope`() {
+        assertAction(SessionFreshnessAction.SHOW_CONFLICT, currentOwns = true, otherOwns = true)
     }
 
     @Test
@@ -32,6 +32,13 @@ class SessionFreshnessPolicyTest {
     @Test
     fun `unattributed fingerprint change defers while busy`() {
         assertAction(SessionFreshnessAction.DEFER_REFRESH, busy = true)
+    }
+
+    @Test
+    fun `deferred refresh applies only after chat becomes idle`() {
+        assertEquals(false, shouldApplyDeferredFreshnessRefresh(hasDeferredRefresh = true, chatIsBusy = true))
+        assertEquals(true, shouldApplyDeferredFreshnessRefresh(hasDeferredRefresh = true, chatIsBusy = false))
+        assertEquals(false, shouldApplyDeferredFreshnessRefresh(hasDeferredRefresh = false, chatIsBusy = false))
     }
 
     @Test

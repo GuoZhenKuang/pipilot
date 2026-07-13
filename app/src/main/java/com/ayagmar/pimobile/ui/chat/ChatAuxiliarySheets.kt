@@ -60,6 +60,7 @@ internal fun SessionStatsSheet(
     isVisible: Boolean,
     stats: SessionStats?,
     sessionName: String?,
+    cwd: String?,
     sessionPath: String?,
     model: ModelInfo?,
     pendingMessageCount: Int,
@@ -79,7 +80,7 @@ internal fun SessionStatsSheet(
     val path = sessionPath ?: stats?.sessionPath
     val status =
         when {
-            isRetrying -> HandoffRunStatus.WAITING
+            isRetrying -> HandoffRunStatus.RETRYING
             isRunActive -> HandoffRunStatus.WORKING
             else -> HandoffRunStatus.IDLE
         }
@@ -87,7 +88,7 @@ internal fun SessionStatsSheet(
         formatHandoffSummary(
             HandoffSummaryData(
                 sessionName = sessionName,
-                cwd = null,
+                cwd = cwd,
                 sessionPath = path,
                 model = model?.let { "${it.provider}/${it.id}" },
                 runStatus = status,
@@ -102,6 +103,7 @@ internal fun SessionStatsSheet(
             Text("Session details", style = MaterialTheme.typography.titleLarge)
             StatsSection(title = "Session") {
                 sessionName?.let { StatRow("Name", it) }
+                cwd?.let { StatRow("Working directory", it) }
                 model?.let { StatRow("Model", "${it.provider}/${it.id}") }
                 StatRow("Status", status.label)
                 StatRow("Queued", pendingMessageCount.toString())

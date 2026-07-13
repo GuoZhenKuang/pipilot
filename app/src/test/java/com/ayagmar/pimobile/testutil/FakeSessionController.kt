@@ -57,6 +57,8 @@ class FakeSessionController : SessionController {
     var lastImportedSessionFileName: String? = null
     var lastImportedSessionJsonlContent: String? = null
     var sendPromptResult: Result<Unit> = Result.success(Unit)
+    var steerResult: Result<Unit> = Result.success(Unit)
+    var followUpResult: Result<Unit> = Result.success(Unit)
     var sendPromptDelayMs: Long = 0L
     var abortResult: Result<Unit> = Result.success(Unit)
     var abortRetryResult: Result<Unit> = Result.success(Unit)
@@ -129,6 +131,8 @@ class FakeSessionController : SessionController {
 
     override fun getEffectiveTransportPreference(): TransportPreference = TransportPreference.WEBSOCKET
 
+    override fun getActiveCwd(): String? = null
+
     override suspend fun ensureConnected(
         hostProfile: HostProfile,
         token: String,
@@ -182,9 +186,9 @@ class FakeSessionController : SessionController {
         return abortResult
     }
 
-    override suspend fun steer(message: String): Result<Unit> = Result.success(Unit)
+    override suspend fun steer(message: String): Result<Unit> = steerResult
 
-    override suspend fun followUp(message: String): Result<Unit> = Result.success(Unit)
+    override suspend fun followUp(message: String): Result<Unit> = followUpResult
 
     override suspend fun renameSession(name: String): Result<String?> {
         renameSessionCallCount += 1

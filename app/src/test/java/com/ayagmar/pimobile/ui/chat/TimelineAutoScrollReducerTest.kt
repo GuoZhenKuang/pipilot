@@ -8,7 +8,7 @@ import org.junit.Test
 class TimelineAutoScrollReducerTest {
     @Test
     fun `near-bottom activity retains sticky behavior`() {
-        val state = reduceTimelineReadingState(TimelineReadingState(), TimelineReadingAction.NewActivity)
+        val state = reduceTimelineReadingState(TimelineReadingState(), TimelineReadingAction.NewActivity())
         assertTrue(state.sticksToBottom)
         assertEquals(0, state.unreadCount)
     }
@@ -16,8 +16,8 @@ class TimelineAutoScrollReducerTest {
     @Test
     fun `scrolled-away activity increments unread count`() {
         val away = reduceTimelineReadingState(TimelineReadingState(), TimelineReadingAction.ScrollAway)
-        val first = reduceTimelineReadingState(away, TimelineReadingAction.NewActivity)
-        val second = reduceTimelineReadingState(first, TimelineReadingAction.NewActivity)
+        val first = reduceTimelineReadingState(away, TimelineReadingAction.NewActivity())
+        val second = reduceTimelineReadingState(first, TimelineReadingAction.NewActivity())
         assertFalse(second.sticksToBottom)
         assertEquals(2, second.unreadCount)
     }
@@ -35,7 +35,51 @@ class TimelineAutoScrollReducerTest {
     }
 
     @Test
-    fun `prepend shifts anchor by inserted row count`() {
-        assertEquals(9, preservedIndexAfterPrepend(previousIndex = 3, prependedCount = 6))
+    fun `batched activity increments by newly added items`() {
+        val away = TimelineReadingState(sticksToBottom = false, unreadCount = 2)
+
+        val updated = reduceTimelineReadingState(away, TimelineReadingAction.NewActivity(count = 3))
+
+        assertEquals(5, updated.unreadCount)
     }
+
+    @Test
+    fun `streaming text growth does not create another activity identity`() {
+        val before =
+            timelineActivityIdentities(
+                listOf(assistant(id = "answer", text = "Hello", streaming = true)),
+            )
+        val after =
+            timelineActivityIdentities(
+                listOf(assistant(id = "answer", text = "Hello there", streaming = true)),
+            )
+
+        assertEquals(0, countNewTimelineActivities(before, after))
+    }
+
+    @Test
+    fun `prepended history is not counted as new activity`() {
+        val before = listOf("user:current", "assistant:answer")
+        val after = listOf("user:older", "assistant:older-answer") + before
+
+        assertEquals(0, countNewTimelineActivities(before, after))
+    }
+
+    @Test
+    fun `new activity identity is counted once`() {
+        val before = timelineActivityIdentities(listOf(assistant(id = "answer", text = "Hello")))
+        val after = before + "tool:read"
+
+        assertEquals(1, countNewTimelineActivities(before, after))
+    }
+
+    private fun assistant(
+        id: String,
+        text: String,
+        streaming: Boolean = false,
+    ) = com.ayagmar.pimobile.chat.ChatTimelineItem.Assistant(
+        id = id,
+        text = text,
+        isStreaming = streaming,
+    )
 }

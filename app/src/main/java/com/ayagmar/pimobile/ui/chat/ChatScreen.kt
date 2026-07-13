@@ -311,6 +311,7 @@ fun ChatRoute(
 
     ChatScreen(
         state = uiState,
+        cwd = sessionController.getActiveCwd(),
         callbacks = callbacks,
         showExtensionStatusStrip = showExtensionStatusStrip,
     )
@@ -320,6 +321,7 @@ fun ChatRoute(
 @Composable
 private fun ChatScreen(
     state: ChatUiState,
+    cwd: String?,
     callbacks: ChatCallbacks,
     showExtensionStatusStrip: Boolean,
 ) {
@@ -381,6 +383,7 @@ private fun ChatScreen(
         isVisible = state.isStatsSheetVisible,
         stats = state.sessionStats,
         sessionName = state.sessionName,
+        cwd = cwd,
         sessionPath = state.sessionPath,
         model = state.currentModel,
         pendingMessageCount = state.pendingMessageCount,

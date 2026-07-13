@@ -15,12 +15,16 @@ enum class SessionFreshnessAction {
     DEFER_REFRESH,
 }
 
+fun shouldApplyDeferredFreshnessRefresh(
+    hasDeferredRefresh: Boolean,
+    chatIsBusy: Boolean,
+): Boolean = hasDeferredRefresh && !chatIsBusy
+
 fun classifySessionFreshness(input: SessionFreshnessPolicyInput): SessionFreshnessAction =
     when {
         !input.fingerprintChanged || input.insideLocalMutationGraceWindow ->
             SessionFreshnessAction.UPDATE_BASELINE
-        input.differentClientOwnsLock && !input.currentClientOwnsLock ->
-            SessionFreshnessAction.SHOW_CONFLICT
+        input.differentClientOwnsLock -> SessionFreshnessAction.SHOW_CONFLICT
         input.chatIsBusy -> SessionFreshnessAction.DEFER_REFRESH
         else -> SessionFreshnessAction.REFRESH_SILENTLY
     }

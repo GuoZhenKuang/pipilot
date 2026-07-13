@@ -15,6 +15,12 @@ enum class ToolActivityStatus {
     ERROR,
 }
 
+fun shouldCollapseSettledToolGroup(
+    wasStreaming: Boolean,
+    isStreaming: Boolean,
+    hasError: Boolean,
+): Boolean = wasStreaming && !isStreaming && !hasError
+
 fun presentToolActivity(tool: ChatTimelineItem.Tool): ToolActivityPresentation =
     ToolActivityPresentation(
         title = tool.toolName.ifBlank { "Tool" },

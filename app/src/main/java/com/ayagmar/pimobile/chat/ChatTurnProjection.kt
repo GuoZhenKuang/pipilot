@@ -4,6 +4,7 @@ data class ChatTurn(
     val key: String,
     val user: ChatTimelineItem.User?,
     val activity: List<ChatTimelineItem>,
+    val sections: List<ChatTurnSection>,
     val runState: ChatTurnRunState,
 ) {
     val assistants: List<ChatTimelineItem.Assistant>
@@ -11,6 +12,18 @@ data class ChatTurn(
 
     val tools: List<ChatTimelineItem.Tool>
         get() = activity.filterIsInstance<ChatTimelineItem.Tool>()
+}
+
+sealed interface ChatTurnSection {
+    val key: String
+
+    data class Assistant(val item: ChatTimelineItem.Assistant) : ChatTurnSection {
+        override val key: String = "assistant:${item.id}"
+    }
+
+    data class Tools(val items: List<ChatTimelineItem.Tool>) : ChatTurnSection {
+        override val key: String = "tools:${items.first().id}"
+    }
 }
 
 enum class ChatTurnRunState {
@@ -34,6 +47,7 @@ fun projectChatTurns(timeline: List<ChatTimelineItem>): List<ChatTurn> {
                 key = turnKey,
                 user = user,
                 activity = activity.toList(),
+                sections = activity.toTurnSections(),
                 runState = activity.toTurnRunState(),
             )
     }
@@ -51,6 +65,30 @@ fun projectChatTurns(timeline: List<ChatTimelineItem>): List<ChatTurn> {
     }
     appendTurn()
     return turns
+}
+
+private fun List<ChatTimelineItem>.toTurnSections(): List<ChatTurnSection> {
+    val sections = mutableListOf<ChatTurnSection>()
+    val pendingTools = mutableListOf<ChatTimelineItem.Tool>()
+
+    fun appendTools() {
+        if (pendingTools.isEmpty()) return
+        sections += ChatTurnSection.Tools(pendingTools.toList())
+        pendingTools.clear()
+    }
+
+    forEach { item ->
+        when (item) {
+            is ChatTimelineItem.Assistant -> {
+                appendTools()
+                sections += ChatTurnSection.Assistant(item)
+            }
+            is ChatTimelineItem.Tool -> pendingTools += item
+            is ChatTimelineItem.User -> Unit
+        }
+    }
+    appendTools()
+    return sections
 }
 
 private fun List<ChatTimelineItem>.toTurnRunState(): ChatTurnRunState =

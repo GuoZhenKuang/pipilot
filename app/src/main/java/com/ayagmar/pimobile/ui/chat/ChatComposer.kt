@@ -79,11 +79,12 @@ internal fun PromptControls(
             if (!isRunActive) {
                 callbacks.onSendPrompt()
             } else {
-                when (deliveryMode) {
-                    ActiveRunDeliveryMode.FOLLOW_UP -> callbacks.onFollowUp(inputText)
-                    ActiveRunDeliveryMode.STEER -> callbacks.onSteer(inputText)
+                val submission = createActiveRunSubmission(inputText, deliveryMode)
+                when (submission?.deliveryMode) {
+                    ActiveRunDeliveryMode.FOLLOW_UP -> callbacks.onFollowUp(submission.message)
+                    ActiveRunDeliveryMode.STEER -> callbacks.onSteer(submission.message)
+                    null -> Unit
                 }
-                callbacks.onInputTextChanged("")
             }
         } else if (!isRunActive && pendingImages.isNotEmpty()) {
             callbacks.onSendPrompt()
