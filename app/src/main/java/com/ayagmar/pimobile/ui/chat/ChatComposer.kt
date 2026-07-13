@@ -3,11 +3,6 @@ package com.ayagmar.pimobile.ui.chat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -29,13 +23,13 @@ import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -53,7 +47,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -64,8 +57,8 @@ import com.ayagmar.pimobile.chat.ImageEncoder
 import com.ayagmar.pimobile.chat.PendingImage
 import com.ayagmar.pimobile.chat.PendingQueueItem
 import com.ayagmar.pimobile.chat.PendingQueueType
-import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Suppress("LongMethod", "LongParameterList")
 @Composable
 internal fun PromptControls(
@@ -78,35 +71,71 @@ internal fun PromptControls(
     pendingImages: List<PendingImage>,
     callbacks: PromptControlsCallbacks,
 ) {
-    var showSteerDialog by remember { mutableStateOf(false) }
-    var showFollowUpDialog by remember { mutableStateOf(false) }
+    var deliveryMode by rememberSaveable { mutableStateOf(ActiveRunDeliveryMode.FOLLOW_UP) }
+    var showQueue by rememberSaveable { mutableStateOf(false) }
+    val isRunActive = isStreaming || isRetrying
+    val submit = {
+        if (inputText.isNotBlank()) {
+            if (!isRunActive) {
+                callbacks.onSendPrompt()
+            } else {
+                when (deliveryMode) {
+                    ActiveRunDeliveryMode.FOLLOW_UP -> callbacks.onFollowUp(inputText)
+                    ActiveRunDeliveryMode.STEER -> callbacks.onSteer(inputText)
+                }
+                callbacks.onInputTextChanged("")
+            }
+        } else if (!isRunActive && pendingImages.isNotEmpty()) {
+            callbacks.onSendPrompt()
+        }
+    }
 
     Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .testTag(CHAT_PROMPT_CONTROLS_TAG),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().testTag(CHAT_PROMPT_CONTROLS_TAG),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        AnimatedVisibility(
-            visible = isStreaming || isRetrying,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically(),
+        Row(
+            modifier = Modifier.fillMaxWidth().testTag(CHAT_STREAMING_CONTROLS_TAG),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            StreamingControls(
-                isRetrying = isRetrying,
-                onAbort = callbacks.onAbort,
-                onAbortRetry = callbacks.onAbortRetry,
-                onSteerClick = { showSteerDialog = true },
-                onFollowUpClick = { showFollowUpDialog = true },
+            FilterChip(
+                selected = deliveryMode == ActiveRunDeliveryMode.FOLLOW_UP,
+                onClick = { deliveryMode = ActiveRunDeliveryMode.FOLLOW_UP },
+                label = { Text("Follow up") },
+                enabled = isRunActive,
             )
+            FilterChip(
+                selected = deliveryMode == ActiveRunDeliveryMode.STEER,
+                onClick = { deliveryMode = ActiveRunDeliveryMode.STEER },
+                label = { Text("Steer") },
+                enabled = isRunActive && !isRetrying,
+            )
+            if (isRunActive) {
+                TextButton(onClick = if (isRetrying) callbacks.onAbortRetry else callbacks.onAbort) {
+                    Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Text("Stop")
+                }
+            }
+            if (pendingQueueItems.isNotEmpty()) {
+                TextButton(onClick = { showQueue = true }) { Text("Queue ${pendingQueueItems.size}") }
+            }
         }
 
-        AnimatedVisibility(
-            visible = isStreaming && pendingQueueItems.isNotEmpty(),
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically(),
-        ) {
+        PromptInputRow(
+            inputText = inputText,
+            isStreaming = isRunActive,
+            pendingImages = pendingImages,
+            onInputTextChanged = callbacks.onInputTextChanged,
+            onSubmit = submit,
+            onShowCommandPalette = callbacks.onShowCommandPalette,
+            onAddImage = callbacks.onAddImage,
+            onRemoveImage = callbacks.onRemoveImage,
+        )
+    }
+
+    if (showQueue) {
+        androidx.compose.material3.ModalBottomSheet(onDismissRequest = { showQueue = false }) {
             PendingQueueInspector(
                 pendingItems = pendingQueueItems,
                 steeringMode = steeringMode,
@@ -114,113 +143,6 @@ internal fun PromptControls(
                 onRemoveItem = callbacks.onRemovePendingQueueItem,
                 onClear = callbacks.onClearPendingQueueItems,
             )
-        }
-
-        PromptInputRow(
-            inputText = inputText,
-            isStreaming = isStreaming,
-            pendingImages = pendingImages,
-            onInputTextChanged = callbacks.onInputTextChanged,
-            onSendPrompt = callbacks.onSendPrompt,
-            onShowCommandPalette = callbacks.onShowCommandPalette,
-            onAddImage = callbacks.onAddImage,
-            onRemoveImage = callbacks.onRemoveImage,
-        )
-    }
-
-    if (showSteerDialog) {
-        SteerFollowUpDialog(
-            title = "Steer",
-            onDismiss = { showSteerDialog = false },
-            onConfirm = { message ->
-                callbacks.onSteer(message)
-                showSteerDialog = false
-            },
-        )
-    }
-
-    if (showFollowUpDialog) {
-        SteerFollowUpDialog(
-            title = "Follow Up",
-            onDismiss = { showFollowUpDialog = false },
-            onConfirm = { message ->
-                callbacks.onFollowUp(message)
-                showFollowUpDialog = false
-            },
-        )
-    }
-}
-
-@Suppress("LongMethod")
-@Composable
-private fun StreamingControls(
-    isRetrying: Boolean,
-    onAbort: () -> Unit,
-    onAbortRetry: () -> Unit,
-    onSteerClick: () -> Unit,
-    onFollowUpClick: () -> Unit,
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth().testTag(CHAT_STREAMING_CONTROLS_TAG),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Button(
-                onClick = onAbort,
-                modifier = Modifier.weight(1f),
-                colors =
-                    androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                    ),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 8.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Stop,
-                    contentDescription = null,
-                    modifier = Modifier.padding(end = 4.dp),
-                )
-                Text(
-                    text = "Abort",
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-
-            if (isRetrying) {
-                OutlinedButton(
-                    onClick = onAbortRetry,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(text = "Abort Retry", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
-                }
-            }
-        }
-
-        if (!isRetrying) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                OutlinedButton(
-                    onClick = onSteerClick,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(text = "Steer", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
-                }
-
-                OutlinedButton(
-                    onClick = onFollowUpClick,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(text = "Follow Up", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
-                }
-            }
         }
     }
 }
@@ -324,7 +246,7 @@ internal fun PromptInputRow(
     isStreaming: Boolean,
     pendingImages: List<PendingImage>,
     onInputTextChanged: (String) -> Unit,
-    onSendPrompt: () -> Unit,
+    onSubmit: () -> Unit,
     onShowCommandPalette: () -> Unit = {},
     onAddImage: (PendingImage) -> Unit,
     onRemoveImage: (Int) -> Unit,
@@ -332,10 +254,6 @@ internal fun PromptInputRow(
     val context = LocalContext.current
     val imageEncoder = remember { ImageEncoder(context) }
     var previewImageUri by rememberSaveable { mutableStateOf<String?>(null) }
-
-    val submitPrompt = {
-        onSendPrompt()
-    }
 
     val photoPickerLauncher =
         rememberLauncherForActivityResult(
@@ -367,7 +285,7 @@ internal fun PromptInputRow(
             minLines = 1,
             maxLines = 5,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
-            enabled = !isStreaming,
+            enabled = true,
             leadingIcon = {
                 IconButton(
                     onClick = {
@@ -394,8 +312,8 @@ internal fun PromptInputRow(
                     }
                 } else {
                     IconButton(
-                        onClick = submitPrompt,
-                        enabled = canSend && !isStreaming,
+                        onClick = onSubmit,
+                        enabled = canSend,
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
@@ -558,41 +476,4 @@ internal fun ImagePreviewDialog(
             }
         }
     }
-}
-
-@Composable
-private fun SteerFollowUpDialog(
-    title: String,
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit,
-) {
-    var text by rememberSaveable { mutableStateOf("") }
-
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                placeholder = { Text("Enter your message...") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = false,
-                maxLines = 6,
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(text) },
-                enabled = text.isNotBlank(),
-            ) {
-                Text("Send")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        },
-    )
 }
