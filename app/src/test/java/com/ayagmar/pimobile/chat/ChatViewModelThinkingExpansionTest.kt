@@ -739,7 +739,7 @@ class ChatViewModelThinkingExpansionTest {
         }
 
     @Test
-    fun syncNowFlagsPotentialCrossDeviceEditsWhenHistoryChanges() =
+    fun syncNowSilentlyRefreshesHistoryChangesWithoutExplicitConflict() =
         runTest(dispatcher) {
             val controller = FakeSessionController()
             controller.messagesPayload = historyWithMessageTexts(listOf("baseline"))
@@ -754,10 +754,8 @@ class ChatViewModelThinkingExpansionTest {
             waitForState(viewModel) { state -> !state.isSyncingSession }
             val state = viewModel.uiState.value
             assertEquals(1, controller.reloadActiveSessionCallCount)
-            assertEquals(
-                "Potential cross-device session edits detected. Use Sync now before continuing.",
-                state.sessionCoherencyWarning,
-            )
+            assertEquals(null, state.sessionCoherencyWarning)
+            assertFalse(state.notifications.any { it.message.contains("Session sync complete") })
         }
 
     @Test
@@ -772,7 +770,7 @@ class ChatViewModelThinkingExpansionTest {
             controller.messagesPayload = historyWithMessageTexts(listOf("unchanged", "changed"))
             viewModel.syncNow()
             dispatcher.scheduler.advanceUntilIdle()
-            waitForState(viewModel) { state -> !state.isSyncingSession && state.sessionCoherencyWarning != null }
+            waitForState(viewModel) { state -> !state.isSyncingSession }
 
             controller.messagesPayload = historyWithMessageTexts(listOf("unchanged", "changed"))
             viewModel.syncNow()

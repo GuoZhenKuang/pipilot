@@ -28,7 +28,6 @@ import com.ayagmar.pimobile.corerpc.UiUpdateThrottler
 import com.ayagmar.pimobile.perf.PerformanceMetrics
 import com.ayagmar.pimobile.sessions.SessionController
 import com.ayagmar.pimobile.sessions.SessionFreshnessFingerprint
-import com.ayagmar.pimobile.sessions.SessionFreshnessSnapshot
 import com.ayagmar.pimobile.sessions.SlashCommandInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -77,6 +76,7 @@ class ChatViewModel(
     private var localSessionMutationGraceUntilMs: Long = 0
     private var isSessionFreshnessUnsupported = false
     private var lastFreshnessWarningAtMs: Long = 0
+    private var hasDeferredFreshnessRefresh = false
 
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
@@ -734,6 +734,7 @@ class ChatViewModel(
         sessionFreshnessMonitorJob = null
     }
 
+    @Suppress("CyclomaticComplexMethod")
     private suspend fun refreshSessionFreshness(trigger: FreshnessCheckTrigger) {
         if (trigger == FreshnessCheckTrigger.POLL) {
             sessionController.recordSafetyPoll()
@@ -760,66 +761,53 @@ class ChatViewModel(
             latestSessionPath = freshness.sessionPath
             val previous = lastKnownSessionFreshness
 
-            when {
-                previous == null -> {
-                    lastKnownSessionFreshness = freshness.fingerprint
-                }
+            val state = _uiState.value
+            val lock = freshness.lock
+            val differentClientOwnsLock =
+                !lock.cwdOwnerClientId.isNullOrBlank() && !lock.isCurrentClientCwdOwner ||
+                    !lock.sessionOwnerClientId.isNullOrBlank() && !lock.isCurrentClientSessionOwner
+            val action =
+                classifySessionFreshness(
+                    SessionFreshnessPolicyInput(
+                        fingerprintChanged = previous != null && previous != freshness.fingerprint,
+                        currentClientOwnsLock =
+                            lock.isCurrentClientCwdOwner || lock.isCurrentClientSessionOwner,
+                        differentClientOwnsLock = differentClientOwnsLock,
+                        chatIsBusy =
+                            state.isStreaming || state.isRetrying || state.isSyncingSession ||
+                                state.inputText.isNotBlank() || state.pendingImages.isNotEmpty(),
+                        insideLocalMutationGraceWindow = isWithinLocalMutationGraceWindow(),
+                    ),
+                )
 
-                previous == freshness.fingerprint -> {
-                    // No-op
+            when (action) {
+                SessionFreshnessAction.UPDATE_BASELINE -> Unit
+                SessionFreshnessAction.REFRESH_SILENTLY -> {
+                    hasDeferredFreshnessRefresh = false
+                    loadInitialMessages(reason = TimelineReloadReason.AUTO_FRESHNESS_REFRESH)
                 }
+                SessionFreshnessAction.DEFER_REFRESH -> hasDeferredFreshnessRefresh = true
+                SessionFreshnessAction.SHOW_CONFLICT -> showSessionFreshnessConflict(trigger)
+            }
+            lastKnownSessionFreshness = freshness.fingerprint
 
-                isWithinLocalMutationGraceWindow() -> {
-                    lastKnownSessionFreshness = freshness.fingerprint
-                }
-
-                else -> {
-                    handleSessionFreshnessMismatch(freshness, trigger)
-                    lastKnownSessionFreshness = freshness.fingerprint
-                }
+            if (lock.isCurrentClientCwdOwner || lock.isCurrentClientSessionOwner) {
+                _uiState.update { it.copy(sessionCoherencyWarning = null) }
             }
         }
     }
 
-    private fun handleSessionFreshnessMismatch(
-        freshness: SessionFreshnessSnapshot,
-        trigger: FreshnessCheckTrigger,
-    ) {
-        val state = _uiState.value
-        val isEditing = state.inputText.isNotBlank() || state.pendingImages.isNotEmpty()
-        val isBusy = state.isStreaming || isEditing || state.isRetrying || state.isSyncingSession
-
-        if (!isBusy && initialLoadJob?.isActive != true) {
-            loadInitialMessages(reason = TimelineReloadReason.AUTO_FRESHNESS_REFRESH)
-            return
-        }
-
+    private fun showSessionFreshnessConflict(trigger: FreshnessCheckTrigger) {
         _uiState.update {
             it.copy(sessionCoherencyWarning = SESSION_COHERENCY_WARNING_MESSAGE)
         }
 
         if (trigger == FreshnessCheckTrigger.POLL && shouldEmitFreshnessWarning()) {
             addSystemNotification(
-                message = buildSessionFreshnessWarningMessage(freshness),
+                message = "Another client is editing this session. Use Sync now before continuing.",
                 type = "warning",
             )
         }
-    }
-
-    private fun buildSessionFreshnessWarningMessage(freshness: SessionFreshnessSnapshot): String {
-        val lock = freshness.lock
-        val ownerHint =
-            when {
-                !lock.sessionOwnerClientId.isNullOrBlank() && !lock.isCurrentClientSessionOwner ->
-                    " (owner=${lock.sessionOwnerClientId})"
-
-                !lock.cwdOwnerClientId.isNullOrBlank() && !lock.isCurrentClientCwdOwner ->
-                    " (owner=${lock.cwdOwnerClientId})"
-
-                else -> ""
-            }
-
-        return "Potential cross-device edits detected$ownerHint. Use Sync now before continuing."
     }
 
     private fun shouldEmitFreshnessWarning(): Boolean {
@@ -868,6 +856,11 @@ class ChatViewModel(
                         pendingQueueItems = if (isStreaming) current.pendingQueueItems else emptyList(),
                         pendingMessageCount = if (isStreaming) current.pendingMessageCount else 0,
                     )
+                }
+
+                if (!isStreaming && hasDeferredFreshnessRefresh) {
+                    hasDeferredFreshnessRefresh = false
+                    loadInitialMessages(reason = TimelineReloadReason.AUTO_FRESHNESS_REFRESH)
                 }
             }
         }
@@ -1722,24 +1715,12 @@ class ChatViewModel(
                         state.copy(
                             isSyncingSession = false,
                             sessionCoherencyWarning =
-                                if (messagesResult.isFailure || hasPotentialExternalChanges) {
-                                    SESSION_COHERENCY_WARNING_MESSAGE
-                                } else {
-                                    null
-                                },
+                                if (messagesResult.isFailure) SESSION_COHERENCY_WARNING_MESSAGE else null,
                         )
                     }
 
                     if (messagesResult.isSuccess) {
                         resetFreshnessWarningThrottle()
-                        val message =
-                            if (hasPotentialExternalChanges) {
-                                "Potential cross-device edits detected. Timeline refreshed."
-                            } else {
-                                "Session sync complete"
-                            }
-                        val type = if (hasPotentialExternalChanges) "warning" else "info"
-                        addSystemNotification(message = message, type = type)
                     }
                 } else if (reason == TimelineReloadReason.AUTO_FRESHNESS_REFRESH) {
                     _uiState.update {
@@ -1755,13 +1736,6 @@ class ChatViewModel(
 
                     if (messagesResult.isSuccess) {
                         resetFreshnessWarningThrottle()
-                        val message =
-                            if (hasPotentialExternalChanges) {
-                                "Session changed externally. Timeline auto-refreshed."
-                            } else {
-                                "Session freshness changed. Timeline refreshed."
-                            }
-                        addSystemNotification(message = message, type = "info")
                     }
                 } else if (hasPotentialExternalChanges) {
                     _uiState.update {

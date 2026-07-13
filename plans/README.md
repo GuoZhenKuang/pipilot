@@ -15,6 +15,7 @@ These plans deliberately retain the current architecture: Android connects to a 
 | [005](005-decompose-chat-architecture.md) | Decompose chat state and UI without changing behavior | P2 | L | 003 | DONE |
 | [006](006-redesign-onboarding-and-navigation.md) | Redesign onboarding, navigation, and recovery UX | P2 | L | 005 | DONE (device acceptance pending — operator-owned) |
 | [007](007-modernize-android-and-release-dx.md) | Modernize Android, CI, release checks, and contributor DX | P2 | L | 004, 006 | DONE (device acceptance pending — operator-owned) |
+| [008](008-chat-experience-v2.md) | Deliver a compact, turn-centered mobile chat experience | P1 | L | 007 | IN PROGRESS |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (reason) | REJECTED (reason)
 
@@ -25,7 +26,8 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (reason) | REJECTED (reason)
 - 003 creates a current RPC compatibility baseline. Plans 004 and 005 must not begin without it.
 - 004 changes synchronization semantics and should remain separate from the UI/state decomposition in 005.
 - 006 depends on 005 so the UX redesign is not added to the current 3,900-line screen and 3,252-line ViewModel.
-- 007 runs last because framework upgrades mixed with feature work make failures difficult to diagnose.
+- 007 completed the revival roadmap and established the current Android/CI baseline.
+- 008 builds on that baseline in strict sequence: quiet freshness policy → turn projection → compact rendering → handoff → active-run composer → unread/reading behavior. Device execution is forbidden until the operator explicitly enables debug mode.
 
 ## Global completion gate
 
@@ -36,7 +38,7 @@ After all plans are DONE, run from the repository root:
 (cd bridge && pnpm install --frozen-lockfile && pnpm run check && pnpm audit --prod)
 ```
 
-Expected: every command exits 0, bridge audit reports no high vulnerabilities, and both APKs are produced. Then execute the manual end-to-end checklist added by plan 007 on an Android device or emulator against a real bridge and Pi installation.
+Expected: every command exits 0, bridge audit reports no high vulnerabilities, and both APKs are produced. For Plan 008, stop after non-device verification and Android-test compilation. Do not launch an emulator, run connected tests, install an APK, use adb, or perform manual phone acceptance until the operator explicitly says debug mode.
 
 ## Findings considered and rejected
 
