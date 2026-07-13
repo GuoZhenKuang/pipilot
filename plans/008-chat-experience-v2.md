@@ -414,22 +414,22 @@ Tests must assert behavior rather than screenshot colors or exact pixel values. 
 
 ## Done criteria
 
-- [ ] Work is on `feat/chat-experience-v2`, created from updated `master`.
-- [ ] Freshness mismatches without an explicit conflicting owner do not generate warning spam.
-- [ ] Explicit conflicting ownership and reload failures remain actionable.
-- [ ] Successful automatic refresh is silent.
-- [ ] Flat timeline data is projected into stable user/assistant turns without rewriting RPC event assembly.
-- [ ] Completed tools default compact and preserve full details on demand.
-- [ ] Thinking is a disclosure rather than a nested high-emphasis card.
-- [ ] Header occupies at most two compact rows; details and handoff live in a sheet.
-- [ ] Handoff output contains no token, authorization data, raw lock owner ID, or fabricated CLI command.
-- [ ] Composer remains stable and accepts steer/follow-up text during a run.
-- [ ] Scrolled-away users get an accurate unread count and are never forcibly pulled to bottom.
-- [ ] Loading older messages preserves reading position.
-- [ ] Focused tests, full Android non-device gate, Android-test compilation, bridge gate, and `git diff --check` pass.
-- [ ] No emulator, connected test, adb command, APK installation, or manual phone test was run.
-- [ ] Seven logical Conventional Commits exist, or fewer only where adjacent steps were inseparable and the commit remains reviewable.
-- [ ] `plans/README.md` marks Plan 008 done with device acceptance pending operator debug mode.
+- [x] Work is on `feat/chat-experience-v2`, created from updated `master`.
+- [x] Freshness mismatches without an explicit conflicting owner do not generate warning spam.
+- [x] Explicit conflicting ownership and reload failures remain actionable.
+- [x] Successful automatic refresh is silent.
+- [x] Flat timeline data is projected into stable user/assistant turns without rewriting RPC event assembly.
+- [x] Completed tools default compact and preserve full details on demand.
+- [x] Thinking is a disclosure rather than a nested high-emphasis card.
+- [x] Header occupies at most two compact rows; details and handoff live in a sheet.
+- [x] Handoff output contains no token, authorization data, raw lock owner ID, or fabricated CLI command.
+- [x] Composer remains stable and accepts steer/follow-up text during a run.
+- [x] Scrolled-away users get an accurate unread count and are never forcibly pulled to bottom.
+- [x] Loading older messages preserves reading position.
+- [x] Focused tests, full Android non-device gate, Android-test compilation, bridge gate, and `git diff --check` pass.
+- [x] No emulator, connected test, adb command, APK installation, or manual phone test was run.
+- [x] Seven logical Conventional Commits exist, or fewer only where adjacent steps were inseparable and the commit remains reviewable.
+- [x] `plans/README.md` marks Plan 008 done with device acceptance pending operator debug mode.
 
 ## STOP conditions
 
@@ -443,6 +443,10 @@ Stop and report; do not improvise if:
 - A step's focused verification fails twice after a reasonable correction.
 - Any requested verification would launch an emulator/device without the operator explicitly enabling debug mode.
 - In-scope files materially drift from the excerpts before execution begins.
+
+## Review corrections
+
+A post-implementation review was completed before merge. The follow-up fixes preserve interleaved assistant/tool ordering, drain deferred freshness refreshes whenever chat becomes idle, retain active-run drafts until successful dispatch, restore the visible anchor after history prepends, count unread activity by stable identities rather than streaming deltas, collapse successful live tool groups when they settle, expose cwd in handoff details, and distinguish retrying from waiting.
 
 ## Maintenance notes
 
