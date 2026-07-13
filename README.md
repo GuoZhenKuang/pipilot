@@ -58,6 +58,7 @@ The bridge is a small Node.js service that translates WebSocket to pi's stdin/st
 - [Custom extensions](docs/extensions.md)
 - [Bridge protocol reference](docs/bridge-protocol.md)
 - [Testing guide](docs/testing.md)
+- [Onboarding and recovery](docs/onboarding.md)
 
 > Note: `docs/ai/` contains planning/progress artifacts used during development. User-facing and maintenance docs live in the top-level `docs/` files above.
 
@@ -94,11 +95,12 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 ### 3. Connect
 
-1. Add a host in the app:
+1. Follow the first-run **Connect your computer** guide:
    - Host: your laptop's Tailscale MagicDNS hostname (`<device>.<tailnet>.ts.net`)
    - Port: `8787` (or whatever the bridge uses)
    - Use TLS: off for local/Tailscale bridge unless you've put TLS in front
-   - Token: set this in `bridge/.env` as `BRIDGE_AUTH_TOKEN`
+   - Token: set this in `bridge/.env` as `BRIDGE_AUTH_TOKEN`; stored tokens are never displayed
+   - Use the staged connection test to distinguish network, authentication, and Pi readiness failures
 
 2. The app will fetch your sessions from `~/.pi/agent/sessions/` (or `BRIDGE_SESSION_DIR` if overridden)
 

@@ -11,6 +11,7 @@ This directory contains human-facing documentation for the Pi Mobile app and bri
 - [Custom Extensions](extensions.md)
 - [Bridge Protocol Reference](bridge-protocol.md)
 - [Testing](testing.md)
+- [Onboarding and Recovery](onboarding.md)
 - [Performance Baseline](perf-baseline.md)
 - [Historical Final Acceptance Report](final-acceptance.md)
 - [Current Pi RPC Gap Assessment](pi-upstream-opportunities.md)

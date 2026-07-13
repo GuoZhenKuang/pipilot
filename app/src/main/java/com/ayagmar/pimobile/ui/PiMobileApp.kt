@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -230,19 +229,20 @@ fun piMobileApp(appGraph: AppGraph) {
             }
         }
 
-        val startDestination =
-            remember(appGraph) {
-                if (appGraph.hostProfileStore.list().isEmpty()) {
-                    "hosts"
-                } else {
-                    "sessions"
-                }
+        var hasConfiguredHost by remember(appGraph) {
+            mutableStateOf(appGraph.hostProfileStore.list().isNotEmpty())
+        }
+        val startDestination = if (hasConfiguredHost) "sessions" else "hosts"
+        val availableDestinations =
+            if (hasConfiguredHost) {
+                destinations.filter { destination -> destination.route != "hosts" && destination.route != "chat" }
+            } else {
+                destinations.filter { destination -> destination.route == "hosts" }
             }
 
         ModalNavigationDrawer(
             drawerState = drawerState,
             gesturesEnabled = drawerState.isOpen,
-            scrimColor = Color.Transparent,
             drawerContent = {
                 ModalDrawerSheet(
                     modifier = Modifier.widthIn(min = 220.dp, max = 270.dp),
@@ -281,7 +281,7 @@ fun piMobileApp(appGraph: AppGraph) {
                             modifier = Modifier.padding(horizontal = 8.dp),
                         )
 
-                        destinations.forEach { destination ->
+                        availableDestinations.forEach { destination ->
                             DrawerDestinationItem(
                                 destination = destination,
                                 selected = currentRoute == destination.route,
@@ -309,6 +309,10 @@ fun piMobileApp(appGraph: AppGraph) {
                                 profileStore = appGraph.hostProfileStore,
                                 tokenStore = appGraph.hostTokenStore,
                                 diagnostics = appGraph.connectionDiagnostics,
+                                onHostSaved = {
+                                    hasConfiguredHost = true
+                                    navigateTo("sessions")
+                                },
                             )
                         }
                         composable(route = "sessions") {
@@ -341,11 +345,11 @@ fun piMobileApp(appGraph: AppGraph) {
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
                         modifier =
                             Modifier
-                                .align(Alignment.CenterStart)
-                                .offset(x = (-8).dp),
+                                .align(Alignment.TopStart)
+                                .padding(8.dp),
                     ) {
                         FilledTonalIconButton(
-                            modifier = Modifier.size(34.dp),
+                            modifier = Modifier.size(48.dp),
                             onClick = {
                                 scope.launch {
                                     if (drawerState.isOpen) {

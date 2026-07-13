@@ -40,15 +40,18 @@ import com.ayagmar.pimobile.hosts.HostDraft
 import com.ayagmar.pimobile.hosts.HostProfileItem
 import com.ayagmar.pimobile.hosts.HostProfileStore
 import com.ayagmar.pimobile.hosts.HostTokenStore
+import com.ayagmar.pimobile.hosts.HostValidationResult
 import com.ayagmar.pimobile.hosts.HostsUiState
 import com.ayagmar.pimobile.hosts.HostsViewModel
 import com.ayagmar.pimobile.hosts.HostsViewModelFactory
+import com.ayagmar.pimobile.hosts.toRecoveryMessage
 
 @Composable
 fun HostsRoute(
     profileStore: HostProfileStore,
     tokenStore: HostTokenStore,
     diagnostics: ConnectionDiagnostics,
+    onHostSaved: () -> Unit = {},
 ) {
     val factory =
         remember(profileStore, tokenStore, diagnostics) {
@@ -95,7 +98,10 @@ fun HostsRoute(
             },
             onSave = { draft ->
                 hostsViewModel.saveHost(draft)
-                editorDraft = null
+                if (draft.validate() is HostValidationResult.Valid && draft.token.isNotBlank()) {
+                    onHostSaved()
+                    editorDraft = null
+                }
             },
         )
     }
@@ -146,10 +152,7 @@ private fun HostsScreen(
         }
 
         if (state.profiles.isEmpty()) {
-            Text(
-                text = "No hosts configured yet.",
-                style = MaterialTheme.typography.bodyLarge,
-            )
+            FirstRunConnectionCard(onAddClick)
             return
         }
 
@@ -167,6 +170,31 @@ private fun HostsScreen(
                     onDeleteClick = { onDeleteClick(item.profile.id) },
                     onTestClick = { onTestClick(item.profile.id) },
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FirstRunConnectionCard(onAddClick: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Connect your computer", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                text =
+                    "Before continuing, start the Pi Mobile bridge on your computer " +
+                        "and connect both devices through Tailscale.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text("You’ll need the computer’s MagicDNS name and bridge token.")
+            Button(
+                onClick = onAddClick,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Set up bridge connection")
             }
         }
     }
@@ -269,11 +297,12 @@ private fun DiagnosticStatusIcon(status: DiagnosticStatus) {
 
 @Composable
 private fun DiagnosticResultDetail(result: DiagnosticsResult) {
+    val recovery = result.toRecoveryMessage()
     when (result) {
         is DiagnosticsResult.Success -> {
             Column {
                 Text(
-                    text = "Connected",
+                    text = recovery.title,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -293,21 +322,21 @@ private fun DiagnosticResultDetail(result: DiagnosticsResult) {
         }
         is DiagnosticsResult.NetworkError -> {
             Text(
-                text = "Network: ${result.message}",
+                text = "${recovery.title}. ${recovery.explanation}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
         }
         is DiagnosticsResult.AuthError -> {
             Text(
-                text = "Auth: ${result.message}",
+                text = "${recovery.title}. ${recovery.explanation}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
         }
         is DiagnosticsResult.RpcError -> {
             Text(
-                text = "RPC: ${result.message}",
+                text = "${recovery.title}. ${recovery.explanation}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
@@ -326,7 +355,7 @@ private fun HostEditorDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(if (initialDraft.id == null) "Add host" else "Edit host")
+            Text(if (initialDraft.id == null) "Connect your computer" else "Edit connection")
         },
         text = {
             HostDraftFields(
@@ -338,7 +367,7 @@ private fun HostEditorDialog(
         },
         confirmButton = {
             TextButton(onClick = { onSave(draft) }) {
-                Text("Save")
+                Text(if (initialDraft.id == null) "Save connection" else "Save")
             }
         },
         dismissButton = {
