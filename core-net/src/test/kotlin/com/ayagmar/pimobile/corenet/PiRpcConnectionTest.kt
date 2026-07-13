@@ -37,14 +37,14 @@ class PiRpcConnectionTest {
 
             val sentTypes = transport.sentPayloadTypes()
             assertEquals(
-                listOf("bridge_set_cwd", "bridge_acquire_control", "get_state", "get_messages"),
+                listOf("bridge_set_cwd", "bridge_acquire_control", "get_state", "get_entries"),
                 sentTypes,
             )
             assertTrue(transport.connectedTarget?.url?.contains("clientId=client-a") == true)
 
             val snapshot = connection.resyncEvents.first()
             assertEquals("get_state", snapshot.stateResponse.command)
-            assertEquals("get_messages", snapshot.messagesResponse.command)
+            assertEquals("get_entries", snapshot.entriesResponse.command)
 
             connection.disconnect()
         }
@@ -133,11 +133,40 @@ class PiRpcConnectionTest {
 
             val reconnectSnapshot = withTimeout(2_000) { reconnectSnapshotDeferred.await() }
             assertEquals("get_state", reconnectSnapshot.stateResponse.command)
-            assertEquals("get_messages", reconnectSnapshot.messagesResponse.command)
+            assertEquals("get_entries", reconnectSnapshot.entriesResponse.command)
             assertEquals(
-                listOf("bridge_set_cwd", "bridge_acquire_control", "get_state", "get_messages"),
+                listOf("bridge_set_cwd", "bridge_acquire_control", "get_state", "get_entries"),
                 transport.sentPayloadTypes(),
             )
+            val entriesRequest = transport.sentPayloads().last()
+            assertEquals("entry-1", entriesRequest["since"]?.toString()?.trim('"'))
+
+            connection.disconnect()
+        }
+
+    @Test
+    fun `unknown entry cursor performs exactly one full entries rebuild`() =
+        runBlocking {
+            val transport = FakeSocketTransport()
+            transport.onSend = { outgoing -> transport.respondToOutgoing(outgoing) }
+            val connection = PiRpcConnection(transport = transport)
+
+            connection.connect(
+                PiRpcConnectionConfig(
+                    target = WebSocketTarget(url = "ws://127.0.0.1:3000/ws"),
+                    cwd = "/tmp/project-cursor",
+                    clientId = "client-cursor",
+                ),
+            )
+
+            transport.clearSentMessages()
+            transport.rejectNextEntriesCursor = true
+            val snapshot = connection.resync()
+
+            assertTrue(snapshot.fullRebuild)
+            assertEquals(listOf("get_state", "get_entries", "get_entries"), transport.sentPayloadTypes())
+            assertEquals("entry-1", transport.sentPayloads()[1]["since"]?.toString()?.trim('"'))
+            assertTrue("since" !in transport.sentPayloads()[2])
 
             connection.disconnect()
         }
@@ -185,6 +214,7 @@ class PiRpcConnectionTest {
         val sentMessages = mutableListOf<String>()
         var connectedTarget: WebSocketTarget? = null
         var onSend: suspend (String) -> Unit = {}
+        var rejectNextEntriesCursor = false
 
         override suspend fun connect(target: WebSocketTarget) {
             connectedTarget = target
@@ -280,6 +310,47 @@ class PiRpcConnectionTest {
                 emitRpcResponse(
                     id = payload["id"]?.toString()?.trim('"').orEmpty(),
                     command = "get_messages",
+                )
+            }
+            if (channel == "rpc" && type == "get_entries") {
+                if (rejectNextEntriesCursor && "since" in payload) {
+                    rejectNextEntriesCursor = false
+                    emitRpc(
+                        buildJsonObject {
+                            put("id", payload["id"]?.toString()?.trim('"').orEmpty())
+                            put("type", "response")
+                            put("command", "get_entries")
+                            put("success", false)
+                            put("error", "Unknown entry cursor")
+                        },
+                    )
+                    return
+                }
+                emitRpc(
+                    buildJsonObject {
+                        put("id", payload["id"]?.toString()?.trim('"').orEmpty())
+                        put("type", "response")
+                        put("command", "get_entries")
+                        put("success", true)
+                        put(
+                            "data",
+                            buildJsonObject {
+                                put(
+                                    "entries",
+                                    kotlinx.serialization.json.buildJsonArray {
+                                        add(
+                                            buildJsonObject {
+                                                put("type", "message")
+                                                put("id", "entry-1")
+                                                put("parentId", JsonNull)
+                                            },
+                                        )
+                                    },
+                                )
+                                put("leafId", "entry-1")
+                            },
+                        )
+                    },
                 )
             }
         }

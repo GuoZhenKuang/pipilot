@@ -1,5 +1,6 @@
 package com.ayagmar.pimobile.corenet
 
+import com.ayagmar.pimobile.corerpc.GetEntriesCommand
 import com.ayagmar.pimobile.corerpc.GetMessagesCommand
 import com.ayagmar.pimobile.corerpc.GetStateCommand
 import com.ayagmar.pimobile.corerpc.RpcCommand
@@ -27,6 +28,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -53,6 +55,8 @@ class PiRpcConnection(
     private var inboundJob: Job? = null
     private var connectionMonitorJob: Job? = null
     private var activeConfig: PiRpcConnectionConfig? = null
+    private var entriesCursor: String? = null
+    private var cursorSessionPath: String? = null
 
     @Volatile
     private var lifecycleEpoch: Long = 0
@@ -66,6 +70,10 @@ class PiRpcConnection(
         val resolvedConfig = config.resolveClientId()
         val connectionEpoch =
             lifecycleMutex.withLock {
+                if (activeConfig?.sessionPath != resolvedConfig.sessionPath) {
+                    entriesCursor = null
+                    cursorSessionPath = resolvedConfig.sessionPath
+                }
                 activeConfig = resolvedConfig
                 lifecycleEpoch += 1
                 startBackgroundJobs()
@@ -128,6 +136,8 @@ class PiRpcConnection(
             lifecycleMutex.withLock {
                 val currentConfig = activeConfig
                 activeConfig = null
+                entriesCursor = null
+                cursorSessionPath = null
                 lifecycleEpoch += 1
                 inboundJob?.cancel()
                 connectionMonitorJob?.cancel()
@@ -188,6 +198,10 @@ class PiRpcConnection(
 
     suspend fun requestMessages(): RpcResponse {
         return requestResponse(GetMessagesCommand(id = requestIdFactory()))
+    }
+
+    suspend fun requestEntries(since: String? = null): RpcResponse {
+        return requestResponse(GetEntriesCommand(id = requestIdFactory(), since = since))
     }
 
     suspend fun resync(): RpcResyncSnapshot {
@@ -297,10 +311,27 @@ class PiRpcConnection(
 
     private suspend fun buildResyncSnapshot(): RpcResyncSnapshot {
         val stateResponse = requestState()
-        val messagesResponse = requestMessages()
+        val sessionPath = stateResponse.data?.stringField("sessionFile")
+        if (cursorSessionPath != sessionPath) {
+            entriesCursor = null
+            cursorSessionPath = sessionPath
+        }
+
+        val requestedCursor = entriesCursor
+        var entriesResponse = requestEntries(requestedCursor)
+        var fullRebuild = requestedCursor == null
+        if (!entriesResponse.success && requestedCursor != null) {
+            entriesCursor = null
+            entriesResponse = requestEntries()
+            fullRebuild = true
+        }
+        entriesResponse.requireSuccessfulEntriesResponse()
+        entriesCursor = entriesResponse.lastEntryId() ?: entriesCursor
+
         return RpcResyncSnapshot(
             stateResponse = stateResponse,
-            messagesResponse = messagesResponse,
+            entriesResponse = entriesResponse,
+            fullRebuild = fullRebuild,
         )
     }
 
@@ -411,7 +442,8 @@ data class BridgeMessage(
 
 data class RpcResyncSnapshot(
     val stateResponse: RpcResponse,
-    val messagesResponse: RpcResponse,
+    val entriesResponse: RpcResponse,
+    val fullRebuild: Boolean,
 )
 
 private suspend fun ensureBridgeControl(
@@ -528,6 +560,16 @@ private fun appendClientId(
 private fun JsonObject.stringField(name: String): String? {
     val primitive = this[name]?.jsonPrimitive ?: return null
     return primitive.contentOrNull
+}
+
+private fun RpcResponse.requireSuccessfulEntriesResponse() {
+    check(success) { error ?: "Failed to synchronize session entries" }
+    check(command == "get_entries") { "Expected get_entries response, received $command" }
+}
+
+private fun RpcResponse.lastEntryId(): String? {
+    val entries = runCatching { data?.get("entries")?.jsonArray }.getOrNull() ?: return null
+    return entries.lastOrNull()?.jsonObject?.stringField("id")
 }
 
 private fun bridgeChannel(
