@@ -32,7 +32,7 @@ fun reduceTimelineReadingState(
         TimelineReadingAction.ReachBottom,
         TimelineReadingAction.JumpToLatest,
         -> TimelineReadingState()
-        TimelineReadingAction.DisclosureChanged -> state
+        TimelineReadingAction.DisclosureChanged -> state.copy(sticksToBottom = false)
     }
 
 fun timelineActivityIdentities(timeline: List<com.ayagmar.pimobile.chat.ChatTimelineItem>): List<String> =

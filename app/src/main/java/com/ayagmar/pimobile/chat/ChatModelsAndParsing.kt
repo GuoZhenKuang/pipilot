@@ -137,7 +137,7 @@ sealed interface ChatTimelineItem {
         override val id: String,
         val text: String,
         val imageCount: Int = 0,
-        val imageUris: List<String> = emptyList(),
+        val images: List<ChatImageSource> = emptyList(),
     ) : ChatTimelineItem
 
     data class Assistant(
@@ -160,6 +160,15 @@ sealed interface ChatTimelineItem {
         val editDiff: EditDiffInfo? = null,
         val isDiffExpanded: Boolean = false,
     ) : ChatTimelineItem
+}
+
+sealed interface ChatImageSource {
+    data class LocalUri(val uri: String) : ChatImageSource
+
+    data class Embedded(
+        val base64Data: String,
+        val mimeType: String,
+    ) : ChatImageSource
 }
 
 /**

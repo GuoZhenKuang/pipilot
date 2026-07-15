@@ -59,11 +59,12 @@ internal fun parseHistoryItems(
             "user" -> {
                 val content = message["content"]
                 val text = extractUserText(content)
-                val imageCount = extractUserImageCount(content)
+                val images = extractUserImages(content)
                 ChatTimelineItem.User(
                     id = "history-user-$absoluteIndex",
                     text = text,
-                    imageCount = imageCount,
+                    imageCount = extractUserImageCount(content),
+                    images = images,
                 )
             }
 
@@ -115,6 +116,27 @@ internal fun extractUserText(content: JsonElement?): String {
                 }
             }.getOrDefault("")
         }
+    }
+}
+
+internal fun extractUserImages(content: JsonElement?): List<ChatImageSource.Embedded> {
+    val blocks =
+        when (content) {
+            is JsonObject -> listOf(content)
+            else ->
+                runCatching {
+                    content?.jsonArray?.mapNotNull { block ->
+                        runCatching { block.jsonObject }.getOrNull()
+                    }
+                }.getOrNull().orEmpty()
+        }
+
+    return blocks.mapNotNull { block ->
+        val type = block.stringField("type")?.lowercase().orEmpty()
+        if (!type.contains("image")) return@mapNotNull null
+        val data = block.stringField("data")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+        val mimeType = block.stringField("mimeType")?.takeIf { it.startsWith("image/") } ?: return@mapNotNull null
+        ChatImageSource.Embedded(base64Data = data, mimeType = mimeType)
     }
 }
 

@@ -65,8 +65,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
 import coil.compose.AsyncImage
+import com.ayagmar.pimobile.chat.ChatImageSource
 import com.ayagmar.pimobile.chat.ChatTimelineItem
 import com.ayagmar.pimobile.chat.ChatTurn
 import com.ayagmar.pimobile.chat.ChatTurnSection
@@ -150,7 +150,7 @@ private fun ChatTimeline(
     onToggleToolArgumentsExpansion: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var previewImageUri by rememberSaveable { mutableStateOf<String?>(null) }
+    var previewImage by remember { mutableStateOf<ChatImageSource?>(null) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val turns = remember(timeline) { projectChatTurns(timeline) }
     var prependAnchor by remember { mutableStateOf<TimelinePrependAnchor?>(null) }
@@ -200,12 +200,26 @@ private fun ChatTimeline(
                     )
                 onLoadOlderMessages()
             },
-            onToggleToolExpansion = onToggleToolExpansion,
-            onToggleThinkingExpansion = onToggleThinkingExpansion,
-            onToggleDiffExpansion = onToggleDiffExpansion,
-            onToggleToolArgumentsExpansion = onToggleToolArgumentsExpansion,
-            onPreviewImage = { uri ->
-                previewImageUri = uri
+            onToggleToolExpansion = { itemId ->
+                autoScrollUi.onDisclosureInteraction()
+                onToggleToolExpansion(itemId)
+            },
+            onToggleThinkingExpansion = { itemId ->
+                autoScrollUi.onDisclosureInteraction()
+                onToggleThinkingExpansion(itemId)
+            },
+            onToggleDiffExpansion = { itemId ->
+                autoScrollUi.onDisclosureInteraction()
+                onToggleDiffExpansion(itemId)
+            },
+            onToggleToolArgumentsExpansion = { itemId ->
+                autoScrollUi.onDisclosureInteraction()
+                onToggleToolArgumentsExpansion(itemId)
+            },
+            onDisclosureInteraction = autoScrollUi.onDisclosureInteraction,
+            onPreviewImage = { image ->
+                autoScrollUi.onDisclosureInteraction()
+                previewImage = image
             },
         )
 
@@ -224,10 +238,10 @@ private fun ChatTimeline(
             }
         }
 
-        previewImageUri?.let { uri ->
+        previewImage?.let { image ->
             ImagePreviewDialog(
-                uriString = uri,
-                onDismiss = { previewImageUri = null },
+                image = image,
+                onDismiss = { previewImage = null },
             )
         }
     }
@@ -271,6 +285,7 @@ private fun androidx.compose.foundation.lazy.LazyListState.capturePrependAnchor(
 private data class TimelineAutoScrollUi(
     val shouldShowJumpToLatest: Boolean,
     val unreadCount: Int,
+    val onDisclosureInteraction: () -> Unit,
     val onJumpToLatest: () -> Unit,
 )
 
@@ -303,17 +318,23 @@ private fun rememberTimelineAutoScrollUi(
             renderedItemsCount = renderedItemsCount,
         )
 
-    val shouldAutoScrollToBottom = (shouldStickToBottom || isNearBottom) && !isPreservingPrepend
     var readingState by remember { mutableStateOf(TimelineReadingState()) }
+    val shouldAutoScrollToBottom =
+        readingState.sticksToBottom &&
+            (shouldStickToBottom || isNearBottom) &&
+            !isPreservingPrepend
     val activityIdentities = remember(timeline) { timelineActivityIdentities(timeline) }
     var previousActivityIdentities by remember { mutableStateOf(activityIdentities) }
 
     LaunchedEffect(isNearBottom, listState.isScrollInProgress) {
-        if (isNearBottom) {
-            readingState = reduceTimelineReadingState(readingState, TimelineReadingAction.ReachBottom)
-        } else if (listState.isScrollInProgress) {
-            readingState = reduceTimelineReadingState(readingState, TimelineReadingAction.ScrollAway)
-        }
+        if (!listState.isScrollInProgress) return@LaunchedEffect
+        val action =
+            if (isNearBottom) {
+                TimelineReadingAction.ReachBottom
+            } else {
+                TimelineReadingAction.ScrollAway
+            }
+        readingState = reduceTimelineReadingState(readingState, action)
     }
     LaunchedEffect(activityIdentities) {
         val newActivityCount = countNewTimelineActivities(previousActivityIdentities, activityIdentities)
@@ -344,6 +365,14 @@ private fun rememberTimelineAutoScrollUi(
     return TimelineAutoScrollUi(
         shouldShowJumpToLatest = renderedItemsCount > 1 && !shouldAutoScrollToBottom,
         unreadCount = readingState.unreadCount,
+        onDisclosureInteraction = {
+            shouldStickToBottom = false
+            readingState =
+                reduceTimelineReadingState(
+                    readingState,
+                    TimelineReadingAction.DisclosureChanged,
+                )
+        },
         onJumpToLatest = {
             shouldStickToBottom = true
             readingState = reduceTimelineReadingState(readingState, TimelineReadingAction.JumpToLatest)
@@ -501,7 +530,8 @@ private fun ChatTimelineList(
     onToggleThinkingExpansion: (String) -> Unit,
     onToggleDiffExpansion: (String) -> Unit,
     onToggleToolArgumentsExpansion: (String) -> Unit,
-    onPreviewImage: (String) -> Unit,
+    onDisclosureInteraction: () -> Unit,
+    onPreviewImage: (ChatImageSource) -> Unit,
 ) {
     LazyColumn(
         state = listState,
@@ -527,6 +557,7 @@ private fun ChatTimelineList(
                 onToggleThinkingExpansion = onToggleThinkingExpansion,
                 onToggleDiffExpansion = onToggleDiffExpansion,
                 onToggleToolArgumentsExpansion = onToggleToolArgumentsExpansion,
+                onDisclosureInteraction = onDisclosureInteraction,
                 onPreviewImage = onPreviewImage,
             )
         }
@@ -555,7 +586,8 @@ private fun ChatTurnRow(
     onToggleThinkingExpansion: (String) -> Unit,
     onToggleDiffExpansion: (String) -> Unit,
     onToggleToolArgumentsExpansion: (String) -> Unit,
-    onPreviewImage: (String) -> Unit,
+    onDisclosureInteraction: () -> Unit,
+    onPreviewImage: (ChatImageSource) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         turn.user?.let { user ->
@@ -566,7 +598,7 @@ private fun ChatTurnRow(
                 UserCard(
                     text = user.text,
                     imageCount = user.imageCount,
-                    imageUris = user.imageUris,
+                    images = user.images,
                     onImageClick = onPreviewImage,
                 )
             }
@@ -587,6 +619,7 @@ private fun ChatTurnRow(
                         onToggleToolExpansion = onToggleToolExpansion,
                         onToggleDiffExpansion = onToggleDiffExpansion,
                         onToggleToolArgumentsExpansion = onToggleToolArgumentsExpansion,
+                        onDisclosureInteraction = onDisclosureInteraction,
                     )
             }
         }
@@ -602,6 +635,7 @@ private fun ToolActivityGroup(
     onToggleToolExpansion: (String) -> Unit,
     onToggleDiffExpansion: (String) -> Unit,
     onToggleToolArgumentsExpansion: (String) -> Unit,
+    onDisclosureInteraction: () -> Unit,
 ) {
     val isStreaming = tools.any { it.isStreaming }
     val hasError = tools.any { it.isError }
@@ -618,7 +652,10 @@ private fun ToolActivityGroup(
     ToolGroupDisclosure(
         tools = tools,
         expanded = expanded,
-        onToggle = { expanded = !expanded },
+        onToggle = {
+            onDisclosureInteraction()
+            expanded = !expanded
+        },
     )
     if (expanded) {
         tools.forEach { tool ->
@@ -715,8 +752,8 @@ private fun ToolActivityRow(
 private fun UserCard(
     text: String,
     imageCount: Int,
-    imageUris: List<String>,
-    onImageClick: (String) -> Unit,
+    images: List<ChatImageSource>,
+    onImageClick: (ChatImageSource) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Card(
@@ -730,28 +767,30 @@ private fun UserCard(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(
-                text = text.ifBlank { "(empty)" },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
+            if (text.isNotBlank()) {
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
 
-            if (imageUris.isNotEmpty()) {
+            if (images.isNotEmpty()) {
                 LazyRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     itemsIndexed(
-                        items = imageUris.take(MAX_INLINE_USER_IMAGE_PREVIEWS),
-                        key = { index, uri -> "$uri-$index" },
-                    ) { _, uriString ->
+                        items = images.take(MAX_INLINE_USER_IMAGE_PREVIEWS),
+                        key = { index, _ -> "user-image-$index" },
+                    ) { _, image ->
                         UserImagePreview(
-                            uriString = uriString,
-                            onClick = { onImageClick(uriString) },
+                            image = image,
+                            onClick = { onImageClick(image) },
                         )
                     }
 
-                    val remaining = imageUris.size - MAX_INLINE_USER_IMAGE_PREVIEWS
+                    val remaining = images.size - MAX_INLINE_USER_IMAGE_PREVIEWS
                     if (remaining > 0) {
                         item(key = "more-images") {
                             Box(
@@ -792,11 +831,11 @@ private fun UserCard(
 
 @Composable
 private fun UserImagePreview(
-    uriString: String,
+    image: ChatImageSource,
     onClick: () -> Unit,
 ) {
-    val uri = remember(uriString) { uriString.toUri() }
-    var loadFailed by remember(uriString) { mutableStateOf(false) }
+    val imageModel = remember(image) { image.toImageModel() }
+    var loadFailed by remember(image) { mutableStateOf(imageModel == null) }
 
     if (loadFailed) {
         Box(
@@ -817,7 +856,7 @@ private fun UserImagePreview(
     }
 
     AsyncImage(
-        model = uri,
+        model = imageModel,
         contentDescription = "Sent image preview",
         modifier =
             Modifier

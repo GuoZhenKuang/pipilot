@@ -1049,7 +1049,7 @@ class ChatViewModelThinkingExpansionTest {
 
             val userItem = viewModel.userItems().single { it.id == "user-server-image" }
             assertEquals(1, userItem.imageCount)
-            assertEquals(listOf(imageUri), userItem.imageUris)
+            assertEquals(listOf(ChatImageSource.LocalUri(imageUri)), userItem.images)
         }
 
     private fun ChatViewModel.userItems(): List<ChatTimelineItem.User> =

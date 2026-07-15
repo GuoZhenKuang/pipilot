@@ -153,7 +153,8 @@ App renders streaming text/tools
 - **Edit diff viewer**: `edit` tool calls show before/after content.
 - **Command palette**: insert slash commands quickly from the prompt field menu, including bridge-backed mobile commands.
 - **Stable active-run composer**: type inline during a run and deliver the draft as a follow-up or steer without a separate dialog.
-- **Reading-position controls**: loading older turns preserves position, while a `N new` control returns to live activity when you choose.
+- **Reading-position controls**: expanding details pauses live auto-scroll, loading older turns preserves position, and `N new` returns to live activity only when you choose.
+- **Image previews**: attached images render from local Android URIs or documented image data embedded in the remote Pi session, with a full-screen preview.
 - **Quick copy action**: copy an assistant answer inline or copy the latest response from session details.
 - **Bash dialog**: execute shell commands with timeout/truncation handling and history.
 - **Session status in chat**: shows the active session name and queued message count from pi state.

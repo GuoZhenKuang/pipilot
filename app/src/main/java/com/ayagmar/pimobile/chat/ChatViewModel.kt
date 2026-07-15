@@ -194,7 +194,7 @@ class ChatViewModel(
                 id = optimisticUserId,
                 text = message,
                 imageCount = pendingImages.size,
-                imageUris = pendingImages.map { it.uri },
+                images = pendingImages.map { ChatImageSource.LocalUri(it.uri) },
             ),
         )
         pendingLocalUserIds.addLast(optimisticUserId)
@@ -1178,6 +1178,7 @@ class ChatViewModel(
                     id = "user-$entryId",
                     text = text,
                     imageCount = imageCount,
+                    images = extractUserImages(content),
                 )
             replacePendingUserItemOrUpsert(userItem)
         }
@@ -2459,7 +2460,7 @@ class ChatViewModel(
         val mergedUserItem =
             userItem.copy(
                 imageCount = maxOf(userItem.imageCount, pendingItem.imageCount),
-                imageUris = userItem.imageUris.ifEmpty { pendingItem.imageUris },
+                images = userItem.images.ifEmpty { pendingItem.images },
             )
 
         fullTimeline =

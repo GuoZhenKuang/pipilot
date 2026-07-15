@@ -52,6 +52,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
+import com.ayagmar.pimobile.chat.ChatImageSource
 import com.ayagmar.pimobile.chat.ChatViewModel
 import com.ayagmar.pimobile.chat.ImageEncoder
 import com.ayagmar.pimobile.chat.PendingImage
@@ -327,7 +328,7 @@ internal fun PromptInputRow(
 
         previewImageUri?.let { uri ->
             ImagePreviewDialog(
-                uriString = uri,
+                image = ChatImageSource.LocalUri(uri),
                 onDismiss = { previewImageUri = null },
             )
         }
@@ -445,10 +446,10 @@ private fun formatFileSize(bytes: Long): String {
 
 @Composable
 internal fun ImagePreviewDialog(
-    uriString: String,
+    image: ChatImageSource,
     onDismiss: () -> Unit,
 ) {
-    val uri = remember(uriString) { uriString.toUri() }
+    val imageModel = remember(image) { image.toImageModel() }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -459,7 +460,7 @@ internal fun ImagePreviewDialog(
             contentAlignment = Alignment.Center,
         ) {
             AsyncImage(
-                model = uri,
+                model = imageModel,
                 contentDescription = "Image preview",
                 modifier = Modifier.fillMaxSize().padding(16.dp),
                 contentScale = ContentScale.Fit,

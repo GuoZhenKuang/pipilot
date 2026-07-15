@@ -23,9 +23,13 @@ class TimelineAutoScrollReducerTest {
     }
 
     @Test
-    fun `disclosure changes do not count as activity`() {
-        val away = TimelineReadingState(sticksToBottom = false)
-        assertEquals(away, reduceTimelineReadingState(away, TimelineReadingAction.DisclosureChanged))
+    fun `disclosure interaction pauses sticky scrolling without adding unread activity`() {
+        val state = TimelineReadingState(sticksToBottom = true, unreadCount = 2)
+
+        val paused = reduceTimelineReadingState(state, TimelineReadingAction.DisclosureChanged)
+
+        assertFalse(paused.sticksToBottom)
+        assertEquals(2, paused.unreadCount)
     }
 
     @Test
