@@ -8,7 +8,7 @@
 
 ## Status
 
-- **State**: DONE (device acceptance pending — operator debug mode)
+- **State**: IN PROGRESS
 - **Priority**: P1
 - **Effort**: L
 - **Risk**: MED
@@ -446,7 +446,7 @@ Stop and report; do not improvise if:
 
 ## Review corrections
 
-A post-implementation review was completed before merge. The follow-up fixes preserve interleaved assistant/tool ordering, drain deferred freshness refreshes whenever chat becomes idle, retain active-run drafts until successful dispatch, restore the visible anchor after history prepends, count unread activity by stable identities rather than streaming deltas, collapse successful live tool groups when they settle, expose cwd in handoff details, and distinguish retrying from waiting.
+Post-implementation reviews were completed before merge. The follow-up fixes preserve interleaved assistant/tool ordering, drain deferred freshness refreshes whenever chat becomes idle, retain active-run drafts until successful dispatch, restore the visible anchor after history prepends, count unread activity by stable identities rather than streaming deltas, collapse successful live tool groups when they settle, expose cwd in handoff details, and distinguish retrying from waiting. Disclosure interactions now pause sticky auto-scroll until the user explicitly returns to the bottom, and documented image data embedded in remote Pi session messages renders as tappable previews alongside local Android attachments.
 
 ## Maintenance notes
 
