@@ -42,8 +42,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.ayagmar.pimobile.chat.ChatViewModel
@@ -76,7 +74,7 @@ internal fun SessionStatsSheet(
 ) {
     if (!isVisible) return
 
-    val clipboardManager = LocalClipboardManager.current
+    val copyToClipboard = rememberClipboardCopy()
     val path = sessionPath ?: stats?.sessionPath
     val status =
         when {
@@ -121,7 +119,7 @@ internal fun SessionStatsSheet(
             }
             Text("Handoff to computer", style = MaterialTheme.typography.titleMedium)
             SelectionContainer { Text(summary, style = MaterialTheme.typography.bodySmall) }
-            TextButton(onClick = { clipboardManager.setText(AnnotatedString(summary)) }) {
+            TextButton(onClick = { copyToClipboard(summary) }) {
                 Icon(Icons.Default.ContentCopy, contentDescription = null)
                 Text("Copy handoff summary")
             }

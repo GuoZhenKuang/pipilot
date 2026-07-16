@@ -49,6 +49,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -60,9 +61,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -233,8 +235,27 @@ private fun ChatTimeline(
                 onClick = autoScrollUi.onJumpToLatest,
                 modifier = Modifier.testTag(CHAT_JUMP_TO_LATEST_TAG),
             ) {
-                val label = if (autoScrollUi.unreadCount > 0) "↓ ${autoScrollUi.unreadCount} new" else "↓ Latest"
-                Text(label)
+                Text("Paused · ↓ ${autoScrollUi.unreadLabel}")
+            }
+        }
+
+        AnimatedVisibility(
+            visible = autoScrollUi.isFollowingLive && isRunActive,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                tonalElevation = 2.dp,
+            ) {
+                Text(
+                    text = "Following live",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                )
             }
         }
 
@@ -284,7 +305,8 @@ private fun androidx.compose.foundation.lazy.LazyListState.capturePrependAnchor(
 
 private data class TimelineAutoScrollUi(
     val shouldShowJumpToLatest: Boolean,
-    val unreadCount: Int,
+    val isFollowingLive: Boolean,
+    val unreadLabel: String,
     val onDisclosureInteraction: () -> Unit,
     val onJumpToLatest: () -> Unit,
 )
@@ -318,7 +340,26 @@ private fun rememberTimelineAutoScrollUi(
             renderedItemsCount = renderedItemsCount,
         )
 
-    var readingState by remember { mutableStateOf(TimelineReadingState()) }
+    var readingState by
+        rememberSaveable(
+            stateSaver =
+                androidx.compose.runtime.saveable.listSaver<TimelineReadingState, Any>(
+                    save = {
+                        listOf(
+                            it.sticksToBottom,
+                            it.assistantUnreadCount,
+                            it.toolUnreadCount,
+                        )
+                    },
+                    restore = {
+                        TimelineReadingState(
+                            sticksToBottom = it[0] as Boolean,
+                            assistantUnreadCount = it[1] as Int,
+                            toolUnreadCount = it[2] as Int,
+                        )
+                    },
+                ),
+        ) { mutableStateOf(TimelineReadingState()) }
     val shouldAutoScrollToBottom =
         readingState.sticksToBottom &&
             (shouldStickToBottom || isNearBottom) &&
@@ -337,12 +378,12 @@ private fun rememberTimelineAutoScrollUi(
         readingState = reduceTimelineReadingState(readingState, action)
     }
     LaunchedEffect(activityIdentities) {
-        val newActivityCount = countNewTimelineActivities(previousActivityIdentities, activityIdentities)
+        val unreadDelta = countNewTimelineActivities(previousActivityIdentities, activityIdentities)
         if (!shouldAutoScrollToBottom && !isPreservingPrepend) {
             readingState =
                 reduceTimelineReadingState(
                     readingState,
-                    TimelineReadingAction.NewActivity(newActivityCount),
+                    TimelineReadingAction.NewActivity(unreadDelta),
                 )
         }
         previousActivityIdentities = activityIdentities
@@ -364,7 +405,8 @@ private fun rememberTimelineAutoScrollUi(
 
     return TimelineAutoScrollUi(
         shouldShowJumpToLatest = renderedItemsCount > 1 && !shouldAutoScrollToBottom,
-        unreadCount = readingState.unreadCount,
+        isFollowingLive = shouldAutoScrollToBottom,
+        unreadLabel = formatUnreadActivityLabel(readingState),
         onDisclosureInteraction = {
             shouldStickToBottom = false
             readingState =
@@ -436,7 +478,7 @@ private fun rememberShouldStickToBottom(
     isNearBottom: Boolean,
     renderedItemsCount: Int,
 ): androidx.compose.runtime.MutableState<Boolean> {
-    val shouldStickToBottom = remember { mutableStateOf(true) }
+    val shouldStickToBottom = rememberSaveable { mutableStateOf(true) }
 
     LaunchedEffect(listState.isScrollInProgress, isNearBottom, renderedItemsCount) {
         if (renderedItemsCount <= 1) {
@@ -459,7 +501,7 @@ private fun RunActivityAutoScroll(
     renderedItemsCount: Int,
     shouldAutoScrollToBottom: Boolean,
 ) {
-    var lastAutoScrollAtMs by remember { mutableStateOf(0L) }
+    var lastAutoScrollAtMs by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(latestTimelineActivityKey, renderedItemsCount, shouldAutoScrollToBottom) {
         if (renderedItemsCount <= 0 || !shouldAutoScrollToBottom) {
@@ -685,7 +727,13 @@ private fun ToolGroupDisclosure(
             else -> "completed"
         }
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(vertical = 4.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .semantics(mergeDescendants = true) {
+                    stateDescription = if (expanded) "Expanded, $state" else "Collapsed, $state"
+                }.clickable(onClick = onToggle)
+                .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -719,7 +767,14 @@ private fun ToolActivityRow(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .clickable(enabled = presentation.hasDetails) { onToggleToolExpansion(item.id) }
+                    .semantics(mergeDescendants = true) {
+                        stateDescription =
+                            when (presentation.status) {
+                                ToolActivityStatus.RUNNING -> "Running"
+                                ToolActivityStatus.SUCCESS -> "Completed"
+                                ToolActivityStatus.ERROR -> "Failed"
+                            }
+                    }.clickable(enabled = presentation.hasDetails) { onToggleToolExpansion(item.id) }
                     .padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -834,10 +889,25 @@ private fun UserImagePreview(
     image: ChatImageSource,
     onClick: () -> Unit,
 ) {
-    val imageModel = remember(image) { image.toImageModel() }
-    var loadFailed by remember(image) { mutableStateOf(imageModel == null) }
+    val context = LocalContext.current
+    val presentation by rememberChatImagePresentation(context, image)
+    var loadFailed by remember(image) { mutableStateOf(false) }
 
-    if (loadFailed) {
+    if (presentation.isLoading) {
+        Box(
+            modifier =
+                Modifier
+                    .size(USER_IMAGE_PREVIEW_SIZE_DP.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center,
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+        }
+        return
+    }
+
+    if (loadFailed || presentation.errorMessage != null) {
         Box(
             modifier =
                 Modifier
@@ -856,8 +926,10 @@ private fun UserImagePreview(
     }
 
     AsyncImage(
-        model = imageModel,
-        contentDescription = "Sent image preview",
+        model = presentation.model,
+        contentDescription =
+            presentation.displayName?.let { "Preview attached image $it" }
+                ?: "Preview attached image",
         modifier =
             Modifier
                 .size(USER_IMAGE_PREVIEW_SIZE_DP.dp)
@@ -875,7 +947,7 @@ private fun AssistantCard(
     item: ChatTimelineItem.Assistant,
     onToggleThinkingExpansion: (String) -> Unit,
 ) {
-    val clipboardManager = LocalClipboardManager.current
+    val copyToClipboard = rememberClipboardCopy()
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -889,8 +961,8 @@ private fun AssistantCard(
             )
             if (item.text.isNotBlank() && !item.isStreaming) {
                 IconButton(
-                    onClick = { clipboardManager.setText(AnnotatedString(item.text)) },
-                    modifier = Modifier.size(28.dp),
+                    onClick = { copyToClipboard(item.text) },
+                    modifier = Modifier.size(48.dp),
                 ) {
                     Icon(
                         Icons.Default.ContentCopy,
@@ -1008,7 +1080,14 @@ private fun ThinkingBlock(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .clickable { onToggleThinkingExpansion(itemId) }
+                    .semantics(mergeDescendants = true) {
+                        stateDescription =
+                            if (isThinkingExpanded) {
+                                "Expanded"
+                            } else {
+                                "Collapsed"
+                            }
+                    }.clickable { onToggleThinkingExpansion(itemId) }
                     .padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -1042,7 +1121,7 @@ private fun ToolCard(
 ) {
     val isEditTool = item.toolName == "edit" && item.editDiff != null
     val toolInfo = getToolInfo(item.toolName)
-    val clipboardManager = LocalClipboardManager.current
+    val copyToClipboard = rememberClipboardCopy()
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1096,6 +1175,14 @@ private fun ToolCard(
                         modifier = Modifier.size(16.dp),
                         strokeWidth = 2.dp,
                     )
+                } else if (item.output.isNotBlank()) {
+                    IconButton(onClick = { copyToClipboard(item.output) }) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Copy tool output",
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
             }
 
@@ -1107,7 +1194,7 @@ private fun ToolCard(
                     onToggleExpand = { onToggleArgumentsExpansion(item.id) },
                     onCopy = {
                         val argsJson = item.arguments.entries.joinToString("\n") { (k, v) -> "\"$k\": \"$v\"" }
-                        clipboardManager.setText(AnnotatedString("{\n$argsJson\n}"))
+                        copyToClipboard("{\n$argsJson\n}")
                     },
                 )
             }
@@ -1210,7 +1297,7 @@ private fun ToolArgumentsSection(
 
             IconButton(
                 onClick = onCopy,
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(48.dp),
             ) {
                 Icon(
                     imageVector = Icons.Default.ContentCopy,
@@ -1287,7 +1374,15 @@ private data class ToolDisplayInfo(
 )
 
 private fun inferLanguageFromToolContext(item: ChatTimelineItem.Tool): String? {
-    val path = item.arguments["path"] ?: return null
-    val extension = path.substringAfterLast('.', missingDelimiterValue = "").lowercase()
-    return TOOL_OUTPUT_LANGUAGE_BY_EXTENSION[extension]
+    val trimmedOutput = item.output.trim()
+    val looksLikeJsonObject = trimmedOutput.startsWith("{") && trimmedOutput.endsWith("}")
+    val looksLikeJsonArray = trimmedOutput.startsWith("[") && trimmedOutput.endsWith("]")
+    val outputLanguage = if (looksLikeJsonObject || looksLikeJsonArray) "json" else null
+    val path = item.arguments["path"] ?: item.arguments["file_path"]
+    val pathLanguage =
+        path?.let {
+            val extension = it.substringAfterLast('.', missingDelimiterValue = "").lowercase()
+            TOOL_OUTPUT_LANGUAGE_BY_EXTENSION[extension]
+        }
+    return outputLanguage ?: pathLanguage
 }

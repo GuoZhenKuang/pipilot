@@ -1,5 +1,6 @@
 package com.ayagmar.pimobile.ui.chat
 
+import android.content.ClipData
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
@@ -50,10 +51,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -183,7 +184,7 @@ fun ChatRoute(
     showExtensionStatusStrip: Boolean,
 ) {
     val context = LocalContext.current
-    val clipboardManager = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
     val routeScope = rememberCoroutineScope()
     val imageEncoder = remember { ImageEncoder(context) }
     val factory =
@@ -247,7 +248,9 @@ fun ChatRoute(
         val pendingText = uiState.pendingClipboardText ?: return@LaunchedEffect
         val copied =
             runCatching {
-                clipboardManager.setText(AnnotatedString(pendingText))
+                clipboard.setClipEntry(
+                    ClipEntry(ClipData.newPlainText("Pi Mobile", pendingText)),
+                )
             }.isSuccess
         chatViewModel.consumePendingClipboardText(copySucceeded = copied)
     }
@@ -535,6 +538,7 @@ private fun ChatScreenContent(
         PromptControls(
             isStreaming = isRunActive,
             isRetrying = state.isRetrying,
+            isDispatchingMessage = state.isDispatchingMessage,
             pendingQueueItems = state.pendingQueueItems,
             steeringMode = state.steeringMode,
             followUpMode = state.followUpMode,
@@ -819,7 +823,7 @@ private fun BashDialog(
     if (!isVisible) return
 
     var showHistoryDropdown by remember { mutableStateOf(false) }
-    val clipboardManager = LocalClipboardManager.current
+    val copyToClipboard = rememberClipboardCopy()
 
     androidx.compose.material3.AlertDialog(
         onDismissRequest = { if (!isExecuting) onDismiss() },
@@ -911,8 +915,8 @@ private fun BashDialog(
 
                             if (output.isNotEmpty()) {
                                 IconButton(
-                                    onClick = { clipboardManager.setText(AnnotatedString(output)) },
-                                    modifier = Modifier.size(40.dp),
+                                    onClick = { copyToClipboard(output) },
+                                    modifier = Modifier.size(48.dp),
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.ContentCopy,
@@ -964,7 +968,7 @@ private fun BashDialog(
 
                     if (wasTruncated && fullLogPath != null) {
                         TextButton(
-                            onClick = { clipboardManager.setText(AnnotatedString(fullLogPath)) },
+                            onClick = { copyToClipboard(fullLogPath) },
                         ) {
                             Text(
                                 text = "Output truncated (copy path)",

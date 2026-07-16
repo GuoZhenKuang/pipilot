@@ -25,7 +25,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -148,7 +147,7 @@ fun DiffViewer(
     modifier: Modifier = Modifier,
     style: DiffViewerStyle = DiffViewerStyle(),
 ) {
-    val clipboardManager = LocalClipboardManager.current
+    val copyToClipboard = rememberClipboardCopy()
     val syntaxLanguage = remember(diffInfo.path) { detectSyntaxLanguage(diffInfo.path) }
     val diffColors = rememberDiffViewerColors()
     val computationState by
@@ -184,7 +183,7 @@ fun DiffViewer(
         Column(modifier = Modifier.fillMaxWidth()) {
             DiffHeader(
                 path = diffInfo.path,
-                onCopyPath = { clipboardManager.setText(AnnotatedString(diffInfo.path)) },
+                onCopyPath = { copyToClipboard(diffInfo.path) },
                 style = style,
             )
 

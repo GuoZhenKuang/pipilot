@@ -7,20 +7,6 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 
-internal fun historyWindowSignature(messages: List<JsonObject>): String {
-    if (messages.isEmpty()) return "empty"
-
-    val marker =
-        messages
-            .joinToString(separator = "|") { message ->
-                val role = message.stringField("role").orEmpty()
-                val entryId = message.stringField("entryId").orEmpty()
-                "$role:$entryId:${message.toString().hashCode()}"
-            }
-
-    return "${messages.size}:$marker"
-}
-
 internal fun extractHistoryMessageWindow(data: JsonObject?): HistoryMessageWindow {
     val rawMessages = runCatching { data?.get("messages")?.jsonArray }.getOrNull() ?: JsonArray(emptyList())
     val startIndex = (rawMessages.size - HISTORY_WINDOW_MAX_ITEMS).coerceAtLeast(0)

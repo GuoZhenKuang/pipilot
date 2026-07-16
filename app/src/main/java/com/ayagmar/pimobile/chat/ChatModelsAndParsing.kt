@@ -16,6 +16,7 @@ data class ChatUiState(
     val connectionState: ConnectionState = ConnectionState.DISCONNECTED,
     val isStreaming: Boolean = false,
     val isRetrying: Boolean = false,
+    val isDispatchingMessage: Boolean = false,
     val timeline: List<ChatTimelineItem> = emptyList(),
     val hasOlderMessages: Boolean = false,
     val hiddenHistoryCount: Int = 0,

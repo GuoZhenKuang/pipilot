@@ -119,6 +119,10 @@ class FakeSessionController : SessionController {
         connectionStateFlow.value = state
     }
 
+    fun invalidateTimeline() {
+        _timelineInvalidated.tryEmit(Unit)
+    }
+
     override fun setTransportPreference(preference: TransportPreference) {
         lastTransportPreference = preference
     }

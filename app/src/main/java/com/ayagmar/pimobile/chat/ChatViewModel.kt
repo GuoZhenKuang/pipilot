@@ -134,6 +134,7 @@ class ChatViewModel(
         }
 
         preparePromptDispatch()
+        _uiState.update { it.copy(isDispatchingMessage = true) }
         val optimisticUserId = addOptimisticUserMessage(message = message, pendingImages = pendingImages)
 
         viewModelScope.launch {
@@ -147,6 +148,7 @@ class ChatViewModel(
             val clearedDraftState = clearDraftAfterPromptDispatch(currentState)
 
             val result = sessionController.sendPrompt(message, imagePayloads)
+            _uiState.update { it.copy(isDispatchingMessage = false) }
             if (result.isFailure) {
                 handleSendPromptFailure(
                     result = result,
@@ -213,7 +215,10 @@ class ChatViewModel(
     private fun handleImageEncodingFailure(optimisticUserId: String) {
         discardPendingLocalUserItem(optimisticUserId)
         _uiState.update {
-            it.copy(errorMessage = "Unable to attach image. Please try again.")
+            it.copy(
+                isDispatchingMessage = false,
+                errorMessage = "Unable to attach image. Please try again.",
+            )
         }
     }
 
@@ -290,10 +295,16 @@ class ChatViewModel(
         if (trimmedMessage.isEmpty()) return
 
         viewModelScope.launch {
-            _uiState.update { it.copy(errorMessage = null) }
+            _uiState.update {
+                it.copy(
+                    errorMessage = null,
+                    isDispatchingMessage = true,
+                )
+            }
             markLocalSessionMutationExpected()
             val queueItemId = maybeTrackStreamingQueueItem(PendingQueueType.STEER, trimmedMessage)
             val result = sessionController.steer(trimmedMessage)
+            _uiState.update { it.copy(isDispatchingMessage = false) }
             if (result.isSuccess) {
                 clearActiveRunDraftAfterDispatch(trimmedMessage)
             } else {
@@ -308,10 +319,16 @@ class ChatViewModel(
         if (trimmedMessage.isEmpty()) return
 
         viewModelScope.launch {
-            _uiState.update { it.copy(errorMessage = null) }
+            _uiState.update {
+                it.copy(
+                    errorMessage = null,
+                    isDispatchingMessage = true,
+                )
+            }
             markLocalSessionMutationExpected()
             val queueItemId = maybeTrackStreamingQueueItem(PendingQueueType.FOLLOW_UP, trimmedMessage)
             val result = sessionController.followUp(trimmedMessage)
+            _uiState.update { it.copy(isDispatchingMessage = false) }
             if (result.isSuccess) {
                 clearActiveRunDraftAfterDispatch(trimmedMessage)
             } else {
@@ -1662,17 +1679,6 @@ class ChatViewModel(
 
     @Suppress("LongMethod", "CyclomaticComplexMethod")
     private fun loadInitialMessages(reason: TimelineReloadReason) {
-        val previousHistorySignature =
-            if (
-                reason == TimelineReloadReason.MANUAL_SYNC ||
-                reason == TimelineReloadReason.CONNECTION_RECOVERY ||
-                reason == TimelineReloadReason.AUTO_FRESHNESS_REFRESH
-            ) {
-                historyWindowSignature(historyWindowMessages)
-            } else {
-                null
-            }
-
         val shouldForceRuntimeReload =
             reason == TimelineReloadReason.MANUAL_SYNC ||
                 reason == TimelineReloadReason.AUTO_FRESHNESS_REFRESH
@@ -1737,12 +1743,6 @@ class ChatViewModel(
                 latestSessionPath = metadata.sessionPath ?: reloadResult?.getOrNull() ?: latestSessionPath
                 refreshSessionFreshness(trigger = FreshnessCheckTrigger.POST_LOAD)
 
-                val refreshedHistorySignature = historyWindowSignature(historyWindowMessages)
-                val hasPotentialExternalChanges =
-                    messagesResult.isSuccess &&
-                        previousHistorySignature != null &&
-                        previousHistorySignature != refreshedHistorySignature
-
                 if (reason == TimelineReloadReason.MANUAL_SYNC) {
                     _uiState.update { state ->
                         state.copy(
@@ -1771,14 +1771,6 @@ class ChatViewModel(
                     if (messagesResult.isSuccess) {
                         resetFreshnessWarningThrottle()
                     }
-                } else if (hasPotentialExternalChanges) {
-                    _uiState.update {
-                        it.copy(sessionCoherencyWarning = SESSION_COHERENCY_WARNING_MESSAGE)
-                    }
-                    addSystemNotification(
-                        message = "Session changed while disconnected or edited elsewhere. Review before continuing.",
-                        type = "warning",
-                    )
                 }
             }
     }

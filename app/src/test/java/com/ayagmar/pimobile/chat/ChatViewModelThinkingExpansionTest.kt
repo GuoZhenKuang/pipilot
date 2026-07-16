@@ -773,6 +773,24 @@ class ChatViewModelThinkingExpansionTest {
         }
 
     @Test
+    fun timelineInvalidationRefreshesWithoutFalseCrossDeviceWarning() =
+        runTest(dispatcher) {
+            val controller = FakeSessionController()
+            controller.messagesPayload = historyWithMessageTexts(listOf("baseline"))
+            val viewModel = createViewModel(controller)
+            dispatcher.scheduler.advanceUntilIdle()
+            awaitInitialLoad(viewModel)
+
+            controller.messagesPayload = historyWithMessageTexts(listOf("baseline", "local-update"))
+            controller.invalidateTimeline()
+            dispatcher.scheduler.advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(null, state.sessionCoherencyWarning)
+            assertFalse(state.notifications.any { it.message.contains("edited elsewhere", ignoreCase = true) })
+        }
+
+    @Test
     fun syncNowSilentlyRefreshesHistoryChangesWithoutExplicitConflict() =
         runTest(dispatcher) {
             val controller = FakeSessionController()
@@ -952,6 +970,8 @@ class ChatViewModelThinkingExpansionTest {
 
             viewModel.onInputTextChanged("original draft")
             viewModel.sendPrompt()
+            dispatcher.scheduler.runCurrent()
+            assertTrue(viewModel.uiState.value.isDispatchingMessage)
 
             viewModel.onInputTextChanged("new draft")
 
@@ -961,6 +981,7 @@ class ChatViewModelThinkingExpansionTest {
 
             assertEquals("new draft", viewModel.uiState.value.inputText)
             assertEquals("rpc failed", viewModel.uiState.value.errorMessage)
+            assertFalse(viewModel.uiState.value.isDispatchingMessage)
         }
 
     @Test
