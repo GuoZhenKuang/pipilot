@@ -48,7 +48,7 @@ import java.util.UUID
 
 internal const val HISTORY_WINDOW_MAX_ITEMS = 1_200
 
-@Suppress("TooManyFunctions", "LargeClass")
+@Suppress("TooManyFunctions", "LargeClass", "VisibleForTests")
 class ChatViewModel(
     private val sessionController: SessionController,
     private val imageEncoder: ImageEncoder? = null,
