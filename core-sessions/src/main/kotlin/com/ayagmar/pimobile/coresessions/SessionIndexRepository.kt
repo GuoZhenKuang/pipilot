@@ -20,11 +20,13 @@ class SessionIndexRepository(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     private val nowEpochMs: () -> Long = { System.currentTimeMillis() },
     private val minimumRefreshIntervalMs: Long = 1_000L,
+    private val maximumRefreshBackoffMs: Long = 60_000L,
 ) {
     private val stateByHost = linkedMapOf<String, MutableStateFlow<SessionIndexState>>()
     private val refreshMutexByHost = linkedMapOf<String, Mutex>()
     private val inFlightRefreshes = linkedMapOf<String, CompletableDeferred<SessionIndexState>>()
     private val lastRefreshAttemptByHost = linkedMapOf<String, Long>()
+    private val refreshFailuresByHost = linkedMapOf<String, Int>()
 
     suspend fun initialize(hostId: String) {
         val state = stateForHost(hostId)
@@ -64,7 +66,11 @@ class SessionIndexRepository(
         val now = nowEpochMs()
         synchronized(lastRefreshAttemptByHost) {
             val lastAttempt = lastRefreshAttemptByHost[hostId]
-            if (lastAttempt != null && now - lastAttempt < minimumRefreshIntervalMs) {
+            val failureCount = synchronized(refreshFailuresByHost) { refreshFailuresByHost[hostId] ?: 0 }
+            val backoffMultiplier = 1L shl failureCount.coerceAtMost(MAX_BACKOFF_SHIFT)
+            val refreshInterval =
+                (minimumRefreshIntervalMs * backoffMultiplier).coerceAtMost(maximumRefreshBackoffMs)
+            if (lastAttempt != null && now - lastAttempt < refreshInterval) {
                 return state.value
             }
             lastRefreshAttemptByHost[hostId] = now
@@ -83,6 +89,13 @@ class SessionIndexRepository(
 
         return try {
             val result = refreshInternal(hostId)
+            synchronized(refreshFailuresByHost) {
+                if (result.errorMessage == null) {
+                    refreshFailuresByHost.remove(hostId)
+                } else {
+                    refreshFailuresByHost[hostId] = (refreshFailuresByHost[hostId] ?: 0) + 1
+                }
+            }
             deferred.complete(result)
             result
         } catch (throwable: Throwable) {
@@ -159,6 +172,8 @@ class SessionIndexRepository(
         }
     }
 }
+
+private const val MAX_BACKOFF_SHIFT = 6
 
 private fun SessionIndexState.filter(query: String): SessionIndexState {
     if (query.isBlank()) return this

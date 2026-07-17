@@ -108,6 +108,32 @@ class SessionIndexRepositoryTest {
         }
 
     @Test
+    fun `failed refresh applies bounded retry backoff`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            var now = 1_000L
+            val remote = FakeSessionRemoteDataSource().apply { failingHosts += "host-a" }
+            val repository =
+                SessionIndexRepository(
+                    remoteDataSource = remote,
+                    cache = InMemorySessionIndexCache(),
+                    scope = CoroutineScope(dispatcher),
+                    nowEpochMs = { now },
+                    minimumRefreshIntervalMs = 1_000L,
+                    maximumRefreshBackoffMs = 8_000L,
+                )
+
+            repository.refresh("host-a")
+            now = 2_500L
+            repository.refresh("host-a")
+            assertEquals(1, remote.fetchCount)
+
+            now = 3_000L
+            repository.refresh("host-a")
+            assertEquals(2, remote.fetchCount)
+        }
+
+    @Test
     fun `file cache persists entries per host`() =
         runTest {
             val directory = Files.createTempDirectory("session-cache-test")
@@ -204,12 +230,14 @@ class SessionIndexRepositoryTest {
 
     private class FakeSessionRemoteDataSource : SessionIndexRemoteDataSource {
         val groupsByHost = linkedMapOf<String, List<SessionGroup>>()
+        val failingHosts = mutableSetOf<String>()
         var fetchCount: Int = 0
         var fetchDelayMs: Long = 0
 
         override suspend fun fetch(hostId: String): List<SessionGroup> {
             fetchCount += 1
             if (fetchDelayMs > 0) delay(fetchDelayMs)
+            if (hostId in failingHosts) error("sanitized failure")
             return groupsByHost[hostId] ?: emptyList()
         }
     }
