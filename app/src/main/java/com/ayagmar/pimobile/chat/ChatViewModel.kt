@@ -1,5 +1,6 @@
 package com.ayagmar.pimobile.chat
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ayagmar.pimobile.corenet.ConnectionState
@@ -51,9 +52,16 @@ internal const val HISTORY_WINDOW_MAX_ITEMS = 1_200
 class ChatViewModel(
     private val sessionController: SessionController,
     private val imageEncoder: ImageEncoder? = null,
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
     private val assembler = AssistantTextAssembler()
-    private val _uiState = MutableStateFlow(ChatUiState(isLoading = true))
+    private val _uiState =
+        MutableStateFlow(
+            ChatUiState(
+                isLoading = true,
+                inputText = savedStateHandle.get<String>(DRAFT_TEXT_KEY).orEmpty(),
+            ),
+        )
     private val assistantUpdateThrottler = UiUpdateThrottler<AssistantTextUpdate>(ASSISTANT_UPDATE_THROTTLE_MS)
     private val toolUpdateThrottlers = mutableMapOf<String, UiUpdateThrottler<ToolExecutionUpdateEvent>>()
     private val toolUpdateFlushJobs = mutableMapOf<String, Job>()
@@ -90,6 +98,7 @@ class ChatViewModel(
     }
 
     fun onInputTextChanged(text: String) {
+        savedStateHandle[DRAFT_TEXT_KEY] = text
         val slashQuery = extractSlashCommandQuery(text)
         var shouldLoadCommands = false
 
@@ -240,6 +249,8 @@ class ChatViewModel(
             )
         }
 
+        if (inputWasCleared) savedStateHandle[DRAFT_TEXT_KEY] = ""
+
         return DraftClearState(
             inputWasCleared = inputWasCleared,
             imagesWereCleared = imagesWereCleared,
@@ -341,7 +352,12 @@ class ChatViewModel(
 
     private fun clearActiveRunDraftAfterDispatch(submittedMessage: String) {
         _uiState.update { state ->
-            if (state.inputText.trim() == submittedMessage) state.copy(inputText = "") else state
+            if (state.inputText.trim() == submittedMessage) {
+                savedStateHandle[DRAFT_TEXT_KEY] = ""
+                state.copy(inputText = "")
+            } else {
+                state
+            }
         }
         applyDeferredFreshnessRefreshIfIdle()
     }
@@ -2763,6 +2779,8 @@ class ChatViewModel(
     }
 
     companion object {
+        private const val DRAFT_TEXT_KEY = "chat_draft_text"
+
         const val TREE_FILTER_DEFAULT = "default"
         const val TREE_FILTER_ALL = "all"
         const val TREE_FILTER_NO_TOOLS = "no-tools"

@@ -1,5 +1,6 @@
 package com.ayagmar.pimobile.chat
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.ayagmar.pimobile.corerpc.ExtensionUiRequestEvent
 import com.ayagmar.pimobile.corerpc.RpcResponse
@@ -144,6 +145,20 @@ class ChatViewModelWorkflowCommandTest {
 
             awaitInitialLoad(viewModel)
             assertFalse(viewModel.uiState.value.isLoading)
+        }
+
+    @Test
+    fun draftRestoresFromSavedStateHandle() =
+        runTest(dispatcher) {
+            val savedStateHandle = SavedStateHandle()
+            val first = ChatViewModel(FakeSessionController(), savedStateHandle = savedStateHandle)
+            viewModels += first
+            first.onInputTextChanged("persisted draft")
+
+            val restored = ChatViewModel(FakeSessionController(), savedStateHandle = savedStateHandle)
+            viewModels += restored
+
+            assertEquals("persisted draft", restored.uiState.value.inputText)
         }
 
     @Test

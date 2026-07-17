@@ -2,6 +2,8 @@ package com.ayagmar.pimobile.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.createSavedStateHandle
+import androidx.lifecycle.viewmodel.CreationExtras
 import com.ayagmar.pimobile.corenet.ConnectionState
 import com.ayagmar.pimobile.corerpc.AvailableModel
 import com.ayagmar.pimobile.corerpc.SessionStats
@@ -186,7 +188,10 @@ class ChatViewModelFactory(
     private val sessionController: SessionController,
     private val imageEncoder: ImageEncoder? = null,
 ) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+    override fun <T : ViewModel> create(
+        modelClass: Class<T>,
+        extras: CreationExtras,
+    ): T {
         check(modelClass == ChatViewModel::class.java) {
             "Unsupported ViewModel class: ${modelClass.name}"
         }
@@ -195,6 +200,7 @@ class ChatViewModelFactory(
         return ChatViewModel(
             sessionController = sessionController,
             imageEncoder = imageEncoder,
+            savedStateHandle = extras.createSavedStateHandle(),
         ) as T
     }
 }
