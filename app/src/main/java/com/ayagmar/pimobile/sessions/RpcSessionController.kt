@@ -43,6 +43,7 @@ import com.ayagmar.pimobile.corerpc.SteerCommand
 import com.ayagmar.pimobile.corerpc.SwitchSessionCommand
 import com.ayagmar.pimobile.coresessions.SessionRecord
 import com.ayagmar.pimobile.hosts.HostProfile
+import com.ayagmar.pimobile.perf.PerformanceMetrics
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -131,6 +132,7 @@ class RpcSessionController(
         token: String,
         cwd: String,
     ): Result<Unit> {
+        val startedAt = System.currentTimeMillis()
         return mutex.withLock {
             runCatching {
                 ensureConnectionLocked(
@@ -138,6 +140,12 @@ class RpcSessionController(
                     token = token,
                     cwd = cwd,
                 )
+                runCatching {
+                    PerformanceMetrics.recordOperation(
+                        operation = "bridge_handshake_control",
+                        durationMs = System.currentTimeMillis() - startedAt,
+                    )
+                }
                 Unit
             }
         }
@@ -152,12 +160,13 @@ class RpcSessionController(
         }
     }
 
-    @Suppress("TooGenericExceptionCaught")
+    @Suppress("TooGenericExceptionCaught", "LongMethod")
     override suspend fun resume(
         hostProfile: HostProfile,
         token: String,
         session: SessionRecord,
     ): Result<String?> {
+        val resumeStartedAt = System.currentTimeMillis()
         val previousIdentity = _activeSession.value
         val nextGeneration = (previousIdentity?.generation ?: 0L) + 1L
         _activeSession.value =
@@ -175,6 +184,12 @@ class RpcSessionController(
                         token = token,
                         cwd = session.cwd,
                     )
+                runCatching {
+                    PerformanceMetrics.recordOperation(
+                        operation = "resume_control_ready",
+                        durationMs = System.currentTimeMillis() - resumeStartedAt,
+                    )
+                }
 
                 if (session.sessionPath.isNotBlank()) {
                     val switchResponse =
@@ -190,6 +205,12 @@ class RpcSessionController(
                         ).requireSuccess("Failed to resume selected session")
 
                     switchResponse.requireNotCancelled("Session switch was cancelled")
+                    runCatching {
+                        PerformanceMetrics.recordOperation(
+                            operation = "session_switch_response",
+                            durationMs = System.currentTimeMillis() - resumeStartedAt,
+                        )
+                    }
                 }
 
                 val newPath = refreshCurrentSessionPath(connection)
