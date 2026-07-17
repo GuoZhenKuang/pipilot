@@ -577,6 +577,40 @@ describe("createSessionIndexer", () => {
         }
     });
 
+    it("uses bounded append freshness and falls back when append safety is not proven", async () => {
+        const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pi-session-tail-"));
+        const projectDir = path.join(tempRoot, "--synthetic-tail--");
+        await fs.mkdir(projectDir, { recursive: true });
+        const sessionPath = path.join(projectDir, "tail.jsonl");
+        const header = JSON.stringify({ type: "session", version: 3, id: "tail", cwd: "/synthetic/tail" });
+        const firstEntry = JSON.stringify({
+            type: "message", id: "m1", parentId: null, message: { role: "user", content: "first" },
+        });
+        await fs.writeFile(sessionPath, `${header}\n${firstEntry}\n`, "utf-8");
+
+        try {
+            const indexer = createSessionIndexer({ sessionsDirectory: tempRoot, logger: createLogger("silent") });
+            const first = await indexer.getSessionFreshness(sessionPath);
+            expect(first.fingerprint.entryCount).toBe(1);
+            expect(indexer.getMetrics?.().fullFileReads).toBe(1);
+
+            const secondEntry = JSON.stringify({
+                type: "message", id: "m2", parentId: "m1", message: { role: "assistant", content: [] },
+            });
+            await fs.appendFile(sessionPath, `${secondEntry}\n`, "utf-8");
+            const incremental = await indexer.getSessionFreshness(sessionPath);
+            expect(incremental.fingerprint.entryCount).toBe(2);
+            expect(incremental.fingerprint.lastEntryId).toBe("m2");
+            expect(indexer.getMetrics?.().fullFileReads).toBe(1);
+
+            await fs.appendFile(sessionPath, "not-json", "utf-8");
+            await indexer.getSessionFreshness(sessionPath);
+            expect(indexer.getMetrics?.().fullFileReads).toBe(2);
+        } finally {
+            await fs.rm(tempRoot, { recursive: true, force: true });
+        }
+    });
+
     it("streams synthetic small medium and large revisions once", async () => {
         const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pi-session-scale-"));
         const projectDir = path.join(tempRoot, "--synthetic-project--");

@@ -87,6 +87,8 @@ interface CachedSessionFreshness {
     mtimeMs: number;
     size: number;
     freshness: SessionFreshnessSnapshot;
+    tailLines: string[];
+    endedWithNewline: boolean;
 }
 
 interface ParsedSessionFile {
@@ -94,11 +96,19 @@ interface ParsedSessionFile {
     size: number;
     lines: string[];
     entries: Record<string, unknown>[];
+    endedWithNewline: boolean;
+}
+
+interface ParsedFreshness {
+    snapshot: SessionFreshnessSnapshot;
+    tailLines: string[];
+    endedWithNewline: boolean;
 }
 
 const MAX_PARSED_SESSION_CACHE_FILES = 16;
 const MAX_PARSED_SESSION_CACHE_BYTES = 32 * 1024 * 1024;
 const MAX_TREE_CACHE_ENTRIES = 32;
+const MAX_INCREMENTAL_FRESHNESS_BYTES = 256 * 1024;
 
 export function createSessionIndexer(options: SessionIndexerOptions): SessionIndexer {
     const sessionsRoot = path.resolve(options.sessionsDirectory);
@@ -339,7 +349,15 @@ async function parseSessionFreshnessWithCache(
         return cached.freshness;
     }
 
-    const freshness = await parseSessionFreshness(
+    if (cached) {
+        const incremental = await tryIncrementalFreshness(sessionPath, fileStats, cached);
+        if (incremental) {
+            cache.set(sessionPath, incremental);
+            return incremental.freshness;
+        }
+    }
+
+    const parsedFreshness = await parseSessionFreshness(
         sessionPath,
         fileStats,
         logger,
@@ -350,10 +368,63 @@ async function parseSessionFreshnessWithCache(
     cache.set(sessionPath, {
         mtimeMs: fileStats.mtimeMs,
         size: fileStats.size,
-        freshness,
+        freshness: parsedFreshness.snapshot,
+        tailLines: parsedFreshness.tailLines,
+        endedWithNewline: parsedFreshness.endedWithNewline,
     });
 
-    return freshness;
+    return parsedFreshness.snapshot;
+}
+
+async function tryIncrementalFreshness(
+    sessionPath: string,
+    fileStats: Awaited<ReturnType<typeof fs.stat>>,
+    cached: CachedSessionFreshness,
+): Promise<CachedSessionFreshness | undefined> {
+    const nextSize = Number(fileStats.size);
+    const appendedBytes = nextSize - cached.size;
+    if (
+        !cached.endedWithNewline ||
+        appendedBytes <= 0 ||
+        appendedBytes > MAX_INCREMENTAL_FRESHNESS_BYTES
+    ) {
+        return undefined;
+    }
+
+    const handle = await fs.open(sessionPath, "r");
+    try {
+        const buffer = Buffer.alloc(appendedBytes);
+        const { bytesRead } = await handle.read(buffer, 0, appendedBytes, cached.size);
+        if (bytesRead !== appendedBytes) return undefined;
+        const appendedText = buffer.toString("utf8");
+        const appendedLines = appendedText.split("\n")
+            .map((line) => line.replace(/\r$/, "").trim())
+            .filter((line) => line.length > 0);
+        const appendedEntries = appendedLines.map(tryParseJson);
+        if (appendedEntries.some((entry) => !entry)) return undefined;
+        const validEntries = appendedEntries.filter((entry): entry is Record<string, unknown> => !!entry);
+        const tailLines = [...cached.tailLines, ...appendedLines].slice(-FRESHNESS_HASH_LINE_WINDOW);
+
+        return {
+            mtimeMs: Number(fileStats.mtimeMs),
+            size: nextSize,
+            freshness: {
+                sessionPath,
+                cwd: cached.freshness.cwd,
+                fingerprint: {
+                    mtimeMs: Number(fileStats.mtimeMs),
+                    sizeBytes: nextSize,
+                    entryCount: cached.freshness.fingerprint.entryCount + validEntries.length,
+                    lastEntryId: findLastEntryId(validEntries) ?? cached.freshness.fingerprint.lastEntryId,
+                    lastEntriesHash: computeLastEntriesHash(tailLines),
+                },
+            },
+            tailLines,
+            endedWithNewline: appendedText.endsWith("\n"),
+        };
+    } finally {
+        await handle.close();
+    }
 }
 
 async function parseSessionFreshness(
@@ -363,7 +434,7 @@ async function parseSessionFreshness(
     parsedCache: Map<string, ParsedSessionFile>,
     parsedInflight: Map<string, Promise<ParsedSessionFile>>,
     metrics: SessionIndexerMetrics,
-): Promise<SessionFreshnessSnapshot> {
+): Promise<ParsedFreshness> {
     const parsed = await getParsedSession(
         sessionPath,
         fileStats,
@@ -384,15 +455,19 @@ async function parseSessionFreshness(
     const lastEntriesHash = computeLastEntriesHash(entryLines);
 
     return {
-        sessionPath,
-        cwd: header.cwd,
-        fingerprint: {
-            mtimeMs: Number(fileStats.mtimeMs),
-            sizeBytes: Number(fileStats.size),
-            entryCount: parsedEntries.length,
-            lastEntryId,
-            lastEntriesHash,
+        snapshot: {
+            sessionPath,
+            cwd: header.cwd,
+            fingerprint: {
+                mtimeMs: Number(fileStats.mtimeMs),
+                sizeBytes: Number(fileStats.size),
+                entryCount: parsedEntries.length,
+                lastEntryId,
+                lastEntriesHash,
+            },
         },
+        tailLines: entryLines.slice(-FRESHNESS_HASH_LINE_WINDOW),
+        endedWithNewline: parsed.endedWithNewline,
     };
 }
 
@@ -589,9 +664,9 @@ async function readParsedSession(
         metrics.parseCacheMisses += 1;
         metrics.fullFileReads += 1;
     }
-    let lines: string[];
+    let streamed: { lines: string[]; endedWithNewline: boolean };
     try {
-        lines = await readJsonlLines(sessionPath);
+        streamed = await readJsonlLines(sessionPath);
     } catch (error: unknown) {
         logger.warn({ error }, "Failed to read session file");
         throw new Error("Failed to read session file");
@@ -599,8 +674,10 @@ async function readParsedSession(
     const parsed: ParsedSessionFile = {
         mtimeMs: Number(fileStats.mtimeMs),
         size: Number(fileStats.size),
-        lines,
-        entries: lines.slice(1).map(tryParseJson).filter((entry): entry is Record<string, unknown> => !!entry),
+        lines: streamed.lines,
+        entries: streamed.lines.slice(1).map(tryParseJson)
+            .filter((entry): entry is Record<string, unknown> => !!entry),
+        endedWithNewline: streamed.endedWithNewline,
     };
     cache.set(sessionPath, parsed);
     while (cache.size > MAX_PARSED_SESSION_CACHE_FILES ||
@@ -612,7 +689,9 @@ async function readParsedSession(
     return parsed;
 }
 
-async function readJsonlLines(sessionPath: string): Promise<string[]> {
+async function readJsonlLines(
+    sessionPath: string,
+): Promise<{ lines: string[]; endedWithNewline: boolean }> {
     const decoder = new StringDecoder("utf8");
     const lines: string[] = [];
     let buffer = "";
@@ -632,9 +711,10 @@ async function readJsonlLines(sessionPath: string): Promise<string[]> {
         appendCompleteLines();
     }
     buffer += decoder.end();
+    const endedWithNewline = buffer.length === 0;
     const finalLine = buffer.replace(/\r$/, "").trim();
     if (finalLine.length > 0) lines.push(finalLine);
-    return lines;
+    return { lines, endedWithNewline };
 }
 
 function normalizeTreeEntries(entries: Record<string, unknown>[]): Record<string, unknown>[] {
