@@ -1722,6 +1722,7 @@ class ChatViewModel(
 
         initialLoadJob?.cancel()
         val loadGeneration = sessionController.activeSession.value?.generation
+        val bootstrapStartedAt = System.currentTimeMillis()
         initialLoadJob =
             viewModelScope.launch(Dispatchers.IO) {
                 val reloadResult =
@@ -1740,6 +1741,12 @@ class ChatViewModel(
                     } else {
                         Result.failure(reloadError)
                     }
+                recordMetricsSafely {
+                    PerformanceMetrics.recordOperation(
+                        operation = "chat_state_response",
+                        durationMs = System.currentTimeMillis() - bootstrapStartedAt,
+                    )
+                }
                 val stateData = stateResult.getOrNull()?.data
                 val metadata =
                     InitialLoadMetadata(
@@ -1778,7 +1785,13 @@ class ChatViewModel(
                     }
 
                 if (messagesResult.isSuccess) {
-                    recordMetricsSafely { PerformanceMetrics.recordFirstMessagesRendered() }
+                    recordMetricsSafely {
+                        PerformanceMetrics.recordFirstMessagesRendered()
+                        PerformanceMetrics.recordOperation(
+                            operation = "chat_first_timeline_payload",
+                            durationMs = System.currentTimeMillis() - bootstrapStartedAt,
+                        )
+                    }
                 }
 
                 _uiState.update { state ->
@@ -2287,7 +2300,14 @@ class ChatViewModel(
                 }
 
                 val filter = _uiState.value.treeFilter
+                val treeStartedAt = System.currentTimeMillis()
                 val result = sessionController.getSessionTree(sessionPath = sessionPath, filter = filter)
+                recordMetricsSafely {
+                    PerformanceMetrics.recordOperation(
+                        operation = "chat_tree_response",
+                        durationMs = System.currentTimeMillis() - treeStartedAt,
+                    )
+                }
                 if (
                     requestGeneration != null &&
                     sessionController.activeSession.value?.generation != requestGeneration
