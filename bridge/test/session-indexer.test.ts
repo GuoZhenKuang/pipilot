@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { createLogger } from "../src/logger.js";
 import { createSessionIndexer } from "../src/session-indexer.js";
@@ -484,18 +484,13 @@ describe("createSessionIndexer", () => {
             logger: createLogger("silent"),
         });
 
-        const readFileSpy = vi.spyOn(fs, "readFile");
-
         try {
             const firstGroups = await sessionIndexer.listSessions();
-            expect(firstGroups[0]?.sessions[0]?.displayName).toBe("Cache Warm");
-            expect(readFileSpy.mock.calls.length).toBeGreaterThan(0);
-
-            readFileSpy.mockClear();
+            const firstSession = firstGroups[0]?.sessions[0];
+            expect(firstSession?.displayName).toBe("Cache Warm");
 
             const secondGroups = await sessionIndexer.listSessions();
-            expect(secondGroups[0]?.sessions[0]?.displayName).toBe("Cache Warm");
-            expect(readFileSpy).not.toHaveBeenCalled();
+            expect(secondGroups[0]?.sessions[0]).toBe(firstSession);
 
             await fs.appendFile(
                 sessionPath,
@@ -508,13 +503,11 @@ describe("createSessionIndexer", () => {
                 "utf-8",
             );
 
-            readFileSpy.mockClear();
-
             const thirdGroups = await sessionIndexer.listSessions();
             expect(thirdGroups[0]?.sessions[0]?.displayName).toBe("Cache Updated");
-            expect(readFileSpy).toHaveBeenCalled();
+            expect(thirdGroups[0]?.sessions[0]).not.toBe(firstSession);
+            expect(sessionIndexer.getMetrics?.().fullFileReads).toBe(2);
         } finally {
-            readFileSpy.mockRestore();
             await fs.rm(tempRoot, { recursive: true, force: true });
         }
     });
@@ -555,8 +548,6 @@ describe("createSessionIndexer", () => {
             logger: createLogger("silent"),
         });
 
-        const readFileSpy = vi.spyOn(fs, "readFile");
-
         try {
             const groups = await sessionIndexer.listSessions();
             expect(groups[0]?.sessions).toHaveLength(1);
@@ -566,21 +557,91 @@ describe("createSessionIndexer", () => {
             expect(cachedTree).toBe(tree);
             const freshness = await sessionIndexer.getSessionFreshness(sessionPath);
             expect(freshness.sessionPath).toBe(sessionPath);
-            // Metadata, tree, and freshness consumers share one revision snapshot.
-            expect(readFileSpy).toHaveBeenCalledTimes(1);
             expect(freshness.cwd).toBe("/tmp/project-freshness");
             expect(freshness.fingerprint.sizeBytes).toBeGreaterThan(0);
             expect(freshness.fingerprint.entryCount).toBe(2);
             expect(freshness.fingerprint.lastEntryId).toBe("m2");
             expect(freshness.fingerprint.lastEntriesHash.length).toBe(64);
 
-            readFileSpy.mockClear();
-
             const cachedFreshness = await sessionIndexer.getSessionFreshness(sessionPath);
-            expect(cachedFreshness.fingerprint.lastEntriesHash).toBe(freshness.fingerprint.lastEntriesHash);
-            expect(readFileSpy).not.toHaveBeenCalled();
+            expect(cachedFreshness).toBe(freshness);
+            expect(sessionIndexer.getMetrics?.()).toMatchObject({
+                fullFileReads: 1,
+                parseCacheMisses: 1,
+                parseCacheHits: 2,
+                treeCacheHits: 1,
+                treeCacheMisses: 1,
+            });
         } finally {
-            readFileSpy.mockRestore();
+            await fs.rm(tempRoot, { recursive: true, force: true });
+        }
+    });
+
+    it("streams synthetic small medium and large revisions once", async () => {
+        const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pi-session-scale-"));
+        const projectDir = path.join(tempRoot, "--synthetic-project--");
+        await fs.mkdir(projectDir, { recursive: true });
+
+        try {
+            const sizes = [10, 1_000, 10_000];
+            const paths: string[] = [];
+            for (const [fileIndex, entryCount] of sizes.entries()) {
+                const sessionPath = path.join(projectDir, `synthetic-${fileIndex}.jsonl`);
+                const lines = [
+                    JSON.stringify({
+                        type: "session",
+                        version: 3,
+                        id: `session-${fileIndex}`,
+                        timestamp: "2026-02-03T00:00:00.000Z",
+                        cwd: "/synthetic/project",
+                    }),
+                ];
+                for (let entryIndex = 0; entryIndex < entryCount; entryIndex += 1) {
+                    lines.push(JSON.stringify({
+                        type: "message",
+                        id: `f${fileIndex}-${entryIndex}`,
+                        parentId: entryIndex === 0 ? null : `f${fileIndex}-${entryIndex - 1}`,
+                        timestamp: "2026-02-03T00:00:01.000Z",
+                        message: { role: "user", content: "synthetic" },
+                    }));
+                }
+                await fs.writeFile(sessionPath, lines.join("\n"), "utf-8");
+                paths.push(sessionPath);
+            }
+
+            const indexer = createSessionIndexer({ sessionsDirectory: tempRoot, logger: createLogger("silent") });
+            const groups = await indexer.listSessions();
+            expect(groups[0]?.sessions.map((session) => session.messageCount).sort((a, b) => a - b))
+                .toEqual(sizes);
+            await Promise.all(paths.map((sessionPath) => indexer.getSessionTree(sessionPath)));
+            expect(indexer.getMetrics?.().fullFileReads).toBe(3);
+        } finally {
+            await fs.rm(tempRoot, { recursive: true, force: true });
+        }
+    });
+
+    it("evicts parsed revisions beyond the file bound", async () => {
+        const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pi-session-eviction-"));
+        const projectDir = path.join(tempRoot, "--synthetic-eviction--");
+        await fs.mkdir(projectDir, { recursive: true });
+
+        try {
+            const paths: string[] = [];
+            for (let index = 0; index < 17; index += 1) {
+                const sessionPath = path.join(projectDir, `session-${index}.jsonl`);
+                await fs.writeFile(sessionPath, [
+                    JSON.stringify({ type: "session", version: 3, id: `s-${index}`, cwd: "/synthetic/eviction" }),
+                    JSON.stringify({ type: "message", id: `m-${index}`, parentId: null, message: { role: "user", content: "x" } }),
+                ].join("\n"), "utf-8");
+                paths.push(sessionPath);
+            }
+
+            const indexer = createSessionIndexer({ sessionsDirectory: tempRoot, logger: createLogger("silent") });
+            await indexer.listSessions();
+            expect(indexer.getMetrics?.().fullFileReads).toBe(17);
+            await indexer.getSessionTree(paths[0]);
+            expect(indexer.getMetrics?.().fullFileReads).toBe(18);
+        } finally {
             await fs.rm(tempRoot, { recursive: true, force: true });
         }
     });

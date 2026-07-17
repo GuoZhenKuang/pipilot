@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import type { Dirent } from "node:fs";
+import { createReadStream, type Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { StringDecoder } from "node:string_decoder";
 
 import type { Logger } from "pino";
 
@@ -55,10 +56,20 @@ export interface SessionFreshnessSnapshot {
     fingerprint: SessionFreshnessFingerprint;
 }
 
+export interface SessionIndexerMetrics {
+    parseCacheHits: number;
+    parseCacheMisses: number;
+    inflightParseHits: number;
+    fullFileReads: number;
+    treeCacheHits: number;
+    treeCacheMisses: number;
+}
+
 export interface SessionIndexer {
     listSessions(): Promise<SessionIndexGroup[]>;
     getSessionTree(sessionPath: string, filter?: SessionTreeFilter): Promise<SessionTreeSnapshot>;
     getSessionFreshness(sessionPath: string): Promise<SessionFreshnessSnapshot>;
+    getMetrics?(): SessionIndexerMetrics;
 }
 
 export interface SessionIndexerOptions {
@@ -98,6 +109,14 @@ export function createSessionIndexer(options: SessionIndexerOptions): SessionInd
     const parsedSessionCache = new Map<string, ParsedSessionFile>();
     const parsedSessionInflight = new Map<string, Promise<ParsedSessionFile>>();
     const treeCache = new Map<string, SessionTreeSnapshot>();
+    const metrics: SessionIndexerMetrics = {
+        parseCacheHits: 0,
+        parseCacheMisses: 0,
+        inflightParseHits: 0,
+        fullFileReads: 0,
+        treeCacheHits: 0,
+        treeCacheMisses: 0,
+    };
 
     return {
         async listSessions(): Promise<SessionIndexGroup[]> {
@@ -125,6 +144,7 @@ export function createSessionIndexer(options: SessionIndexerOptions): SessionInd
                         options.logger,
                         sessionMetadataCache,
                         parsedSessionCache,
+                        metrics,
                     ),
             );
             for (const entry of parsedEntries) {
@@ -158,6 +178,7 @@ export function createSessionIndexer(options: SessionIndexerOptions): SessionInd
                 parsedSessionCache,
                 treeCache,
                 parsedSessionInflight,
+                metrics,
             );
         },
 
@@ -169,7 +190,12 @@ export function createSessionIndexer(options: SessionIndexerOptions): SessionInd
                 sessionFreshnessCache,
                 parsedSessionCache,
                 parsedSessionInflight,
+                metrics,
             );
+        },
+
+        getMetrics(): SessionIndexerMetrics {
+            return { ...metrics };
         },
     };
 }
@@ -263,6 +289,7 @@ async function parseSessionFileWithCache(
     logger: Logger,
     cache: Map<string, CachedSessionMetadata>,
     parsedCache: Map<string, ParsedSessionFile>,
+    metrics: SessionIndexerMetrics,
 ): Promise<SessionIndexEntry | undefined> {
     let fileStats: Awaited<ReturnType<typeof fs.stat>>;
 
@@ -279,7 +306,7 @@ async function parseSessionFileWithCache(
         return cached.entry;
     }
 
-    const entry = await parseSessionFile(sessionPath, fileStats, logger, parsedCache);
+    const entry = await parseSessionFile(sessionPath, fileStats, logger, parsedCache, metrics);
     cache.set(sessionPath, {
         mtimeMs: fileStats.mtimeMs,
         size: fileStats.size,
@@ -295,6 +322,7 @@ async function parseSessionFreshnessWithCache(
     cache: Map<string, CachedSessionFreshness>,
     parsedCache: Map<string, ParsedSessionFile>,
     parsedInflight: Map<string, Promise<ParsedSessionFile>>,
+    metrics: SessionIndexerMetrics,
 ): Promise<SessionFreshnessSnapshot> {
     let fileStats: Awaited<ReturnType<typeof fs.stat>>;
 
@@ -317,6 +345,7 @@ async function parseSessionFreshnessWithCache(
         logger,
         parsedCache,
         parsedInflight,
+        metrics,
     );
     cache.set(sessionPath, {
         mtimeMs: fileStats.mtimeMs,
@@ -333,8 +362,16 @@ async function parseSessionFreshness(
     logger: Logger,
     parsedCache: Map<string, ParsedSessionFile>,
     parsedInflight: Map<string, Promise<ParsedSessionFile>>,
+    metrics: SessionIndexerMetrics,
 ): Promise<SessionFreshnessSnapshot> {
-    const parsed = await getParsedSession(sessionPath, fileStats, logger, parsedCache, parsedInflight);
+    const parsed = await getParsedSession(
+        sessionPath,
+        fileStats,
+        logger,
+        parsedCache,
+        parsedInflight,
+        metrics,
+    );
     const { lines, entries: parsedEntries } = parsed;
     const header = tryParseJson(lines[0]);
     if (!header || header.type !== "session" || typeof header.cwd !== "string") {
@@ -364,8 +401,10 @@ async function parseSessionFile(
     fileStats: Awaited<ReturnType<typeof fs.stat>>,
     logger: Logger,
     parsedCache: Map<string, ParsedSessionFile>,
+    metrics: SessionIndexerMetrics,
 ): Promise<SessionIndexEntry | undefined> {
-    const parsed = await getParsedSession(sessionPath, fileStats, logger, parsedCache).catch(() => undefined);
+    const parsed = await getParsedSession(sessionPath, fileStats, logger, parsedCache, undefined, metrics)
+        .catch(() => undefined);
     if (!parsed || parsed.lines.length === 0) return undefined;
 
     const { lines } = parsed;
@@ -429,16 +468,26 @@ async function parseSessionTreeFile(
     parsedCache: Map<string, ParsedSessionFile>,
     treeCache: Map<string, SessionTreeSnapshot>,
     parsedInflight: Map<string, Promise<ParsedSessionFile>>,
+    metrics: SessionIndexerMetrics,
 ): Promise<SessionTreeSnapshot> {
     const fileStats = await fs.stat(sessionPath);
     const cacheKey = `${sessionPath}:${fileStats.mtimeMs}:${fileStats.size}:${filter}`;
     const cachedTree = treeCache.get(cacheKey);
     if (cachedTree) {
+        metrics.treeCacheHits += 1;
         treeCache.delete(cacheKey);
         treeCache.set(cacheKey, cachedTree);
         return cachedTree;
     }
-    const parsed = await getParsedSession(sessionPath, fileStats, logger, parsedCache, parsedInflight);
+    metrics.treeCacheMisses += 1;
+    const parsed = await getParsedSession(
+        sessionPath,
+        fileStats,
+        logger,
+        parsedCache,
+        parsedInflight,
+        metrics,
+    );
     const { lines, entries: parsedEntries } = parsed;
     if (lines.length === 0) throw new Error("Session file is empty");
 
@@ -503,12 +552,16 @@ async function getParsedSession(
     logger: Logger,
     cache: Map<string, ParsedSessionFile>,
     inflight: Map<string, Promise<ParsedSessionFile>> = new Map(),
+    metrics?: SessionIndexerMetrics,
 ): Promise<ParsedSessionFile> {
     const revisionKey = `${sessionPath}:${fileStats.mtimeMs}:${fileStats.size}`;
     const pending = inflight.get(revisionKey);
-    if (pending) return pending;
+    if (pending) {
+        if (metrics) metrics.inflightParseHits += 1;
+        return pending;
+    }
 
-    const read = readParsedSession(sessionPath, fileStats, logger, cache);
+    const read = readParsedSession(sessionPath, fileStats, logger, cache, metrics);
     inflight.set(revisionKey, read);
     try {
         return await read;
@@ -522,23 +575,27 @@ async function readParsedSession(
     fileStats: Awaited<ReturnType<typeof fs.stat>>,
     logger: Logger,
     cache: Map<string, ParsedSessionFile>,
+    metrics?: SessionIndexerMetrics,
 ): Promise<ParsedSessionFile> {
     const cached = cache.get(sessionPath);
     if (cached && cached.mtimeMs === fileStats.mtimeMs && cached.size === fileStats.size) {
+        if (metrics) metrics.parseCacheHits += 1;
         cache.delete(sessionPath);
         cache.set(sessionPath, cached);
         return cached;
     }
 
-    let fileContent: string;
-    try {
-        fileContent = await fs.readFile(sessionPath, "utf-8");
-    } catch (error: unknown) {
-        logger.warn({ sessionPath, error }, "Failed to read session file");
-        throw new Error(`Failed to read session file: ${sessionPath}`);
+    if (metrics) {
+        metrics.parseCacheMisses += 1;
+        metrics.fullFileReads += 1;
     }
-
-    const lines = fileContent.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
+    let lines: string[];
+    try {
+        lines = await readJsonlLines(sessionPath);
+    } catch (error: unknown) {
+        logger.warn({ error }, "Failed to read session file");
+        throw new Error("Failed to read session file");
+    }
     const parsed: ParsedSessionFile = {
         mtimeMs: Number(fileStats.mtimeMs),
         size: Number(fileStats.size),
@@ -553,6 +610,31 @@ async function readParsedSession(
         cache.delete(oldest);
     }
     return parsed;
+}
+
+async function readJsonlLines(sessionPath: string): Promise<string[]> {
+    const decoder = new StringDecoder("utf8");
+    const lines: string[] = [];
+    let buffer = "";
+
+    const appendCompleteLines = (): void => {
+        while (true) {
+            const newlineIndex = buffer.indexOf("\n");
+            if (newlineIndex < 0) return;
+            const line = buffer.slice(0, newlineIndex).replace(/\r$/, "").trim();
+            buffer = buffer.slice(newlineIndex + 1);
+            if (line.length > 0) lines.push(line);
+        }
+    };
+
+    for await (const chunk of createReadStream(sessionPath)) {
+        buffer += decoder.write(chunk as Buffer);
+        appendCompleteLines();
+    }
+    buffer += decoder.end();
+    const finalLine = buffer.replace(/\r$/, "").trim();
+    if (finalLine.length > 0) lines.push(finalLine);
+    return lines;
 }
 
 function normalizeTreeEntries(entries: Record<string, unknown>[]): Record<string, unknown>[] {
