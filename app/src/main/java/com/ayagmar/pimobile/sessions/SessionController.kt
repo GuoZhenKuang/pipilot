@@ -86,6 +86,11 @@ interface SessionController {
 
     suspend fun getForkMessages(): Result<List<ForkableMessage>>
 
+    fun getCachedSessionTree(
+        sessionPath: String,
+        filter: String? = null,
+    ): SessionTreeSnapshot?
+
     suspend fun getSessionTree(
         sessionPath: String? = null,
         filter: String? = null,
@@ -179,6 +184,7 @@ data class SessionTreeSnapshot(
     val rootIds: List<String>,
     val currentLeafId: String?,
     val entries: List<SessionTreeEntry>,
+    val isStale: Boolean = false,
 )
 
 data class SessionFreshnessSnapshot(

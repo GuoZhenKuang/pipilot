@@ -2312,6 +2312,15 @@ class ChatViewModel(
                 }
 
                 val filter = _uiState.value.treeFilter
+                sessionController.getCachedSessionTree(sessionPath, filter)?.let { cachedTree ->
+                    _uiState.update {
+                        it.copy(
+                            sessionTree = cachedTree.copy(isStale = true),
+                            isLoadingTree = true,
+                            treeErrorMessage = null,
+                        )
+                    }
+                }
                 val treeStartedAt = System.currentTimeMillis()
                 val result = sessionController.getSessionTree(sessionPath = sessionPath, filter = filter)
                 recordMetricsSafely {

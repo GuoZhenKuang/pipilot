@@ -69,6 +69,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 @Suppress("TooManyFunctions", "LargeClass")
 class RpcSessionController(
@@ -76,6 +77,7 @@ class RpcSessionController(
     private val connectionFactory: () -> PiRpcConnection = { PiRpcConnection() },
     private val connectTimeoutMs: Long = DEFAULT_TIMEOUT_MS,
     private val requestTimeoutMs: Long = DEFAULT_TIMEOUT_MS,
+    private val treeRequestTimeoutMs: Long = TREE_REQUEST_TIMEOUT_MS,
 ) : SessionController {
     private val mutex = Mutex()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -87,6 +89,7 @@ class RpcSessionController(
     private val _timelineInvalidated = MutableSharedFlow<Unit>(extraBufferCapacity = 16)
     private val _syncMetrics = MutableStateFlow(SessionSyncMetrics())
     private val entryProjection = SessionEntryProjection()
+    private val activeTreeCache = ConcurrentHashMap<String, SessionTreeSnapshot>()
 
     private var projectedMessagesResponse: RpcResponse? = null
     private var activeConnection: PiRpcConnection? = null
@@ -342,6 +345,11 @@ class RpcSessionController(
         }
     }
 
+    override fun getCachedSessionTree(
+        sessionPath: String,
+        filter: String?,
+    ): SessionTreeSnapshot? = activeTreeCache[treeCacheKey(sessionPath, filter)]
+
     override suspend fun getSessionTree(
         sessionPath: String?,
         filter: String?,
@@ -351,12 +359,17 @@ class RpcSessionController(
                 val connection = ensureActiveConnection()
                 val activeSessionPath = refreshCurrentSessionPath(connection)
                 if (sessionPath.isNullOrBlank() || sessionPath == activeSessionPath) {
-                    val response = connection.requestTree().requireSuccess("Failed to load active session tree")
-                    return@runCatching parseRpcSessionTreeSnapshot(
-                        data = response.data,
-                        sessionPath = activeSessionPath.orEmpty(),
-                        filter = filter,
-                    )
+                    val response =
+                        connection.requestTree(treeRequestTimeoutMs)
+                            .requireSuccess("Failed to load active session tree")
+                    val snapshot =
+                        parseRpcSessionTreeSnapshot(
+                            data = response.data,
+                            sessionPath = activeSessionPath.orEmpty(),
+                            filter = filter,
+                        )
+                    activeTreeCache[treeCacheKey(snapshot.sessionPath, filter)] = snapshot
+                    return@runCatching snapshot
                 }
 
                 val bridgePayload =
@@ -416,6 +429,15 @@ class RpcSessionController(
                 parseTreeNavigationResult(bridgeResponse.payload)
             }
         }
+    }
+
+    private fun treeCacheKey(
+        sessionPath: String,
+        filter: String?,
+    ): String = "$sessionPath:${filter.orEmpty()}"
+
+    private fun markActiveTreesStale() {
+        activeTreeCache.replaceAll { _, snapshot -> snapshot.copy(isStale = true) }
     }
 
     private suspend fun publishSessionChanged(sessionPath: String?) {
@@ -1124,6 +1146,7 @@ class RpcSessionController(
         return scope.launch {
             connection.bridgeEvents.collect { event ->
                 if (event.type == BRIDGE_SESSION_INVALIDATED_TYPE) {
+                    markActiveTreesStale()
                     runCatching { connection.resync() }
                         .onFailure { error ->
                             Log.w(
@@ -1226,6 +1249,7 @@ class RpcSessionController(
         private const val SET_AUTO_RETRY_COMMAND = "set_auto_retry"
         private const val SET_STEERING_MODE_COMMAND = "set_steering_mode"
         private const val SET_FOLLOW_UP_MODE_COMMAND = "set_follow_up_mode"
+        private const val TREE_REQUEST_TIMEOUT_MS = 30_000L
         private const val BRIDGE_GET_SESSION_TREE_TYPE = "bridge_get_session_tree"
         private const val BRIDGE_SESSION_TREE_TYPE = "bridge_session_tree"
         private const val BRIDGE_GET_SESSION_FRESHNESS_TYPE = "bridge_get_session_freshness"

@@ -72,6 +72,9 @@ class FakeSessionController : SessionController {
     var messagesPayload: JsonObject? = null
     var sessionFreshnessResult: Result<SessionFreshnessSnapshot> =
         Result.failure(IllegalStateException("Not used"))
+    var cachedSessionTree: SessionTreeSnapshot? = null
+    var sessionTreeResult: Result<SessionTreeSnapshot> = Result.failure(IllegalStateException("Not used"))
+    var getSessionTreeCallCount: Int = 0
     var treeNavigationResult: Result<TreeNavigationResult> =
         Result.success(
             TreeNavigationResult(
@@ -244,10 +247,18 @@ class FakeSessionController : SessionController {
 
     override suspend fun getForkMessages(): Result<List<ForkableMessage>> = Result.success(emptyList())
 
+    override fun getCachedSessionTree(
+        sessionPath: String,
+        filter: String?,
+    ): SessionTreeSnapshot? = cachedSessionTree?.takeIf { it.sessionPath == sessionPath }
+
     override suspend fun getSessionTree(
         sessionPath: String?,
         filter: String?,
-    ): Result<SessionTreeSnapshot> = Result.failure(IllegalStateException("Not used"))
+    ): Result<SessionTreeSnapshot> {
+        getSessionTreeCallCount += 1
+        return sessionTreeResult
+    }
 
     override suspend fun getSessionFreshness(sessionPath: String): Result<SessionFreshnessSnapshot> {
         getSessionFreshnessCallCount += 1
