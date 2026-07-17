@@ -96,6 +96,7 @@ export function createSessionIndexer(options: SessionIndexerOptions): SessionInd
     // One parsed snapshot is shared by metadata/freshness/tree consumers. The key
     // is the canonical path plus the stat revision; mutation naturally invalidates it.
     const parsedSessionCache = new Map<string, ParsedSessionFile>();
+    const parsedSessionInflight = new Map<string, Promise<ParsedSessionFile>>();
     const treeCache = new Map<string, SessionTreeSnapshot>();
 
     return {
@@ -156,6 +157,7 @@ export function createSessionIndexer(options: SessionIndexerOptions): SessionInd
                 filter,
                 parsedSessionCache,
                 treeCache,
+                parsedSessionInflight,
             );
         },
 
@@ -166,6 +168,7 @@ export function createSessionIndexer(options: SessionIndexerOptions): SessionInd
                 options.logger,
                 sessionFreshnessCache,
                 parsedSessionCache,
+                parsedSessionInflight,
             );
         },
     };
@@ -291,6 +294,7 @@ async function parseSessionFreshnessWithCache(
     logger: Logger,
     cache: Map<string, CachedSessionFreshness>,
     parsedCache: Map<string, ParsedSessionFile>,
+    parsedInflight: Map<string, Promise<ParsedSessionFile>>,
 ): Promise<SessionFreshnessSnapshot> {
     let fileStats: Awaited<ReturnType<typeof fs.stat>>;
 
@@ -307,7 +311,13 @@ async function parseSessionFreshnessWithCache(
         return cached.freshness;
     }
 
-    const freshness = await parseSessionFreshness(sessionPath, fileStats, logger, parsedCache);
+    const freshness = await parseSessionFreshness(
+        sessionPath,
+        fileStats,
+        logger,
+        parsedCache,
+        parsedInflight,
+    );
     cache.set(sessionPath, {
         mtimeMs: fileStats.mtimeMs,
         size: fileStats.size,
@@ -322,8 +332,9 @@ async function parseSessionFreshness(
     fileStats: Awaited<ReturnType<typeof fs.stat>>,
     logger: Logger,
     parsedCache: Map<string, ParsedSessionFile>,
+    parsedInflight: Map<string, Promise<ParsedSessionFile>>,
 ): Promise<SessionFreshnessSnapshot> {
-    const parsed = await getParsedSession(sessionPath, fileStats, logger, parsedCache);
+    const parsed = await getParsedSession(sessionPath, fileStats, logger, parsedCache, parsedInflight);
     const { lines, entries: parsedEntries } = parsed;
     const header = tryParseJson(lines[0]);
     if (!header || header.type !== "session" || typeof header.cwd !== "string") {
@@ -417,6 +428,7 @@ async function parseSessionTreeFile(
     filter: SessionTreeFilter = "default",
     parsedCache: Map<string, ParsedSessionFile>,
     treeCache: Map<string, SessionTreeSnapshot>,
+    parsedInflight: Map<string, Promise<ParsedSessionFile>>,
 ): Promise<SessionTreeSnapshot> {
     const fileStats = await fs.stat(sessionPath);
     const cacheKey = `${sessionPath}:${fileStats.mtimeMs}:${fileStats.size}:${filter}`;
@@ -426,7 +438,7 @@ async function parseSessionTreeFile(
         treeCache.set(cacheKey, cachedTree);
         return cachedTree;
     }
-    const parsed = await getParsedSession(sessionPath, fileStats, logger, parsedCache);
+    const parsed = await getParsedSession(sessionPath, fileStats, logger, parsedCache, parsedInflight);
     const { lines, entries: parsedEntries } = parsed;
     if (lines.length === 0) throw new Error("Session file is empty");
 
@@ -486,6 +498,26 @@ async function parseSessionTreeFile(
 }
 
 async function getParsedSession(
+    sessionPath: string,
+    fileStats: Awaited<ReturnType<typeof fs.stat>>,
+    logger: Logger,
+    cache: Map<string, ParsedSessionFile>,
+    inflight: Map<string, Promise<ParsedSessionFile>> = new Map(),
+): Promise<ParsedSessionFile> {
+    const revisionKey = `${sessionPath}:${fileStats.mtimeMs}:${fileStats.size}`;
+    const pending = inflight.get(revisionKey);
+    if (pending) return pending;
+
+    const read = readParsedSession(sessionPath, fileStats, logger, cache);
+    inflight.set(revisionKey, read);
+    try {
+        return await read;
+    } finally {
+        inflight.delete(revisionKey);
+    }
+}
+
+async function readParsedSession(
     sessionPath: string,
     fileStats: Awaited<ReturnType<typeof fs.stat>>,
     logger: Logger,
