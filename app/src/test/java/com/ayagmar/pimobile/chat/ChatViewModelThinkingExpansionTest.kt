@@ -256,6 +256,38 @@ class ChatViewModelThinkingExpansionTest {
         }
 
     @Test
+    fun sessionSwitchClearsRetainedTimelineBeforeResponse() =
+        runTest(dispatcher) {
+            val controller = FakeSessionController()
+            val viewModel = createViewModel(controller)
+            dispatcher.scheduler.advanceUntilIdle()
+            awaitInitialLoad(viewModel)
+
+            controller.emitEvent(
+                textUpdate(
+                    assistantType = "text_start",
+                    messageTimestamp = "old-session",
+                ),
+            )
+            controller.emitEvent(
+                textUpdate(
+                    assistantType = "text_delta",
+                    delta = "Old transcript",
+                    messageTimestamp = "old-session",
+                ),
+            )
+            dispatcher.scheduler.advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.timeline.isNotEmpty())
+
+            controller.beginSessionSwitch("/tmp/new-session.jsonl")
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.isLoading)
+            assertTrue(viewModel.uiState.value.timeline.isEmpty())
+            assertEquals("/tmp/new-session.jsonl", viewModel.uiState.value.sessionPath)
+        }
+
+    @Test
     fun sessionChangeDropsPendingAssistantDeltaFromPreviousSession() =
         runTest(dispatcher) {
             val controller = FakeSessionController()
