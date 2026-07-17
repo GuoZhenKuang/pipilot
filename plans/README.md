@@ -18,6 +18,7 @@ These plans deliberately retain the current architecture: Android connects to a 
 | [008](008-chat-experience-v2.md) | Deliver a compact, turn-centered mobile chat experience | P1 | L | 007 | IN PROGRESS |
 | [009](009-polish-native-chat-and-harden-platform.md) | Polish native chat and harden platform | P1 | XL | 008 | IN PROGRESS |
 | [010](010-performance-resume-and-session-navigation.md) | Performance overhaul for resume, trees, and session navigation | P1 | XL | 008, 009 | IN PROGRESS |
+| [011](011-agp9-api37-java25-modernization-and-quality.md) | Migrate to AGP 9/API 37/JDK 25 and modernize platform quality | P1 | XL | 009, 010 | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (reason) | REJECTED (reason)
 
@@ -32,6 +33,7 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (reason) | REJECTED (reason)
 - 008 builds on that baseline in strict sequence: quiet freshness policy → turn projection → compact rendering → handoff → active-run composer → unread/reading behavior. Device execution is forbidden until the operator explicitly enables debug mode.
 - 009 is the native polish/accessibility/dependency hardening pass.
 - 010 is the performance pass for resume, long-session trees, transport reuse, staged bootstrap, and stale-session rendering.
+- 011 is the separate platform modernization pass for AGP 9, API 37, JDK 25, built-in Kotlin integration, dependency convergence, CI, quality, adaptive UI, and migration-enabled performance. It must not be started by assuming AGP 8 compatibility; Step 1 selects and records the official stable matrix first.
 
 ## Global completion gate
 
@@ -49,3 +51,4 @@ Expected: every command exits 0, bridge audit reports no high vulnerabilities, a
 - Replace the subprocess bridge with the Pi SDK: rejected for this roadmap. RPC preserves process isolation, directly consumes Pi's supported cross-language contract, and avoids rebuilding Pi's RPC dispatcher inside the bridge.
 - Remove the bridge: rejected. Android cannot directly consume stdio RPC, and the bridge owns authentication, WebSocket transport, remote session discovery, cwd locks, and reconnect policy.
 - Add offline agent execution on Android: rejected for now; it conflicts with the product's remote-control purpose and would substantially expand credential, filesystem, and runtime scope.
+- Treat AGP 9/API 37/JDK 25 as part of Plans 009/010: rejected. The migration is intentionally isolated as Plan 011 so feature/performance changes can be verified independently.
