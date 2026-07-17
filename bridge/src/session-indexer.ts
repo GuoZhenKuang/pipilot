@@ -87,6 +87,7 @@ interface ParsedSessionFile {
 
 const MAX_PARSED_SESSION_CACHE_FILES = 16;
 const MAX_PARSED_SESSION_CACHE_BYTES = 32 * 1024 * 1024;
+const MAX_TREE_CACHE_ENTRIES = 32;
 
 export function createSessionIndexer(options: SessionIndexerOptions): SessionIndexer {
     const sessionsRoot = path.resolve(options.sessionsDirectory);
@@ -95,6 +96,7 @@ export function createSessionIndexer(options: SessionIndexerOptions): SessionInd
     // One parsed snapshot is shared by metadata/freshness/tree consumers. The key
     // is the canonical path plus the stat revision; mutation naturally invalidates it.
     const parsedSessionCache = new Map<string, ParsedSessionFile>();
+    const treeCache = new Map<string, SessionTreeSnapshot>();
 
     return {
         async listSessions(): Promise<SessionIndexGroup[]> {
@@ -148,7 +150,13 @@ export function createSessionIndexer(options: SessionIndexerOptions): SessionInd
 
         async getSessionTree(sessionPath: string, filter?: SessionTreeFilter): Promise<SessionTreeSnapshot> {
             const resolvedSessionPath = await resolveSessionPath(sessionPath, sessionsRoot);
-            return parseSessionTreeFile(resolvedSessionPath, options.logger, filter, parsedSessionCache);
+            return parseSessionTreeFile(
+                resolvedSessionPath,
+                options.logger,
+                filter,
+                parsedSessionCache,
+                treeCache,
+            );
         },
 
         async getSessionFreshness(sessionPath: string): Promise<SessionFreshnessSnapshot> {
@@ -408,8 +416,16 @@ async function parseSessionTreeFile(
     logger: Logger,
     filter: SessionTreeFilter = "default",
     parsedCache: Map<string, ParsedSessionFile>,
+    treeCache: Map<string, SessionTreeSnapshot>,
 ): Promise<SessionTreeSnapshot> {
     const fileStats = await fs.stat(sessionPath);
+    const cacheKey = `${sessionPath}:${fileStats.mtimeMs}:${fileStats.size}:${filter}`;
+    const cachedTree = treeCache.get(cacheKey);
+    if (cachedTree) {
+        treeCache.delete(cacheKey);
+        treeCache.set(cacheKey, cachedTree);
+        return cachedTree;
+    }
     const parsed = await getParsedSession(sessionPath, fileStats, logger, parsedCache);
     const { lines, entries: parsedEntries } = parsed;
     if (lines.length === 0) throw new Error("Session file is empty");
@@ -454,12 +470,19 @@ async function parseSessionTreeFile(
         .filter((entry) => entry.parentId === null || !filteredEntryIds.has(entry.parentId))
         .map((entry) => entry.entryId);
 
-    return {
+    const snapshot = {
         sessionPath,
         rootIds,
         currentLeafId: resolveVisibleLeafId(currentLeafIdRaw, filteredEntryIds, parentIdsByEntryId),
         entries: filteredEntries,
     };
+    treeCache.set(cacheKey, snapshot);
+    while (treeCache.size > MAX_TREE_CACHE_ENTRIES) {
+        const oldest = treeCache.keys().next().value;
+        if (!oldest) break;
+        treeCache.delete(oldest);
+    }
+    return snapshot;
 }
 
 async function getParsedSession(

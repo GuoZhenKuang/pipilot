@@ -48,7 +48,7 @@ In scope: chat UI/state/tests, Android dependency declarations and deprecated AP
 - Keep navigation on stable `2.9.8`; do not adopt alpha artifacts.
 - Migrate `LocalClipboardManager` to suspend `LocalClipboard`/`ClipEntry` APIs.
 - Migrate Compose tests to `androidx.compose.ui.test.junit4.v2.createComposeRule`.
-- Keep AGP 9/API 37/Kotlin built-in migration as a separate compatibility step; do not suppress AAR metadata checks.
+- Defer AGP 9/API 37/Kotlin built-in migration to a separate future task; do not suppress AAR metadata checks in this plan.
 
 ### 3. Make image preview production-grade
 
@@ -130,12 +130,13 @@ If npm returns HTTP 410 for the retired audit endpoint, record the external fail
 - [ ] Composer exposes delivery and dispatch state without losing drafts.
 - [ ] Heavy tool details use a bounded detail surface with copy/highlighting.
 - [ ] Compact and expanded layouts follow Material 3 navigation/inset rules.
+- [ ] AGP 9/API 37/Kotlin built-in migration remains deferred to a separate future task.
 - [ ] Bridge/mobile P1 audit findings have regression coverage.
 - [ ] Full non-device gates pass; device acceptance remains operator-owned.
 
 ## STOP conditions
 
 - Stop if a requested queue operation, remote file preview, or image steer requires an undocumented RPC shape.
-- Stop if AGP 9/API 37 requires unavailable CI/local SDK support; isolate it as a migration rather than suppressing metadata checks.
+- AGP 9/API 37 migration is out of scope here and must be handled as a separate task.
 - Stop if freshness noise can only be removed by ignoring explicit other-client ownership.
 - Stop before any device/emulator command unless the operator says **debug mode**.

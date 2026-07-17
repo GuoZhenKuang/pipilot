@@ -562,6 +562,8 @@ describe("createSessionIndexer", () => {
             expect(groups[0]?.sessions).toHaveLength(1);
             const tree = await sessionIndexer.getSessionTree(sessionPath);
             expect(tree.entries.map((entry) => entry.entryId)).toEqual(["m1", "m2"]);
+            const cachedTree = await sessionIndexer.getSessionTree(sessionPath);
+            expect(cachedTree).toBe(tree);
             const freshness = await sessionIndexer.getSessionFreshness(sessionPath);
             expect(freshness.sessionPath).toBe(sessionPath);
             // Metadata, tree, and freshness consumers share one revision snapshot.
