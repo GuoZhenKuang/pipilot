@@ -558,8 +558,14 @@ describe("createSessionIndexer", () => {
         const readFileSpy = vi.spyOn(fs, "readFile");
 
         try {
+            const groups = await sessionIndexer.listSessions();
+            expect(groups[0]?.sessions).toHaveLength(1);
+            const tree = await sessionIndexer.getSessionTree(sessionPath);
+            expect(tree.entries.map((entry) => entry.entryId)).toEqual(["m1", "m2"]);
             const freshness = await sessionIndexer.getSessionFreshness(sessionPath);
             expect(freshness.sessionPath).toBe(sessionPath);
+            // Metadata, tree, and freshness consumers share one revision snapshot.
+            expect(readFileSpy).toHaveBeenCalledTimes(1);
             expect(freshness.cwd).toBe("/tmp/project-freshness");
             expect(freshness.fingerprint.sizeBytes).toBeGreaterThan(0);
             expect(freshness.fingerprint.entryCount).toBe(2);
