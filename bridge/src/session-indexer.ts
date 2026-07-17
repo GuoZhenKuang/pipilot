@@ -113,15 +113,19 @@ export function createSessionIndexer(options: SessionIndexerOptions): SessionInd
                 }
             }
 
-            for (const sessionFile of sessionFiles) {
-                const entry = await parseSessionFileWithCache(
-                    sessionFile,
-                    options.logger,
-                    sessionMetadataCache,
-                    parsedSessionCache,
-                );
-                if (!entry) continue;
-                sessions.push(entry);
+            const parsedEntries = await mapWithConcurrency(
+                sessionFiles,
+                4,
+                (sessionFile) =>
+                    parseSessionFileWithCache(
+                        sessionFile,
+                        options.logger,
+                        sessionMetadataCache,
+                        parsedSessionCache,
+                    ),
+            );
+            for (const entry of parsedEntries) {
+                if (entry) sessions.push(entry);
             }
 
             const groups = new Map<string, SessionIndexEntry[]>();
@@ -157,6 +161,24 @@ export function createSessionIndexer(options: SessionIndexerOptions): SessionInd
             );
         },
     };
+}
+
+async function mapWithConcurrency<T, R>(
+    values: T[],
+    concurrency: number,
+    mapper: (value: T) => Promise<R>,
+): Promise<R[]> {
+    const results = new Array<R>(values.length);
+    let nextIndex = 0;
+    const worker = async (): Promise<void> => {
+        while (true) {
+            const index = nextIndex++;
+            if (index >= values.length) return;
+            results[index] = await mapper(values[index]);
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, worker));
+    return results;
 }
 
 async function resolveSessionPath(sessionPath: string, sessionsRoot: string): Promise<string> {

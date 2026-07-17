@@ -1,6 +1,8 @@
 package com.ayagmar.pimobile.coresessions
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -73,6 +75,23 @@ class SessionIndexRepositoryTest {
             assertEquals("modernized", changedRef.firstUserMessagePreview)
 
             assertFilteredPaymentState(repository = repository, hostId = hostId)
+        }
+
+    @Test
+    fun `concurrent refreshes share one remote fetch`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val remote = FakeSessionRemoteDataSource().apply { fetchDelayMs = 10 }
+            remote.groupsByHost["host-a"] = emptyList()
+            val repository = createRepository(remote, InMemorySessionIndexCache(), dispatcher)
+
+            val first = async { repository.refresh("host-a") }
+            val second = async { repository.refresh("host-a") }
+            advanceUntilIdle()
+
+            first.await()
+            second.await()
+            assertEquals(1, remote.fetchCount)
         }
 
     @Test
@@ -172,8 +191,12 @@ class SessionIndexRepositoryTest {
 
     private class FakeSessionRemoteDataSource : SessionIndexRemoteDataSource {
         val groupsByHost = linkedMapOf<String, List<SessionGroup>>()
+        var fetchCount: Int = 0
+        var fetchDelayMs: Long = 0
 
         override suspend fun fetch(hostId: String): List<SessionGroup> {
+            fetchCount += 1
+            if (fetchDelayMs > 0) delay(fetchDelayMs)
             return groupsByHost[hostId] ?: emptyList()
         }
     }

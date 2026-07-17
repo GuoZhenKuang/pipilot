@@ -961,6 +961,7 @@ class ChatViewModel(
                 // A retained Chat destination must never keep painting the source session
                 // while the bridge is switching. The generation also guards late replies.
                 initialLoadJob?.cancel()
+                treeLoadJob?.cancel()
                 fullTimeline = emptyList()
                 visibleTimelineSize = 0
                 pendingLocalUserIds.clear()
@@ -978,6 +979,9 @@ class ChatViewModel(
                         errorMessage = null,
                         sessionCoherencyWarning = null,
                         isSyncingSession = true,
+                        sessionTree = null,
+                        isLoadingTree = false,
+                        treeErrorMessage = null,
                         extensionStatuses = emptyMap(),
                     )
                 }
@@ -1728,23 +1732,14 @@ class ChatViewModel(
                     }
                 val reloadError = reloadResult?.exceptionOrNull()
 
-                val messagesResult =
-                    if (reloadError == null) {
-                        sessionController.getMessages()
-                    } else {
-                        Result.failure(reloadError)
-                    }
+                // State is the cheap header phase. Publish it before the bounded timeline
+                // arrives so resume has a useful first render without duplicate requests.
                 val stateResult =
                     if (reloadError == null) {
                         sessionController.getState()
                     } else {
                         Result.failure(reloadError)
                     }
-
-                if (messagesResult.isSuccess) {
-                    recordMetricsSafely { PerformanceMetrics.recordFirstMessagesRendered() }
-                }
-
                 val stateData = stateResult.getOrNull()?.data
                 val metadata =
                     InitialLoadMetadata(
@@ -1760,6 +1755,30 @@ class ChatViewModel(
 
                 if (loadGeneration != null && sessionController.activeSession.value?.generation != loadGeneration) {
                     return@launch
+                }
+
+                _uiState.update { state ->
+                    state.copy(
+                        currentModel = metadata.modelInfo,
+                        thinkingLevel = metadata.thinkingLevel,
+                        isStreaming = metadata.isStreaming,
+                        steeringMode = metadata.steeringMode,
+                        followUpMode = metadata.followUpMode,
+                        sessionPath = metadata.sessionPath ?: reloadResult?.getOrNull(),
+                        sessionName = metadata.sessionName,
+                        pendingMessageCount = metadata.pendingMessageCount,
+                    )
+                }
+
+                val messagesResult =
+                    if (reloadError == null) {
+                        sessionController.getMessages()
+                    } else {
+                        Result.failure(reloadError)
+                    }
+
+                if (messagesResult.isSuccess) {
+                    recordMetricsSafely { PerformanceMetrics.recordFirstMessagesRendered() }
                 }
 
                 _uiState.update { state ->
@@ -1891,6 +1910,7 @@ class ChatViewModel(
 
     private var hasRecordedFirstToken = false
     private var initialLoadJob: Job? = null
+    private var treeLoadJob: Job? = null
 
     private fun handleMessageUpdate(event: MessageUpdateEvent) {
         // Record first token received for TTFT tracking
@@ -2163,6 +2183,7 @@ class ChatViewModel(
     }
 
     fun hideTreeSheet() {
+        treeLoadJob?.cancel()
         _uiState.update { it.copy(isTreeSheetVisible = false) }
     }
 
@@ -2223,10 +2244,19 @@ class ChatViewModel(
     }
 
     private fun loadSessionTree() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingTree = true) }
+        treeLoadJob?.cancel()
+        val requestGeneration = sessionController.activeSession.value?.generation
+        treeLoadJob =
+            viewModelScope.launch {
+                _uiState.update { it.copy(isLoadingTree = true) }
 
-            val stateResult = sessionController.getState()
+                val activePath = sessionController.activeSession.value?.sessionPath
+                val stateResult =
+                    if (!activePath.isNullOrBlank()) {
+                        Result.success<RpcResponse?>(null)
+                    } else {
+                        sessionController.getState()
+                    }
             if (stateResult.isFailure) {
                 _uiState.update {
                     it.copy(
@@ -2237,7 +2267,9 @@ class ChatViewModel(
                 return@launch
             }
 
-            val sessionPath = stateResult.getOrNull()?.data?.stringField("sessionFile")
+            if (requestGeneration != null && sessionController.activeSession.value?.generation != requestGeneration) return@launch
+
+            val sessionPath = activePath ?: stateResult.getOrNull()?.data?.stringField("sessionFile")
             if (sessionPath.isNullOrBlank()) {
                 _uiState.update {
                     it.copy(
@@ -2250,6 +2282,7 @@ class ChatViewModel(
 
             val filter = _uiState.value.treeFilter
             val result = sessionController.getSessionTree(sessionPath = sessionPath, filter = filter)
+            if (requestGeneration != null && sessionController.activeSession.value?.generation != requestGeneration) return@launch
             _uiState.update { state ->
                 if (result.isSuccess) {
                     state.copy(

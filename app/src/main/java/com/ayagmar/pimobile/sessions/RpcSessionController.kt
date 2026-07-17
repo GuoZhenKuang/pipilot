@@ -400,6 +400,16 @@ class RpcSessionController(
         }
     }
 
+    private suspend fun publishSessionChanged(sessionPath: String?) {
+        _activeSession.value =
+            ActiveSessionState(
+                sessionPath = sessionPath,
+                generation = (_activeSession.value?.generation ?: 0L) + 1L,
+                isSwitching = false,
+            )
+        _sessionChanged.emit(sessionPath)
+    }
+
     private suspend fun forkWithEntryId(
         connection: PiRpcConnection,
         entryId: String,
@@ -423,7 +433,7 @@ class RpcSessionController(
 
         val newPath = refreshCurrentSessionPath(connection)
         resetSessionProjection()
-        _sessionChanged.emit(newPath)
+        publishSessionChanged(newPath)
         return newPath
     }
 
@@ -621,7 +631,7 @@ class RpcSessionController(
 
                 val newPath = refreshCurrentSessionPath(connection)
                 resetSessionProjection()
-                _sessionChanged.emit(newPath)
+                publishSessionChanged(newPath)
                 Unit
             }
         }
@@ -687,7 +697,7 @@ class RpcSessionController(
 
                 val sessionPath = bridgeResponse.payload.stringField("sessionPath")
                 resetSessionProjection()
-                _sessionChanged.emit(sessionPath)
+                publishSessionChanged(sessionPath)
                 sessionPath
             }
         }

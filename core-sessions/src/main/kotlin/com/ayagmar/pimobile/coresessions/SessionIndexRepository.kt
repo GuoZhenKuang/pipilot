@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.sync.withLock
 
 class SessionIndexRepository(
@@ -21,6 +22,7 @@ class SessionIndexRepository(
 ) {
     private val stateByHost = linkedMapOf<String, MutableStateFlow<SessionIndexState>>()
     private val refreshMutexByHost = linkedMapOf<String, Mutex>()
+    private val inFlightRefreshes = linkedMapOf<String, CompletableDeferred<SessionIndexState>>()
 
     suspend fun initialize(hostId: String) {
         val state = stateForHost(hostId)
@@ -52,6 +54,31 @@ class SessionIndexRepository(
     }
 
     suspend fun refresh(hostId: String): SessionIndexState {
+        val (deferred, owner) = synchronized(inFlightRefreshes) {
+            val existing = inFlightRefreshes[hostId]
+            if (existing != null) {
+                existing to false
+            } else {
+                CompletableDeferred<SessionIndexState>().also { inFlightRefreshes[hostId] = it } to true
+            }
+        }
+        if (!owner) return deferred.await()
+
+        return try {
+            val result = refreshInternal(hostId)
+            deferred.complete(result)
+            result
+        } catch (throwable: Throwable) {
+            deferred.completeExceptionally(throwable)
+            throw throwable
+        } finally {
+            synchronized(inFlightRefreshes) {
+                if (inFlightRefreshes[hostId] === deferred) inFlightRefreshes.remove(hostId)
+            }
+        }
+    }
+
+    private suspend fun refreshInternal(hostId: String): SessionIndexState {
         val mutex = mutexForHost(hostId)
         val state = stateForHost(hostId)
 
