@@ -8,6 +8,7 @@ import com.ayagmar.pimobile.corerpc.AgentSettledEvent
 import com.ayagmar.pimobile.corerpc.AssistantMessageEvent
 import com.ayagmar.pimobile.corerpc.MessageEndEvent
 import com.ayagmar.pimobile.corerpc.MessageUpdateEvent
+import com.ayagmar.pimobile.sessions.SessionTreeSnapshot
 import com.ayagmar.pimobile.sessions.SlashCommandInfo
 import com.ayagmar.pimobile.sessions.TreeNavigationResult
 import com.ayagmar.pimobile.testutil.FakeSessionController
@@ -890,6 +891,37 @@ class ChatViewModelThinkingExpansionTest {
                 "Potential cross-device session edits detected. Use Sync now before continuing.",
                 viewModel.uiState.value.sessionCoherencyWarning,
             )
+        }
+
+    @Test
+    fun cachedTreeRendersStaleUntilAuthoritativeReplacementArrives() =
+        runTest(dispatcher) {
+            val sessionPath = "/tmp/tree-session.jsonl"
+            val cached = SessionTreeSnapshot(sessionPath, emptyList(), "old-leaf", emptyList())
+            val authoritative = SessionTreeSnapshot(sessionPath, emptyList(), "new-leaf", emptyList())
+            val controller =
+                FakeSessionController().apply {
+                    beginSessionSwitch(sessionPath)
+                    finishSessionSwitch(sessionPath)
+                    cachedSessionTree = cached
+                    sessionTreeResult = Result.success(authoritative)
+                    sessionTreeDelayMs = 100
+                }
+            val viewModel = createViewModel(controller)
+            dispatcher.scheduler.advanceUntilIdle()
+            awaitInitialLoad(viewModel)
+
+            viewModel.showTreeSheet()
+            dispatcher.scheduler.runCurrent()
+            assertEquals("old-leaf", viewModel.uiState.value.sessionTree?.currentLeafId)
+            assertTrue(viewModel.uiState.value.sessionTree?.isStale == true)
+            assertTrue(viewModel.uiState.value.isLoadingTree)
+
+            dispatcher.scheduler.advanceTimeBy(100)
+            dispatcher.scheduler.runCurrent()
+            assertEquals("new-leaf", viewModel.uiState.value.sessionTree?.currentLeafId)
+            assertFalse(viewModel.uiState.value.sessionTree?.isStale == true)
+            assertFalse(viewModel.uiState.value.isLoadingTree)
         }
 
     @Test

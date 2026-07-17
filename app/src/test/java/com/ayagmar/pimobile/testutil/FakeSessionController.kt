@@ -75,6 +75,7 @@ class FakeSessionController : SessionController {
     var cachedSessionTree: SessionTreeSnapshot? = null
     var sessionTreeResult: Result<SessionTreeSnapshot> = Result.failure(IllegalStateException("Not used"))
     var getSessionTreeCallCount: Int = 0
+    var sessionTreeDelayMs: Long = 0L
     var treeNavigationResult: Result<TreeNavigationResult> =
         Result.success(
             TreeNavigationResult(
@@ -257,6 +258,7 @@ class FakeSessionController : SessionController {
         filter: String?,
     ): Result<SessionTreeSnapshot> {
         getSessionTreeCallCount += 1
+        if (sessionTreeDelayMs > 0) delay(sessionTreeDelayMs)
         return sessionTreeResult
     }
 
