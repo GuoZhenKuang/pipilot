@@ -399,7 +399,6 @@ private fun ChatScreen(
         stats = state.sessionStats,
         sessionName = state.sessionName,
         cwd = cwd,
-        sessionPath = state.sessionPath,
         model = state.currentModel,
         pendingMessageCount = state.pendingMessageCount,
         isRunActive = state.isStreaming || state.isRetrying,

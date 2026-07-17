@@ -140,7 +140,6 @@ internal fun SessionStatsSheet(
     stats: SessionStats?,
     sessionName: String?,
     cwd: String?,
-    sessionPath: String?,
     model: ModelInfo?,
     pendingMessageCount: Int,
     isRunActive: Boolean,
@@ -156,7 +155,6 @@ internal fun SessionStatsSheet(
     if (!isVisible) return
 
     val copyToClipboard = rememberClipboardCopy()
-    val path = sessionPath ?: stats?.sessionPath
     val status =
         when {
             isRetrying -> HandoffRunStatus.RETRYING
@@ -168,7 +166,7 @@ internal fun SessionStatsSheet(
             HandoffSummaryData(
                 sessionName = sessionName,
                 cwd = cwd,
-                sessionPath = path,
+                sessionPath = null,
                 model = model?.let { "${it.provider}/${it.id}" },
                 runStatus = status,
             ),
@@ -186,7 +184,6 @@ internal fun SessionStatsSheet(
                 model?.let { StatRow("Model", "${it.provider}/${it.id}") }
                 StatRow("Status", status.label)
                 StatRow("Queued", pendingMessageCount.toString())
-                path?.let { StatRow("Session file", it.takeLast(SESSION_PATH_DISPLAY_LENGTH)) }
             }
             if (isLoading) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
@@ -500,9 +497,9 @@ internal fun TreeNavigationSheet(
         title = { Text("Session tree") },
         text = {
             Column(modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
-                tree?.sessionPath?.let { sessionPath ->
+                if (tree != null) {
                     Text(
-                        text = truncatePath(sessionPath),
+                        text = "Current session tree",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 8.dp),
@@ -780,13 +777,3 @@ private val TREE_FILTER_OPTIONS =
     )
 
 private const val MODEL_PICKER_SCROLL_OFFSET_ITEMS = 1
-private const val SESSION_PATH_DISPLAY_LENGTH = 40
-
-private fun truncatePath(path: String): String {
-    if (path.length <= SESSION_PATH_DISPLAY_LENGTH) {
-        return path
-    }
-    val head = SESSION_PATH_DISPLAY_LENGTH / 2
-    val tail = SESSION_PATH_DISPLAY_LENGTH - head - 1
-    return "${path.take(head)}…${path.takeLast(tail)}"
-}
