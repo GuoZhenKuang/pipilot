@@ -95,6 +95,19 @@ class SessionIndexRepositoryTest {
         }
 
     @Test
+    fun `refresh interval prevents redundant remote fetches`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val remote = FakeSessionRemoteDataSource()
+            val repository = createRepository(remote, InMemorySessionIndexCache(), dispatcher)
+
+            repository.refresh("host-a")
+            repository.refresh("host-a")
+
+            assertEquals(1, remote.fetchCount)
+        }
+
+    @Test
     fun `file cache persists entries per host`() =
         runTest {
             val directory = Files.createTempDirectory("session-cache-test")
