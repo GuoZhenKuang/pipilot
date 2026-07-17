@@ -9,6 +9,7 @@ import com.ayagmar.pimobile.corerpc.RpcResponse
 import com.ayagmar.pimobile.corerpc.SessionStats
 import com.ayagmar.pimobile.coresessions.SessionRecord
 import com.ayagmar.pimobile.hosts.HostProfile
+import com.ayagmar.pimobile.sessions.ActiveSessionState
 import com.ayagmar.pimobile.sessions.ForkableMessage
 import com.ayagmar.pimobile.sessions.ModelInfo
 import com.ayagmar.pimobile.sessions.SessionController
@@ -31,6 +32,7 @@ class FakeSessionController : SessionController {
     private val streamingState = MutableStateFlow(false)
     private val connectionStateFlow = MutableStateFlow(ConnectionState.DISCONNECTED)
     private val _sessionChanged = MutableSharedFlow<String?>(extraBufferCapacity = 16)
+    private val _activeSession = MutableStateFlow<ActiveSessionState?>(null)
     private val _timelineInvalidated = MutableSharedFlow<Unit>(extraBufferCapacity = 16)
     private val _syncMetrics = MutableStateFlow(SessionSyncMetrics())
 
@@ -100,6 +102,7 @@ class FakeSessionController : SessionController {
     override val connectionState: StateFlow<ConnectionState> = connectionStateFlow
     override val isStreaming: StateFlow<Boolean> = streamingState
     override val sessionChanged: SharedFlow<String?> = _sessionChanged
+    override val activeSession: StateFlow<ActiveSessionState?> = _activeSession
     override val timelineInvalidated: SharedFlow<Unit> = _timelineInvalidated
     override val syncMetrics: StateFlow<SessionSyncMetrics> = _syncMetrics
 
@@ -108,7 +111,16 @@ class FakeSessionController : SessionController {
     }
 
     suspend fun emitSessionChanged(sessionPath: String? = null) {
+        _activeSession.value = ActiveSessionState(sessionPath, (_activeSession.value?.generation ?: 0L) + 1L)
         _sessionChanged.emit(sessionPath)
+    }
+
+    fun beginSessionSwitch(sessionPath: String?) {
+        _activeSession.value = ActiveSessionState(sessionPath, (_activeSession.value?.generation ?: 0L) + 1L, true)
+    }
+
+    fun finishSessionSwitch(sessionPath: String?) {
+        _activeSession.value = _activeSession.value?.copy(sessionPath = sessionPath, isSwitching = false)
     }
 
     fun setStreaming(isStreaming: Boolean) {

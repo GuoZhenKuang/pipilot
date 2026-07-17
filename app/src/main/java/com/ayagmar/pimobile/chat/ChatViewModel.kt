@@ -84,6 +84,7 @@ class ChatViewModel(
         observeConnection()
         observeStreamingState()
         observeEvents()
+        observeActiveSessionIdentity()
         loadInitialMessages(reason = TimelineReloadReason.INITIAL)
         loadSessionStats()
     }
@@ -952,6 +953,38 @@ class ChatViewModel(
         runCatching(record)
     }
 
+    private fun observeActiveSessionIdentity() {
+        viewModelScope.launch {
+            sessionController.activeSession.collect { identity ->
+                if (identity?.isSwitching != true) return@collect
+
+                // A retained Chat destination must never keep painting the source session
+                // while the bridge is switching. The generation also guards late replies.
+                initialLoadJob?.cancel()
+                fullTimeline = emptyList()
+                visibleTimelineSize = 0
+                pendingLocalUserIds.clear()
+                resetHistoryWindow()
+                latestSessionPath = identity.sessionPath
+                lastKnownSessionFreshness = null
+                _uiState.update {
+                    it.copy(
+                        isLoading = true,
+                        timeline = emptyList(),
+                        hasOlderMessages = false,
+                        hiddenHistoryCount = 0,
+                        sessionPath = identity.sessionPath,
+                        sessionName = null,
+                        errorMessage = null,
+                        sessionCoherencyWarning = null,
+                        isSyncingSession = true,
+                        extensionStatuses = emptyMap(),
+                    )
+                }
+            }
+        }
+    }
+
     @Suppress("CyclomaticComplexMethod", "LongMethod")
     private fun observeEvents() {
         // Observe session changes and reload timeline
@@ -1684,6 +1717,7 @@ class ChatViewModel(
                 reason == TimelineReloadReason.AUTO_FRESHNESS_REFRESH
 
         initialLoadJob?.cancel()
+        val loadGeneration = sessionController.activeSession.value?.generation
         initialLoadJob =
             viewModelScope.launch(Dispatchers.IO) {
                 val reloadResult =
@@ -1723,6 +1757,10 @@ class ChatViewModel(
                         sessionName = stateData?.stringField("sessionName"),
                         pendingMessageCount = stateData?.intField("pendingMessageCount") ?: 0,
                     )
+
+                if (loadGeneration != null && sessionController.activeSession.value?.generation != loadGeneration) {
+                    return@launch
+                }
 
                 _uiState.update { state ->
                     if (messagesResult.isFailure) {

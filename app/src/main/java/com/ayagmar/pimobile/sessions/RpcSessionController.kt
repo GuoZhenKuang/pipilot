@@ -83,6 +83,7 @@ class RpcSessionController(
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     private val _isStreaming = MutableStateFlow(false)
     private val _sessionChanged = MutableSharedFlow<String?>(extraBufferCapacity = 16)
+    private val _activeSession = MutableStateFlow<ActiveSessionState?>(null)
     private val _timelineInvalidated = MutableSharedFlow<Unit>(extraBufferCapacity = 16)
     private val _syncMetrics = MutableStateFlow(SessionSyncMetrics())
     private val entryProjection = SessionEntryProjection()
@@ -102,6 +103,7 @@ class RpcSessionController(
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
     override val isStreaming: StateFlow<Boolean> = _isStreaming.asStateFlow()
     override val sessionChanged: SharedFlow<String?> = _sessionChanged
+    override val activeSession: StateFlow<ActiveSessionState?> = _activeSession.asStateFlow()
     override val timelineInvalidated: SharedFlow<Unit> = _timelineInvalidated
     override val syncMetrics: StateFlow<SessionSyncMetrics> = _syncMetrics.asStateFlow()
 
@@ -152,8 +154,17 @@ class RpcSessionController(
         token: String,
         session: SessionRecord,
     ): Result<String?> {
+        val previousIdentity = _activeSession.value
+        val nextGeneration = (previousIdentity?.generation ?: 0L) + 1L
+        _activeSession.value =
+            ActiveSessionState(
+                sessionPath = session.sessionPath.takeIf { it.isNotBlank() },
+                generation = nextGeneration,
+                isSwitching = true,
+            )
+
         return mutex.withLock {
-            runCatching {
+            try {
                 val connection =
                     ensureConnectionLocked(
                         hostProfile = hostProfile,
@@ -179,8 +190,18 @@ class RpcSessionController(
 
                 val newPath = refreshCurrentSessionPath(connection)
                 resetSessionProjection()
+                _activeSession.value =
+                    ActiveSessionState(
+                        sessionPath = newPath,
+                        generation = nextGeneration,
+                        isSwitching = false,
+                    )
                 _sessionChanged.emit(newPath)
-                newPath
+                Result.success(newPath)
+            } catch (error: Throwable) {
+                _activeSession.value = previousIdentity?.copy(isSwitching = false)
+                previousIdentity?.let { _sessionChanged.emit(it.sessionPath) }
+                Result.failure(error)
             }
         }
     }

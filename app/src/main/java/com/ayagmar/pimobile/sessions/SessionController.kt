@@ -26,6 +26,8 @@ interface SessionController {
      * ChatViewModel observes this to reload the timeline.
      */
     val sessionChanged: SharedFlow<String?>
+    /** Replayable identity used to invalidate retained chat content before a switch completes. */
+    val activeSession: StateFlow<ActiveSessionState?>
     val timelineInvalidated: SharedFlow<Unit>
     val syncMetrics: StateFlow<SessionSyncMetrics>
 
@@ -145,6 +147,12 @@ interface SessionController {
 /**
  * Information about a forkable message from get_fork_messages response.
  */
+data class ActiveSessionState(
+    val sessionPath: String?,
+    val generation: Long,
+    val isSwitching: Boolean = false,
+)
+
 data class SessionSyncMetrics(
     val fullRebuilds: Int = 0,
     val incrementalEntries: Int = 0,
