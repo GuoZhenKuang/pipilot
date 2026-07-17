@@ -445,8 +445,17 @@ internal fun TreeNavigationSheet(
                     }
                 }
 
+                if (isLoading && entries.isNotEmpty()) {
+                    Text(
+                        text = "Updating tree…",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.padding(bottom = 6.dp),
+                    )
+                }
+
                 when {
-                    isLoading -> {
+                    isLoading && entries.isEmpty() -> {
                         Box(
                             modifier = Modifier.fillMaxWidth().padding(24.dp),
                             contentAlignment = Alignment.Center,
