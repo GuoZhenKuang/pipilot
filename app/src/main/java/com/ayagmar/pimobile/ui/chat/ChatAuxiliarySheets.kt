@@ -32,6 +32,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,12 +45,67 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.ayagmar.pimobile.chat.ChatTimelineItem
 import com.ayagmar.pimobile.chat.ChatViewModel
 import com.ayagmar.pimobile.corerpc.AvailableModel
 import com.ayagmar.pimobile.corerpc.SessionStats
 import com.ayagmar.pimobile.sessions.ModelInfo
 import com.ayagmar.pimobile.sessions.SessionTreeEntry
 import com.ayagmar.pimobile.sessions.SessionTreeSnapshot
+
+private const val MAX_TOOL_ARGUMENT_PREVIEW_CHARS = 12_000
+private const val MAX_TOOL_OUTPUT_PREVIEW_CHARS = 20_000
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ToolDetailsSheet(
+    isVisible: Boolean,
+    tool: ChatTimelineItem.Tool?,
+    onDismiss: () -> Unit,
+) {
+    if (!isVisible || tool == null) return
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(tool.toolName.ifBlank { "Tool details" }, style = MaterialTheme.typography.titleLarge)
+            Text(
+                text =
+                    if (tool.isError) {
+                        "Failed"
+                    } else if (tool.isStreaming) {
+                        "Running"
+                    } else {
+                        "Completed"
+                    },
+                style = MaterialTheme.typography.labelMedium,
+                color = if (tool.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+            )
+            if (tool.arguments.isNotEmpty()) {
+                Text("Arguments", style = MaterialTheme.typography.titleSmall)
+                SelectionContainer {
+                    Text(
+                        tool.arguments.entries
+                            .joinToString("\n") { (key, value) -> "$key: $value" }
+                            .take(MAX_TOOL_ARGUMENT_PREVIEW_CHARS),
+                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            Text("Output", style = MaterialTheme.typography.titleSmall)
+            SelectionContainer {
+                Text(
+                    tool.output.ifBlank { "(no output)" }.take(MAX_TOOL_OUTPUT_PREVIEW_CHARS),
+                    fontFamily = FontFamily.Monospace,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Suppress("LongParameterList", "LongMethod")

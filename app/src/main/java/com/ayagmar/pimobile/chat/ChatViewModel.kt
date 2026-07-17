@@ -706,9 +706,13 @@ class ChatViewModel(
     }
 
     fun toggleToolExpansion(itemId: String) {
-        updateTimelineState { state ->
-            ChatTimelineReducer.toggleToolExpansion(state, itemId)
+        _uiState.update { state ->
+            state.copy(selectedToolId = itemId)
         }
+    }
+
+    fun dismissToolDetails() {
+        _uiState.update { it.copy(selectedToolId = null) }
     }
 
     fun toggleDiffExpansion(itemId: String) {
@@ -982,6 +986,7 @@ class ChatViewModel(
                         sessionTree = null,
                         isLoadingTree = false,
                         treeErrorMessage = null,
+                        selectedToolId = null,
                         extensionStatuses = emptyMap(),
                     )
                 }

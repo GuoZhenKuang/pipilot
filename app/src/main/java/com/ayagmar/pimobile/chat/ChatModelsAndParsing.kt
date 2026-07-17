@@ -55,6 +55,7 @@ data class ChatUiState(
     val bashHistory: List<String> = emptyList(),
     // Tool argument expansion state (per tool ID)
     val expandedToolArguments: Set<String> = emptySet(),
+    val selectedToolId: String? = null,
     // Session stats state
     val isStatsSheetVisible: Boolean = false,
     val sessionStats: SessionStats? = null,

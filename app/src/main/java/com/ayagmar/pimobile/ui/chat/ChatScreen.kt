@@ -112,6 +112,7 @@ private fun resolveDocumentDisplayName(
 
 internal data class ChatCallbacks(
     val onToggleToolExpansion: (String) -> Unit,
+    val onDismissToolDetails: () -> Unit,
     val onToggleThinkingExpansion: (String) -> Unit,
     val onToggleDiffExpansion: (String) -> Unit,
     val onToggleToolArgumentsExpansion: (String) -> Unit,
@@ -265,6 +266,7 @@ fun ChatRoute(
         remember(chatViewModel) {
             ChatCallbacks(
                 onToggleToolExpansion = chatViewModel::toggleToolExpansion,
+                onDismissToolDetails = chatViewModel::dismissToolDetails,
                 onToggleThinkingExpansion = chatViewModel::toggleThinkingExpansion,
                 onToggleDiffExpansion = chatViewModel::toggleDiffExpansion,
                 onToggleToolArgumentsExpansion = chatViewModel::toggleToolArgumentsExpansion,
@@ -343,6 +345,16 @@ private fun ChatScreen(
         state = state,
         callbacks = callbacks,
         showExtensionStatusStrip = showExtensionStatusStrip,
+    )
+
+    val selectedTool =
+        state.timeline
+            .filterIsInstance<ChatTimelineItem.Tool>()
+            .firstOrNull { it.id == state.selectedToolId }
+    ToolDetailsSheet(
+        isVisible = selectedTool != null,
+        tool = selectedTool,
+        onDismiss = callbacks.onDismissToolDetails,
     )
 
     ExtensionUiDialogs(
