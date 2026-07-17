@@ -2243,6 +2243,7 @@ class ChatViewModel(
         }
     }
 
+    @Suppress("LongMethod")
     private fun loadSessionTree() {
         treeLoadJob?.cancel()
         val requestGeneration = sessionController.activeSession.value?.generation
@@ -2257,47 +2258,57 @@ class ChatViewModel(
                     } else {
                         sessionController.getState()
                     }
-            if (stateResult.isFailure) {
-                _uiState.update {
-                    it.copy(
-                        isLoadingTree = false,
-                        treeErrorMessage = stateResult.exceptionOrNull()?.message ?: "Failed to load session state",
-                    )
+                if (stateResult.isFailure) {
+                    _uiState.update {
+                        it.copy(
+                            isLoadingTree = false,
+                            treeErrorMessage = stateResult.exceptionOrNull()?.message ?: "Failed to load session state",
+                        )
+                    }
+                    return@launch
                 }
-                return@launch
-            }
 
-            if (requestGeneration != null && sessionController.activeSession.value?.generation != requestGeneration) return@launch
-
-            val sessionPath = activePath ?: stateResult.getOrNull()?.data?.stringField("sessionFile")
-            if (sessionPath.isNullOrBlank()) {
-                _uiState.update {
-                    it.copy(
-                        isLoadingTree = false,
-                        treeErrorMessage = "No active session path available",
-                    )
+                if (
+                    requestGeneration != null &&
+                    sessionController.activeSession.value?.generation != requestGeneration
+                ) {
+                    return@launch
                 }
-                return@launch
-            }
 
-            val filter = _uiState.value.treeFilter
-            val result = sessionController.getSessionTree(sessionPath = sessionPath, filter = filter)
-            if (requestGeneration != null && sessionController.activeSession.value?.generation != requestGeneration) return@launch
-            _uiState.update { state ->
-                if (result.isSuccess) {
-                    state.copy(
-                        sessionTree = result.getOrNull(),
-                        isLoadingTree = false,
-                        treeErrorMessage = null,
-                    )
-                } else {
-                    state.copy(
-                        isLoadingTree = false,
-                        treeErrorMessage = result.exceptionOrNull()?.message ?: "Failed to load session tree",
-                    )
+                val sessionPath = activePath ?: stateResult.getOrNull()?.data?.stringField("sessionFile")
+                if (sessionPath.isNullOrBlank()) {
+                    _uiState.update {
+                        it.copy(
+                            isLoadingTree = false,
+                            treeErrorMessage = "No active session path available",
+                        )
+                    }
+                    return@launch
+                }
+
+                val filter = _uiState.value.treeFilter
+                val result = sessionController.getSessionTree(sessionPath = sessionPath, filter = filter)
+                if (
+                    requestGeneration != null &&
+                    sessionController.activeSession.value?.generation != requestGeneration
+                ) {
+                    return@launch
+                }
+                _uiState.update { state ->
+                    if (result.isSuccess) {
+                        state.copy(
+                            sessionTree = result.getOrNull(),
+                            isLoadingTree = false,
+                            treeErrorMessage = null,
+                        )
+                    } else {
+                        state.copy(
+                            isLoadingTree = false,
+                            treeErrorMessage = result.exceptionOrNull()?.message ?: "Failed to load session tree",
+                        )
+                    }
                 }
             }
-        }
     }
 
     private fun handleToolStart(event: ToolExecutionStartEvent) {

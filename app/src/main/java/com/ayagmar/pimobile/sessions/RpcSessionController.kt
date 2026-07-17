@@ -149,6 +149,7 @@ class RpcSessionController(
         }
     }
 
+    @Suppress("TooGenericExceptionCaught")
     override suspend fun resume(
         hostProfile: HostProfile,
         token: String,

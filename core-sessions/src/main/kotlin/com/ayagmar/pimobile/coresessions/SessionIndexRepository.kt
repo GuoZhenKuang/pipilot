@@ -1,5 +1,6 @@
 package com.ayagmar.pimobile.coresessions
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -11,7 +12,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.sync.withLock
 
 class SessionIndexRepository(
@@ -53,15 +53,17 @@ class SessionIndexRepository(
         }
     }
 
+    @Suppress("TooGenericExceptionCaught")
     suspend fun refresh(hostId: String): SessionIndexState {
-        val (deferred, owner) = synchronized(inFlightRefreshes) {
-            val existing = inFlightRefreshes[hostId]
-            if (existing != null) {
-                existing to false
-            } else {
-                CompletableDeferred<SessionIndexState>().also { inFlightRefreshes[hostId] = it } to true
+        val (deferred, owner) =
+            synchronized(inFlightRefreshes) {
+                val existing = inFlightRefreshes[hostId]
+                if (existing != null) {
+                    existing to false
+                } else {
+                    CompletableDeferred<SessionIndexState>().also { inFlightRefreshes[hostId] = it } to true
+                }
             }
-        }
         if (!owner) return deferred.await()
 
         return try {

@@ -26,7 +26,9 @@ interface SessionController {
      * ChatViewModel observes this to reload the timeline.
      */
     val sessionChanged: SharedFlow<String?>
+
     /** Replayable identity used to invalidate retained chat content before a switch completes. */
+
     val activeSession: StateFlow<ActiveSessionState?>
     val timelineInvalidated: SharedFlow<Unit>
     val syncMetrics: StateFlow<SessionSyncMetrics>
