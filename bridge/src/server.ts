@@ -901,6 +901,7 @@ async function handleBridgeControlMessage(
     }
 
     if (messageType === "bridge_set_cwd") {
+        const startedAt = performance.now();
         const cwd = normalizeCwd(payload.cwd);
         if (!cwd) {
             client.send(JSON.stringify(createBridgeErrorEnvelope("invalid_cwd", "cwd must be a non-empty string")));
@@ -912,6 +913,14 @@ async function handleBridgeControlMessage(
         }
 
         context.cwd = cwd;
+        logger.info(
+            {
+                operation: "cwd_setup",
+                durationMs: Math.round(performance.now() - startedAt),
+                status: "success",
+            },
+            "Performance operation",
+        );
 
         client.send(
             JSON.stringify(
@@ -925,6 +934,7 @@ async function handleBridgeControlMessage(
     }
 
     if (messageType === "bridge_acquire_control") {
+        const startedAt = performance.now();
         const cwd = getRequestedCwd(payload, context);
         if (!cwd) {
             client.send(
@@ -958,6 +968,14 @@ async function handleBridgeControlMessage(
         }
 
         context.cwd = cwd;
+        logger.info(
+            {
+                operation: "lock_acquisition",
+                durationMs: Math.round(performance.now() - startedAt),
+                status: "success",
+            },
+            "Performance operation",
+        );
 
         client.send(
             JSON.stringify(
