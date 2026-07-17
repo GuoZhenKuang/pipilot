@@ -535,8 +535,19 @@ async function handleBridgeControlMessage(
     }
 
     if (messageType === "bridge_list_sessions") {
+        const startedAt = performance.now();
         try {
             const groupedSessions = await sessionIndexer.listSessions();
+            const sessionCount = groupedSessions.reduce((total, group) => total + group.sessions.length, 0);
+            logger.info(
+                {
+                    operation: "session_index_fetch",
+                    durationMs: Math.round(performance.now() - startedAt),
+                    entryCount: sessionCount,
+                    status: "success",
+                },
+                "Performance operation",
+            );
 
             client.send(
                 JSON.stringify(
@@ -547,6 +558,14 @@ async function handleBridgeControlMessage(
                 ),
             );
         } catch (error: unknown) {
+            logger.info(
+                {
+                    operation: "session_index_fetch",
+                    durationMs: Math.round(performance.now() - startedAt),
+                    status: "failure",
+                },
+                "Performance operation",
+            );
             logger.error({ error }, "Failed to list sessions");
             client.send(
                 JSON.stringify(
@@ -591,8 +610,18 @@ async function handleBridgeControlMessage(
 
         const requestedFilter = requestedFilterRaw as SessionTreeFilter | undefined;
 
+        const startedAt = performance.now();
         try {
             const tree = await sessionIndexer.getSessionTree(sessionPath, requestedFilter);
+            logger.info(
+                {
+                    operation: "session_tree_fetch",
+                    durationMs: Math.round(performance.now() - startedAt),
+                    entryCount: tree.entries.length,
+                    status: "success",
+                },
+                "Performance operation",
+            );
             const runtimeLeafOverride = runtimeLeafBySessionPath.get(tree.sessionPath);
             const runtimeLeafId = runtimeLeafOverride?.currentLeafId;
 
@@ -608,7 +637,15 @@ async function handleBridgeControlMessage(
                 ),
             );
         } catch (error: unknown) {
-            logger.error({ error, sessionPath }, "Failed to build session tree");
+            logger.info(
+                {
+                    operation: "session_tree_fetch",
+                    durationMs: Math.round(performance.now() - startedAt),
+                    status: "failure",
+                },
+                "Performance operation",
+            );
+            logger.error({ error }, "Failed to build session tree");
             client.send(
                 JSON.stringify(
                     createBridgeErrorEnvelope(
