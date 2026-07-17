@@ -113,6 +113,37 @@ class ChatViewModelWorkflowCommandTest {
 
             assertEquals("queued-session", viewModel.uiState.value.sessionName)
             assertEquals(2, viewModel.uiState.value.pendingMessageCount)
+            assertEquals(1, controller.bootstrapCallCount)
+            assertEquals(0, controller.getStateCallCount)
+            assertEquals(0, controller.getMessagesCallCount)
+        }
+
+    @Test
+    fun bootstrapPublishesHeaderBeforeTimelineCompletes() =
+        runTest(dispatcher) {
+            val controller =
+                FakeSessionController().apply {
+                    bootstrapMessagesDelayMs = 100
+                    getStateResult =
+                        Result.success(
+                            RpcResponse(
+                                type = "response",
+                                command = "get_state",
+                                success = true,
+                                data = buildJsonObject { put("sessionName", "staged-session") },
+                            ),
+                        )
+                }
+
+            val viewModel = createViewModel(controller)
+            testScheduler.runCurrent()
+
+            assertEquals("staged-session", viewModel.uiState.value.sessionName)
+            assertTrue(viewModel.uiState.value.isLoading)
+            assertEquals(1, controller.bootstrapCallCount)
+
+            awaitInitialLoad(viewModel)
+            assertFalse(viewModel.uiState.value.isLoading)
         }
 
     @Test

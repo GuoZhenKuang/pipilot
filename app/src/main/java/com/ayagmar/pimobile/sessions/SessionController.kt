@@ -57,6 +57,8 @@ interface SessionController {
         session: SessionRecord,
     ): Result<String?>
 
+    suspend fun bootstrap(onStateAvailable: (RpcResponse) -> Unit = {}): Result<SessionBootstrapSnapshot>
+
     suspend fun getMessages(): Result<RpcResponse>
 
     suspend fun getState(): Result<RpcResponse>
@@ -153,6 +155,11 @@ data class ActiveSessionState(
     val sessionPath: String?,
     val generation: Long,
     val isSwitching: Boolean = false,
+)
+
+data class SessionBootstrapSnapshot(
+    val stateResponse: RpcResponse,
+    val messagesResponse: RpcResponse,
 )
 
 data class SessionSyncMetrics(

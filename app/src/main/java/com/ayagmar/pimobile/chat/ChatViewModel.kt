@@ -1733,56 +1733,44 @@ class ChatViewModel(
                     }
                 val reloadError = reloadResult?.exceptionOrNull()
 
-                // State is the cheap header phase. Publish it before the bounded timeline
-                // arrives so resume has a useful first render without duplicate requests.
-                val stateResult =
+                var metadata = emptyInitialLoadMetadata()
+                val bootstrapResult =
                     if (reloadError == null) {
-                        sessionController.getState()
+                        sessionController.bootstrap { stateResponse ->
+                            recordMetricsSafely {
+                                PerformanceMetrics.recordOperation(
+                                    operation = "chat_state_response",
+                                    durationMs = System.currentTimeMillis() - bootstrapStartedAt,
+                                )
+                            }
+                            metadata = parseInitialLoadMetadata(stateResponse.data)
+                            val isCurrentGeneration =
+                                loadGeneration == null ||
+                                    sessionController.activeSession.value?.generation == loadGeneration
+                            if (isCurrentGeneration) {
+                                _uiState.update { state ->
+                                    state.copy(
+                                        currentModel = metadata.modelInfo,
+                                        thinkingLevel = metadata.thinkingLevel,
+                                        isStreaming = metadata.isStreaming,
+                                        steeringMode = metadata.steeringMode,
+                                        followUpMode = metadata.followUpMode,
+                                        sessionPath = metadata.sessionPath ?: reloadResult?.getOrNull(),
+                                        sessionName = metadata.sessionName,
+                                        pendingMessageCount = metadata.pendingMessageCount,
+                                    )
+                                }
+                            }
+                        }
                     } else {
                         Result.failure(reloadError)
                     }
-                recordMetricsSafely {
-                    PerformanceMetrics.recordOperation(
-                        operation = "chat_state_response",
-                        durationMs = System.currentTimeMillis() - bootstrapStartedAt,
-                    )
-                }
-                val stateData = stateResult.getOrNull()?.data
-                val metadata =
-                    InitialLoadMetadata(
-                        modelInfo = stateData?.let { parseModelInfo(it) },
-                        thinkingLevel = stateData?.stringField("thinkingLevel"),
-                        isStreaming = stateData?.booleanField("isStreaming") ?: false,
-                        steeringMode = stateData.deliveryModeField("steeringMode", "steering_mode"),
-                        followUpMode = stateData.deliveryModeField("followUpMode", "follow_up_mode"),
-                        sessionPath = stateData?.stringField("sessionFile"),
-                        sessionName = stateData?.stringField("sessionName"),
-                        pendingMessageCount = stateData?.intField("pendingMessageCount") ?: 0,
-                    )
 
                 if (loadGeneration != null && sessionController.activeSession.value?.generation != loadGeneration) {
                     return@launch
                 }
 
-                _uiState.update { state ->
-                    state.copy(
-                        currentModel = metadata.modelInfo,
-                        thinkingLevel = metadata.thinkingLevel,
-                        isStreaming = metadata.isStreaming,
-                        steeringMode = metadata.steeringMode,
-                        followUpMode = metadata.followUpMode,
-                        sessionPath = metadata.sessionPath ?: reloadResult?.getOrNull(),
-                        sessionName = metadata.sessionName,
-                        pendingMessageCount = metadata.pendingMessageCount,
-                    )
-                }
-
-                val messagesResult =
-                    if (reloadError == null) {
-                        sessionController.getMessages()
-                    } else {
-                        Result.failure(reloadError)
-                    }
+                val messagesResult = bootstrapResult.map { snapshot -> snapshot.messagesResponse }
 
                 if (messagesResult.isSuccess) {
                     recordMetricsSafely {
@@ -1844,6 +1832,30 @@ class ChatViewModel(
                 }
             }
     }
+
+    private fun parseInitialLoadMetadata(stateData: JsonObject?): InitialLoadMetadata =
+        InitialLoadMetadata(
+            modelInfo = stateData?.let { parseModelInfo(it) },
+            thinkingLevel = stateData?.stringField("thinkingLevel"),
+            isStreaming = stateData?.booleanField("isStreaming") ?: false,
+            steeringMode = stateData.deliveryModeField("steeringMode", "steering_mode"),
+            followUpMode = stateData.deliveryModeField("followUpMode", "follow_up_mode"),
+            sessionPath = stateData?.stringField("sessionFile"),
+            sessionName = stateData?.stringField("sessionName"),
+            pendingMessageCount = stateData?.intField("pendingMessageCount") ?: 0,
+        )
+
+    private fun emptyInitialLoadMetadata(): InitialLoadMetadata =
+        InitialLoadMetadata(
+            modelInfo = null,
+            thinkingLevel = null,
+            isStreaming = false,
+            steeringMode = DELIVERY_MODE_ONE_AT_A_TIME,
+            followUpMode = DELIVERY_MODE_ONE_AT_A_TIME,
+            sessionPath = null,
+            sessionName = null,
+            pendingMessageCount = 0,
+        )
 
     private fun buildInitialLoadFailureState(
         state: ChatUiState,

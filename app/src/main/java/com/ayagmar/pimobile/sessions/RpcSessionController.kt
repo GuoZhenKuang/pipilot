@@ -207,6 +207,23 @@ class RpcSessionController(
         }
     }
 
+    override suspend fun bootstrap(onStateAvailable: (RpcResponse) -> Unit): Result<SessionBootstrapSnapshot> {
+        return mutex.withLock {
+            runCatching {
+                val connection = ensureActiveConnection()
+                val stateResponse = connection.requestState().requireSuccess("Failed to load state")
+                onStateAvailable(stateResponse)
+                val messagesResponse =
+                    projectedMessagesResponse
+                        ?: connection.requestMessages().requireSuccess("Failed to load messages")
+                SessionBootstrapSnapshot(
+                    stateResponse = stateResponse,
+                    messagesResponse = messagesResponse,
+                )
+            }
+        }
+    }
+
     override suspend fun getMessages(): Result<RpcResponse> {
         return mutex.withLock {
             runCatching {

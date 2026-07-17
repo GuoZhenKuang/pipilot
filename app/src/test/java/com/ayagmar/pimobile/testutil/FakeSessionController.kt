@@ -12,6 +12,7 @@ import com.ayagmar.pimobile.hosts.HostProfile
 import com.ayagmar.pimobile.sessions.ActiveSessionState
 import com.ayagmar.pimobile.sessions.ForkableMessage
 import com.ayagmar.pimobile.sessions.ModelInfo
+import com.ayagmar.pimobile.sessions.SessionBootstrapSnapshot
 import com.ayagmar.pimobile.sessions.SessionController
 import com.ayagmar.pimobile.sessions.SessionFreshnessSnapshot
 import com.ayagmar.pimobile.sessions.SessionSyncMetrics
@@ -41,6 +42,7 @@ class FakeSessionController : SessionController {
     var getLastAssistantTextCallCount: Int = 0
     var importSessionJsonlCallCount: Int = 0
     var sendPromptCallCount: Int = 0
+    var bootstrapCallCount: Int = 0
     var getMessagesCallCount: Int = 0
     var getStateCallCount: Int = 0
     var reloadActiveSessionCallCount: Int = 0
@@ -62,6 +64,7 @@ class FakeSessionController : SessionController {
     var steerResult: Result<Unit> = Result.success(Unit)
     var followUpResult: Result<Unit> = Result.success(Unit)
     var sendPromptDelayMs: Long = 0L
+    var bootstrapMessagesDelayMs: Long = 0L
     var abortResult: Result<Unit> = Result.success(Unit)
     var abortRetryResult: Result<Unit> = Result.success(Unit)
     var abortCallCount: Int = 0
@@ -162,6 +165,21 @@ class FakeSessionController : SessionController {
         token: String,
         session: SessionRecord,
     ): Result<String?> = Result.success(null)
+
+    override suspend fun bootstrap(onStateAvailable: (RpcResponse) -> Unit): Result<SessionBootstrapSnapshot> {
+        bootstrapCallCount += 1
+        val stateResponse = getStateResult.getOrElse { return Result.failure(it) }
+        onStateAvailable(stateResponse)
+        if (bootstrapMessagesDelayMs > 0) delay(bootstrapMessagesDelayMs)
+        val messagesResponse =
+            RpcResponse(
+                type = "response",
+                command = "get_messages",
+                success = true,
+                data = messagesPayload,
+            )
+        return Result.success(SessionBootstrapSnapshot(stateResponse, messagesResponse))
+    }
 
     override suspend fun getMessages(): Result<RpcResponse> {
         getMessagesCallCount += 1
