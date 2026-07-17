@@ -17,15 +17,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.automirrored.filled.MenuOpen
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -34,6 +34,7 @@ import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -174,6 +175,7 @@ private fun DrawerDestinationItem(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Suppress("LongMethod")
 @Composable
 fun PiMobileApp(appGraph: AppGraph) {
@@ -288,14 +290,34 @@ fun PiMobileApp(appGraph: AppGraph) {
                 }
             },
         ) {
-            Scaffold { paddingValues ->
+            Scaffold(
+                topBar = {
+                    TopAppBar(
+                        title = { Text(currentRoute?.replaceFirstChar(Char::uppercase) ?: "Pi Mobile") },
+                        navigationIcon = {
+                            IconButton(
+                                onClick = {
+                                    scope.launch {
+                                        if (drawerState.isOpen) drawerState.close() else drawerState.open()
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Menu,
+                                    contentDescription = "Open navigation",
+                                )
+                            }
+                        },
+                    )
+                },
+            ) { paddingValues ->
                 Box(
                     modifier = Modifier.fillMaxSize().padding(paddingValues),
                 ) {
                     NavHost(
                         navController = navController,
                         startDestination = startDestination,
-                        modifier = Modifier.fillMaxSize().padding(top = 56.dp),
+                        modifier = Modifier.fillMaxSize(),
                     ) {
                         composable(route = "hosts") {
                             HostsRoute(
@@ -327,45 +349,6 @@ fun PiMobileApp(appGraph: AppGraph) {
                         }
                         composable(route = "settings") {
                             SettingsRoute(sessionController = appGraph.sessionController)
-                        }
-                    }
-
-                    Surface(
-                        shape = CircleShape,
-                        tonalElevation = 3.dp,
-                        shadowElevation = 6.dp,
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
-                        modifier =
-                            Modifier
-                                .align(Alignment.TopStart)
-                                .padding(8.dp),
-                    ) {
-                        FilledTonalIconButton(
-                            modifier = Modifier.size(48.dp),
-                            onClick = {
-                                scope.launch {
-                                    if (drawerState.isOpen) {
-                                        drawerState.close()
-                                    } else {
-                                        drawerState.open()
-                                    }
-                                }
-                            },
-                        ) {
-                            Icon(
-                                imageVector =
-                                    if (drawerState.isOpen) {
-                                        Icons.AutoMirrored.Filled.MenuOpen
-                                    } else {
-                                        Icons.Default.Menu
-                                    },
-                                contentDescription =
-                                    if (drawerState.isOpen) {
-                                        "Close left navigation"
-                                    } else {
-                                        "Open left navigation"
-                                    },
-                            )
                         }
                     }
                 }
