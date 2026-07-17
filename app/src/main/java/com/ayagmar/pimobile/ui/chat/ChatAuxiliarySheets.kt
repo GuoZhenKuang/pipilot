@@ -57,6 +57,7 @@ private const val MAX_TOOL_ARGUMENT_PREVIEW_CHARS = 12_000
 private const val MAX_TOOL_OUTPUT_PREVIEW_CHARS = 20_000
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongMethod")
 @Composable
 internal fun ToolDetailsSheet(
     isVisible: Boolean,
@@ -65,9 +66,23 @@ internal fun ToolDetailsSheet(
 ) {
     if (!isVisible || tool == null) return
 
+    val copyToClipboard = rememberClipboardCopy()
+    val argumentsText =
+        remember(tool.arguments) {
+            tool.arguments.entries
+                .joinToString("\n") { (key, value) -> "$key: $value" }
+                .take(MAX_TOOL_ARGUMENT_PREVIEW_CHARS)
+        }
+    val outputText = remember(tool.output) { tool.output.ifBlank { "(no output)" }.take(MAX_TOOL_OUTPUT_PREVIEW_CHARS) }
+
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 640.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(tool.toolName.ifBlank { "Tool details" }, style = MaterialTheme.typography.titleLarge)
@@ -84,21 +99,31 @@ internal fun ToolDetailsSheet(
                 color = if (tool.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
             )
             if (tool.arguments.isNotEmpty()) {
-                Text("Arguments", style = MaterialTheme.typography.titleSmall)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Arguments", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { copyToClipboard(argumentsText) }) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy tool arguments")
+                        Text("Copy")
+                    }
+                }
                 SelectionContainer {
                     Text(
-                        tool.arguments.entries
-                            .joinToString("\n") { (key, value) -> "$key: $value" }
-                            .take(MAX_TOOL_ARGUMENT_PREVIEW_CHARS),
+                        argumentsText,
                         fontFamily = FontFamily.Monospace,
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
             }
-            Text("Output", style = MaterialTheme.typography.titleSmall)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Output", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                TextButton(onClick = { copyToClipboard(outputText) }) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy tool output")
+                    Text("Copy")
+                }
+            }
             SelectionContainer {
                 Text(
-                    tool.output.ifBlank { "(no output)" }.take(MAX_TOOL_OUTPUT_PREVIEW_CHARS),
+                    outputText,
                     fontFamily = FontFamily.Monospace,
                     style = MaterialTheme.typography.bodySmall,
                 )
