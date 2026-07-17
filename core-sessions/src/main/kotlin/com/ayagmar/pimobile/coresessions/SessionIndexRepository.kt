@@ -19,10 +19,12 @@ class SessionIndexRepository(
     private val cache: SessionIndexCache,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     private val nowEpochMs: () -> Long = { System.currentTimeMillis() },
+    private val minimumRefreshIntervalMs: Long = 1_000L,
 ) {
     private val stateByHost = linkedMapOf<String, MutableStateFlow<SessionIndexState>>()
     private val refreshMutexByHost = linkedMapOf<String, Mutex>()
     private val inFlightRefreshes = linkedMapOf<String, CompletableDeferred<SessionIndexState>>()
+    private val lastRefreshAttemptByHost = linkedMapOf<String, Long>()
 
     suspend fun initialize(hostId: String) {
         val state = stateForHost(hostId)
@@ -53,8 +55,21 @@ class SessionIndexRepository(
         }
     }
 
-    @Suppress("TooGenericExceptionCaught")
+    @Suppress("TooGenericExceptionCaught", "ReturnCount")
     suspend fun refresh(hostId: String): SessionIndexState {
+        val state = stateForHost(hostId)
+        val existingRefresh = synchronized(inFlightRefreshes) { inFlightRefreshes[hostId] }
+        if (existingRefresh != null) return existingRefresh.await()
+
+        val now = nowEpochMs()
+        synchronized(lastRefreshAttemptByHost) {
+            val lastAttempt = lastRefreshAttemptByHost[hostId]
+            if (lastAttempt != null && now - lastAttempt < minimumRefreshIntervalMs) {
+                return state.value
+            }
+            lastRefreshAttemptByHost[hostId] = now
+        }
+
         val (deferred, owner) =
             synchronized(inFlightRefreshes) {
                 val existing = inFlightRefreshes[hostId]
