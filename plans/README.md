@@ -17,6 +17,7 @@ These plans deliberately retain the current architecture: Android connects to a 
 | [007](007-modernize-android-and-release-dx.md) | Modernize Android, CI, release checks, and contributor DX | P2 | L | 004, 006 | DONE (device acceptance pending — operator-owned) |
 | [008](008-chat-experience-v2.md) | Deliver a compact, turn-centered mobile chat experience | P1 | L | 007 | IN PROGRESS |
 | [009](009-polish-native-chat-and-harden-platform.md) | Polish native chat and harden platform | P1 | XL | 008 | IN PROGRESS |
+| [010](010-performance-resume-and-session-navigation.md) | Performance overhaul for resume, trees, and session navigation | P1 | XL | 008, 009 | IN PROGRESS |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (reason) | REJECTED (reason)
 
@@ -29,6 +30,8 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (reason) | REJECTED (reason)
 - 006 depends on 005 so the UX redesign is not added to the current 3,900-line screen and 3,252-line ViewModel.
 - 007 completed the revival roadmap and established the current Android/CI baseline.
 - 008 builds on that baseline in strict sequence: quiet freshness policy → turn projection → compact rendering → handoff → active-run composer → unread/reading behavior. Device execution is forbidden until the operator explicitly enables debug mode.
+- 009 is the native polish/accessibility/dependency hardening pass.
+- 010 is the performance pass for resume, long-session trees, transport reuse, staged bootstrap, and stale-session rendering.
 
 ## Global completion gate
 
