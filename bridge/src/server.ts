@@ -350,18 +350,30 @@ export function createBridgeServer(
             ),
         );
 
+        let controlPlaneQueue = Promise.resolve();
         client.on("message", (data: RawData) => {
-            void handleClientMessage(
-                client,
-                data,
-                logger,
-                processManager,
-                sessionIndexer,
-                restored.context,
-                config,
-                awaitRpcEvent,
-                runtimeLeafBySessionPath,
-            );
+            const dispatch = (): Promise<void> =>
+                handleClientMessage(
+                    client,
+                    data,
+                    logger,
+                    processManager,
+                    sessionIndexer,
+                    restored.context,
+                    config,
+                    awaitRpcEvent,
+                    runtimeLeafBySessionPath,
+                );
+            const parsedEnvelope = parseBridgeEnvelope(asUtf8String(data));
+            if (parsedEnvelope.success && parsedEnvelope.envelope.channel === "bridge") {
+                controlPlaneQueue = controlPlaneQueue
+                    .then(dispatch)
+                    .catch((error: unknown) => {
+                        logger.error({ error }, "Control-plane message failed");
+                    });
+            } else {
+                void dispatch();
+            }
         });
 
         client.on("close", () => {
