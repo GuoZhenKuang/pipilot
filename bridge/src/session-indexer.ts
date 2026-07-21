@@ -268,7 +268,7 @@ async function findSessionFiles(rootDir: string, logger: Logger): Promise<string
         directoryEntries = await fs.readdir(rootDir, { withFileTypes: true });
     } catch (error: unknown) {
         if (isErrorWithCode(error, "ENOENT")) {
-            logger.warn({ rootDir }, "Session directory does not exist");
+            logger.warn("Session directory does not exist");
             return [];
         }
 
@@ -305,9 +305,9 @@ async function parseSessionFileWithCache(
 
     try {
         fileStats = await fs.stat(sessionPath);
-    } catch (error: unknown) {
+    } catch {
         cache.delete(sessionPath);
-        logger.warn({ sessionPath, error }, "Failed to stat session file");
+        logger.warn("Failed to stat session file");
         return undefined;
     }
 
@@ -340,8 +340,8 @@ async function parseSessionFreshnessWithCache(
         fileStats = await fs.stat(sessionPath);
     } catch (error: unknown) {
         cache.delete(sessionPath);
-        logger.warn({ sessionPath, error }, "Failed to stat session file for freshness");
-        throw new Error(`Failed to read session freshness for ${sessionPath}`);
+        logger.warn("Failed to stat session file for freshness");
+        throw new Error("Failed to read session freshness", { cause: error });
     }
 
     const cached = cache.get(sessionPath);
@@ -446,7 +446,7 @@ async function parseSessionFreshness(
     const { lines, entries: parsedEntries } = parsed;
     const header = tryParseJson(lines[0]);
     if (!header || header.type !== "session" || typeof header.cwd !== "string") {
-        logger.warn({ sessionPath }, "Invalid session header while computing freshness");
+        logger.warn("Invalid session header while computing freshness");
         throw new Error("Invalid session header");
     }
 
@@ -485,7 +485,7 @@ async function parseSessionFile(
     const { lines } = parsed;
     const header = tryParseJson(lines[0]);
     if (!header || header.type !== "session" || typeof header.cwd !== "string") {
-        logger.warn({ sessionPath }, "Skipping invalid session header");
+        logger.warn("Skipping invalid session header");
         return undefined;
     }
 
@@ -668,8 +668,8 @@ async function readParsedSession(
     try {
         streamed = await readJsonlLines(sessionPath);
     } catch (error: unknown) {
-        logger.warn({ error }, "Failed to read session file");
-        throw new Error("Failed to read session file");
+        logger.warn("Failed to read session file");
+        throw new Error("Failed to read session file", { cause: error });
     }
     const parsed: ParsedSessionFile = {
         mtimeMs: Number(fileStats.mtimeMs),

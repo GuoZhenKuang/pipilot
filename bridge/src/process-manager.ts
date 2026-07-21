@@ -98,12 +98,12 @@ export function createPiProcessManager(options: ProcessManagerOptions): PiProces
             messageHandler({ cwd, payload });
         });
         forwarder.setLifecycleHandler((event) => {
-            options.logger.info({ cwd, event }, "RPC forwarder lifecycle event");
+            options.logger.info({ eventType: event.type }, "RPC forwarder lifecycle event");
         });
 
         entries.set(cwd, entry);
 
-        options.logger.info({ cwd }, "Started RPC forwarder for cwd");
+        options.logger.info("Started RPC forwarder for cwd");
 
         return forwarder;
     };
@@ -118,7 +118,7 @@ export function createPiProcessManager(options: ProcessManagerOptions): PiProces
             await entry.forwarder.stop();
             entries.delete(cwd);
 
-            options.logger.info({ cwd }, "Evicted idle RPC forwarder");
+            options.logger.info("Evicted idle RPC forwarder");
         }
     };
 

@@ -143,7 +143,7 @@ export function createBridgeServer(
                         args: buildPiRpcArgs(config.sessionDirectory),
                         cwd,
                     },
-                    logger.child({ component: "rpc-forwarder", cwd }),
+                    logger.child({ component: "rpc-forwarder" }),
                 );
             },
         });
@@ -239,9 +239,6 @@ export function createBridgeServer(
 
     if (isUnsafeBindHost(config.host)) {
         logger.warn(
-            {
-                host: config.host,
-            },
             "Bridge is listening on a non-loopback interface; restrict exposure with Tailscale/firewall rules",
         );
     }
@@ -307,12 +304,7 @@ export function createBridgeServer(
         if (!secureTokenEquals(providedToken, config.authToken)) {
             socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
             socket.destroy();
-            logger.warn(
-                {
-                    remoteAddress: request.socket.remoteAddress,
-                },
-                "Rejected websocket connection due to invalid token",
-            );
+            logger.warn("Rejected websocket connection due to invalid token");
             return;
         }
 
@@ -328,14 +320,7 @@ export function createBridgeServer(
 
         clientContexts.set(client, restored.context);
 
-        logger.info(
-            {
-                clientId: restored.context.clientId,
-                resumed: restored.resumed,
-                remoteAddress: request.socket.remoteAddress,
-            },
-            "WebSocket client connected",
-        );
+        logger.info({ resumed: restored.resumed }, "WebSocket client connected");
 
         client.send(
             JSON.stringify(
@@ -368,8 +353,8 @@ export function createBridgeServer(
             if (parsedEnvelope.success && parsedEnvelope.envelope.channel === "bridge") {
                 controlPlaneQueue = controlPlaneQueue
                     .then(dispatch)
-                    .catch((error: unknown) => {
-                        logger.error({ error }, "Control-plane message failed");
+                    .catch(() => {
+                        logger.error("Control-plane message failed");
                     });
             } else {
                 void dispatch();
@@ -386,14 +371,14 @@ export function createBridgeServer(
                 logger,
             );
 
-            logger.info({ clientId: restored.context.clientId }, "WebSocket client disconnected");
+            logger.info("WebSocket client disconnected");
         });
     });
 
     return {
         async start(): Promise<BridgeServerStartInfo> {
             const piVersion = await piVersionProbe(config.piCommand);
-            logger.info({ command: config.piCommand, version: piVersion }, "Detected Pi executable");
+            logger.info({ version: piVersion }, "Detected Pi executable");
 
             await new Promise<void>((resolve) => {
                 server.listen(config.port, config.host, () => {
@@ -406,13 +391,7 @@ export function createBridgeServer(
                 throw new Error("Failed to resolve bridge server address");
             }
 
-            logger.info(
-                {
-                    host: addressInfo.address,
-                    port: addressInfo.port,
-                },
-                "Bridge server listening",
-            );
+            logger.info({ port: addressInfo.port }, "Bridge server listening");
 
             return {
                 host: addressInfo.address,
@@ -488,13 +467,7 @@ async function handleClientMessage(
             ),
         );
 
-        logger.warn(
-            {
-                clientId: context.clientId,
-                error: parsedEnvelope.error,
-            },
-            "Received malformed envelope",
-        );
+        logger.warn("Received malformed envelope");
         return;
     }
 
@@ -569,7 +542,7 @@ async function handleBridgeControlMessage(
                     }),
                 ),
             );
-        } catch (error: unknown) {
+        } catch {
             logger.info(
                 {
                     operation: "session_index_fetch",
@@ -578,7 +551,7 @@ async function handleBridgeControlMessage(
                 },
                 "Performance operation",
             );
-            logger.error({ error }, "Failed to list sessions");
+            logger.error("Failed to list sessions");
             client.send(
                 JSON.stringify(
                     createBridgeErrorEnvelope(
@@ -648,7 +621,7 @@ async function handleBridgeControlMessage(
                     }),
                 ),
             );
-        } catch (error: unknown) {
+        } catch {
             logger.info(
                 {
                     operation: "session_tree_fetch",
@@ -657,7 +630,7 @@ async function handleBridgeControlMessage(
                 },
                 "Performance operation",
             );
-            logger.error({ error }, "Failed to build session tree");
+            logger.error("Failed to build session tree");
             client.send(
                 JSON.stringify(
                     createBridgeErrorEnvelope(
@@ -705,8 +678,8 @@ async function handleBridgeControlMessage(
                     }),
                 ),
             );
-        } catch (error: unknown) {
-            logger.error({ error, sessionPath }, "Failed to read session freshness");
+        } catch {
+            logger.error("Failed to read session freshness");
             client.send(
                 JSON.stringify(
                     createBridgeErrorEnvelope(
@@ -792,14 +765,13 @@ async function handleBridgeControlMessage(
                     }),
                 ),
             );
-        } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : "Failed to import session"
-            logger.error({ error, cwd }, "Failed to import JSONL session into active runtime");
+        } catch {
+            logger.error("Failed to import JSONL session into active runtime");
             client.send(
                 JSON.stringify(
                     createBridgeErrorEnvelope(
                         "session_import_failed",
-                        message,
+                        "Failed to import session",
                     ),
                 ),
             );
@@ -884,14 +856,13 @@ async function handleBridgeControlMessage(
                     }),
                 ),
             );
-        } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : "Failed to navigate tree";
-            logger.error({ error, cwd, entryId }, "Failed to navigate tree in active session");
+        } catch {
+            logger.error("Failed to navigate tree in active session");
             client.send(
                 JSON.stringify(
                     createBridgeErrorEnvelope(
                         "tree_navigation_failed",
-                        message,
+                        "Failed to navigate tree",
                     ),
                 ),
             );
@@ -1278,8 +1249,8 @@ function handleRpcEnvelope(
 
     try {
         processManager.sendRpc(context.cwd, payload);
-    } catch (error: unknown) {
-        logger.error({ error, clientId: context.clientId, cwd: context.cwd }, "Failed to forward RPC payload");
+    } catch {
+        logger.error("Failed to forward RPC payload");
 
         client.send(
             JSON.stringify(
@@ -1373,7 +1344,7 @@ function scheduleDisconnectedClientRelease(
         processManager.releaseClient(context.clientId);
         disconnectedClients.delete(context.clientId);
 
-        logger.info({ clientId: context.clientId }, "Released client locks after reconnect grace period");
+        logger.info("Released client locks after reconnect grace period");
     }, reconnectGraceMs);
 
     disconnectedClients.set(context.clientId, {
