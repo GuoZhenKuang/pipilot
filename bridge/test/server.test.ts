@@ -266,6 +266,52 @@ describe("bridge websocket server", () => {
         ws.close();
     });
 
+    it("sanitizes session tree failures", async () => {
+        const failingSessionIndexer: SessionIndexer = {
+            async listSessions(): Promise<SessionIndexGroup[]> {
+                return [];
+            },
+            async getSessionTree(): Promise<SessionTreeSnapshot> {
+                throw new Error("private-session-path/secret.jsonl");
+            },
+            async getSessionFreshness(): Promise<SessionFreshnessSnapshot> {
+                throw new Error("not used");
+            },
+        };
+        const { baseUrl, server } = await startBridgeServer({ sessionIndexer: failingSessionIndexer });
+        bridgeServer = server;
+
+        const ws = await connectWebSocket(baseUrl, {
+            headers: {
+                authorization: "Bearer bridge-token",
+            },
+        });
+
+        const waitForFailure = waitForEnvelope(
+            ws,
+            (envelope) => envelope.payload?.type === "bridge_error",
+        );
+        ws.send(
+            JSON.stringify({
+                channel: "bridge",
+                payload: {
+                    type: "bridge_get_session_tree",
+                    sessionPath: "/synthetic/session.jsonl",
+                },
+            }),
+        );
+
+        const failureEnvelope = await waitForFailure;
+        expect(failureEnvelope.payload).toEqual({
+            type: "bridge_error",
+            code: "session_tree_failed",
+            message: "Failed to build session tree",
+        });
+        expect(JSON.stringify(failureEnvelope)).not.toContain("private-session-path");
+
+        ws.close();
+    });
+
     it("returns session freshness fingerprint with lock metadata", async () => {
         const fakeProcessManager = new FakeProcessManager();
         const fakeSessionIndexer = new FakeSessionIndexer();
