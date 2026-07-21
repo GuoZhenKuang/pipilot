@@ -19,7 +19,7 @@
 
 ## Status
 
-- **State**: IN PROGRESS — operator approved latest stable supported versions with detekt's analysis target retained at its supported JVM 21
+- **State**: DONE (device acceptance pending — operator-owned; stable detekt uses an isolated JDK 21 analysis launcher)
 - **Priority**: P1
 - **Effort**: XL
 - **Risk**: HIGH
@@ -371,19 +371,19 @@ Do not run these during ordinary plan execution:
 
 ## Done criteria
 
-- [ ] Official AGP 9/Gradle/JDK 25/Kotlin/API 37 compatibility matrix is recorded with sources.
-- [ ] All Android and Kotlin modules build on JDK 25 with no active JDK 21 declarations.
-- [ ] App and benchmark compile/target API 37 with no new lint errors or unjustified baseline growth.
-- [ ] AGP 9 built-in Kotlin integration is used as documented; obsolete plugin wiring is removed.
-- [ ] AndroidX/Compose/benchmark/test dependencies are converged and compatible; no unauthorized alpha/preview dependency was added.
-- [ ] Bridge Node/TypeScript dependencies, lockfile, lint, typecheck, tests, and production audit pass.
-- [ ] Controller bootstrap, parser tail fallback, tree cache, transport reuse/backoff, lifecycle serialization, and metrics regressions pass.
-- [ ] Compose UI has compact/expanded navigation, app-bar-owned insets, predictive Back source contracts, bounded detail surfaces, and accessible controls.
-- [ ] SavedStateHandle drafts and migration-sensitive secure storage behavior are covered by tests.
-- [ ] First-frame performance work is measured, bounded, cancellable, and cached without transcript/privacy logging.
-- [ ] CI and contributor/release docs use the selected toolchain and exact gates.
-- [ ] Full non-device gate passes; device acceptance is explicitly `PENDING — operator-owned` until `debug mode`.
-- [ ] `git diff --check` passes and the working tree is clean.
+- [x] Official AGP 9/Gradle/JDK 25/Kotlin/API 37 compatibility matrix is recorded with sources.
+- [x] Android and Kotlin production/test compilation uses JDK/JVM 25; stable detekt alone uses the operator-approved isolated JDK 21 analysis launcher.
+- [x] App and benchmark compile/target API 37 with no new lint errors or unjustified baseline growth.
+- [x] AGP 9 built-in Kotlin integration is used as documented; obsolete plugin wiring is removed.
+- [x] AndroidX/Compose/benchmark/test dependencies are converged and compatible; no unauthorized alpha/preview dependency was added.
+- [x] Bridge Node/TypeScript dependencies, lockfile, lint, typecheck, tests, and production audit pass.
+- [x] Controller bootstrap, parser tail fallback, tree cache, transport reuse/backoff, lifecycle serialization, and metrics regressions pass.
+- [x] Compose UI has compact/expanded navigation, app-bar-owned insets, predictive Back source contracts, bounded detail surfaces, and accessible controls.
+- [x] SavedStateHandle drafts and migration-sensitive secure storage behavior are covered by tests.
+- [x] First-frame performance work remains measured, bounded, cancellable, and cached without transcript/privacy logging.
+- [x] CI and contributor/release docs use the selected toolchain and exact gates.
+- [x] Full non-device gate passes; device acceptance is explicitly `PENDING — operator-owned` until `debug mode`.
+- [x] `git diff --check` passes and the working tree is clean.
 
 ## STOP conditions
 
@@ -415,11 +415,29 @@ Stop and report instead of improvising if:
 
 ### Step 1 compatibility decision
 
-The candidate stable platform matrix is documented in `docs/dependency-matrix.md`: AGP 9.1.1, Gradle 9.3.1, JDK/JVM 25, Kotlin/Compose compiler 2.4.10, and Android API 37. Newer AGP 9.3 was intentionally rejected because Kotlin 2.4.10 does not document it as fully supported.
+The selected stable platform matrix is documented in `docs/dependency-matrix.md`: AGP 9.1.1, Gradle 9.3.1, JDK/JVM 25, Kotlin/Compose compiler 2.4.10, and Android API 37. Newer AGP 9.3 was intentionally rejected because Kotlin 2.4.10 does not document it as fully supported.
 
 Execution initially stopped before changing build files because the latest stable detekt (`1.23.8`) is documented against JDK 21 and Gradle 8.12.1. detekt's first documented JDK 25/Gradle 9 line is `2.0.0-alpha.1`, and the 2.0 line remains pre-release. On 2026-07-17 the operator explicitly approved proceeding with the latest stable supported versions and retaining detekt's analysis JVM target at 21 as a tool-specific exception; project Gradle runtime and compilation toolchains still move to JDK/JVM 25. No alpha dependency is authorized.
 
-Device-only validation remains **PENDING — operator-owned**. Evidence fields remain empty because execution stopped before migration and device commands are prohibited without `debug mode`.
+### Migration and final gate
+
+- AGP 9.1.1 built-in Kotlin is active; Android modules no longer apply `org.jetbrains.kotlin.android`.
+- Gradle 9.3.1 runs on JDK 25. Android, benchmark, and core Kotlin/Java targets are 25.
+- Stable detekt 1.23.8 runs through a JDK 21 `JavaExec` quality task because it cannot parse a JDK 25 runtime version. detekt 2 alpha was rejected.
+- App and benchmark use API 37.0 and build-tools 37.0.0.
+- Stable upgrades include Kotlin/Compose compiler 2.4.10, AndroidX Core 1.19.0, Activity 1.13.0, Lifecycle 2.11.0, Benchmark 1.4.1, AndroidX Test JUnit 1.3.0, Espresso 3.7.0, UIAutomator 2.4.0, Coil 3.5.0, and the Gradle 9-compatible ktlint plugin.
+- Node 24 LTS is the bridge baseline. Stable bridge upgrades include dotenv 17.4.2, pino 10.3.1, ws 8.21.1, ESLint 10.7.0, TypeScript 6.0.3 (7.0.2 rejected because typescript-eslint does not support it), Vitest 4.1.10, and related supported tooling.
+- Bridge logs and client failures no longer include raw client IDs, cwd/session paths, command arguments, remote addresses, or caught exception objects.
+- API 37 lint migration removed empty lifecycle super calls, enabled edge-to-edge through Activity, retained Navigation/Material predictive Back integration, and removed the obsolete `OldTargetApi` lint exclusion.
+- Lint baseline: unchanged. Lint result: zero errors/warnings and one informational hint for deliberately retaining fully supported Gradle 9.3.1 instead of lint's 9.6.1 suggestion.
+- `./gradlew clean ktlintCheck detekt test :app:lintDebug :app:assembleDebug :app:assembleRelease`: PASS in 3m24s from clean; debug and unsigned release APKs produced.
+- `./gradlew :app:compileDebugAndroidTestKotlin`: PASS.
+- `./gradlew :benchmark:tasks --all`: PASS; no connected benchmark ran.
+- Bridge frozen install, lint, typecheck, 7 test files/64 tests, and production audit: PASS; registry reported no known vulnerabilities.
+- Existing migration-sensitive Android/core and bridge regression suites passed. One bridge regression test proves tree failures cannot expose an internal path; one Kotlin 2.4 test cleanup removed obsolete safe calls.
+- `git diff --check`: PASS.
+
+Device-only validation remains **PENDING — operator-owned**. Evidence fields are empty. Required operator steps after explicit `debug mode`: API 37 launch; edge-to-edge/status/navigation bar and IME review; predictive Back through drawers/sheets/dialogs/navigation; rotation, large font, TalkBack, landscape/tablet/foldable/multi-window; long-session resume/switch/tree benchmark; disconnect/reconnect races; and release-like secure-token smoke.
 
 ## Maintenance notes
 
