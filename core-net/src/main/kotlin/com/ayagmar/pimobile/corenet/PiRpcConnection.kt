@@ -484,9 +484,7 @@ private suspend fun ensureBridgeControl(
 
     withTimeout(config.requestTimeoutMs) {
         select<Unit> {
-            cwdSetChannel.onReceive {
-                Unit
-            }
+            cwdSetChannel.onReceive { }
             errorChannel.onReceive { message ->
                 throw IllegalStateException(parseBridgeErrorMessage(message))
             }
@@ -510,9 +508,7 @@ private suspend fun ensureBridgeControl(
 
     withTimeout(config.requestTimeoutMs) {
         select<Unit> {
-            controlAcquiredChannel.onReceive {
-                Unit
-            }
+            controlAcquiredChannel.onReceive { }
             errorChannel.onReceive { message ->
                 throw IllegalStateException(parseBridgeErrorMessage(message))
             }
