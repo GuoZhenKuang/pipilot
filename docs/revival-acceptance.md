@@ -4,7 +4,7 @@ All device-only results are **PENDING — operator-owned**. Do not replace this 
 
 ## Prerequisites
 
-- JDK 21, Android SDK/platform 36, adb, Node 22+, pnpm 10, and Pi 0.80.6+
+- JDK 25, a JDK 21 toolchain for stable detekt, Android SDK/platform 37.0 and build-tools 37.0.0, adb, Node 24 LTS+, pnpm 10, and Pi 0.80.6+
 - A bridge configured with a fresh `BRIDGE_AUTH_TOKEN` and reachable Tailnet address
 - An emulator/device with no private data in screenshots or logs
 

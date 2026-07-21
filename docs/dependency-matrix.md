@@ -29,11 +29,11 @@ The operator approved the newest mutually supported stable/LTS platform matrix. 
 | Kotlin serialization JSON | 1.11.0 | 1.11.0 | 25 selected | Kotlin-compatible | — | Current stable runtime; compiler plugin would match Kotlin 2.4.10. |
 | Kotlin coroutines | 1.11.0 | 1.11.0 | 25 selected | Kotlin-compatible | — | Current stable runtime. |
 | OkHttp | 5.4.0 | 5.4.0 | 25 selected | — | — | Current stable release. |
-| Coil Compose | 2.7.0 | 2.7.0 pending migration review | 25 selected | — | — | Retained until a Coil 3 source/API migration can be characterized; no preview is needed for API 37. |
+| Coil Compose | 2.7.0 | 3.5.0 | 25 selected | — | API 37 compatible | Current stable Coil 3 line; Compose imports moved to `coil3.compose`. |
 | Java Diff Utils | 4.17 | 4.17 | 25 selected | — | — | Current stable release. |
 | Prism4j | 2.0.0 | 2.0.0 | 25 selected | — | — | No migration requirement identified. |
 | Google Code Scanner | 16.1.0 | 16.1.0 | — | — | API 37 compatible | Current permissionless scanner contract is retained. |
-| Node.js | 22 LTS in CI | 22 LTS in CI | — | — | — | Supported bridge baseline remains Node 22+; local Node 24 passed the baseline. |
+| Node.js | 22 LTS in CI | 24 LTS in CI | — | — | — | Current LTS bridge baseline; `engines` requires Node 24+. |
 | pnpm | 10.33.0 | 10.33.0 | — | — | — | Matches `packageManager`, lockfile, and CI. |
 | Bridge runtime packages | current lockfile | current stable lockfile | — | — | — | Frozen install, ESLint, typecheck, tests, and production audit remain mandatory. Protocol/process changes are out of scope. |
 | Pi | 0.80.6 minimum | 0.80.6 minimum | — | — | — | RPC compatibility baseline remains unchanged. |

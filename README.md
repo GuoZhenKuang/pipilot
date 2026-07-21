@@ -208,7 +208,7 @@ benchmark/        - Macrobenchmark / baseline profile scaffolding
 
 ### Running Tests
 
-Use JDK 21, Android SDK 36, Node 22+, and pnpm 10 for this repo. See [the dependency matrix](docs/dependency-matrix.md).
+Use JDK 25 for builds, a JDK 21 toolchain for stable detekt, Android SDK platform 37.0/build-tools 37.0.0, Node 24 LTS+, and pnpm 10. See [the dependency matrix](docs/dependency-matrix.md).
 
 ```bash
 # Android tests
@@ -222,6 +222,7 @@ cd bridge && pnpm run check
 
 # Complete non-device Android gate
 ./gradlew clean ktlintCheck detekt test :app:lintDebug :app:assembleDebug :app:assembleRelease
+./gradlew :app:compileDebugAndroidTestKotlin
 ```
 
 ### Logs to Watch

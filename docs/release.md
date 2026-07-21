@@ -4,6 +4,7 @@ Pi Mobile does not store signing credentials in the repository. The checked-in r
 
 ```bash
 ./gradlew clean ktlintCheck detekt test :app:lintDebug :app:assembleDebug :app:assembleRelease
+./gradlew :app:compileDebugAndroidTestKotlin
 (cd bridge && pnpm install --frozen-lockfile && pnpm run check && pnpm audit --prod)
 ```
 

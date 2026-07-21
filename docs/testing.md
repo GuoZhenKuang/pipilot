@@ -137,7 +137,7 @@ Or use Android Studio's "Apply Changes" for hot reload of Compose previews.
 
 ## Running Tests
 
-Use JDK 21, Android SDK 36, Node 22+, and pnpm 10.
+Use JDK 25 for Gradle and compilation, a JDK 21 toolchain for stable detekt, Android SDK platform 37.0/build-tools 37.0.0, Node 24 LTS+, and pnpm 10.
 
 Complete non-device gate:
 
