@@ -32,7 +32,7 @@ class AssistantTextAssemblerTest {
         assertEquals("Hello", message100?.text)
         assertNull(message100?.thinking)
         assertFalse(message100?.isThinkingComplete ?: true)
-        assertFalse(message100?.isFinal ?: true)
+        assertFalse(message100.isFinal)
 
         val snapshot100 = assembler.snapshot(messageKey = "100")
         assertNotNull(snapshot100)
@@ -53,7 +53,7 @@ class AssistantTextAssemblerTest {
                 ),
             )
         assertTrue(finalized?.isFinal ?: false)
-        assertEquals("Hello", finalized?.text)
+        assertEquals("Hello", finalized.text)
 
         assembler.apply(messageUpdate(messageTimestamp = 100, eventType = "text_start", contentIndex = 1))
         assembler.apply(
@@ -138,7 +138,7 @@ class AssistantTextAssemblerTest {
             )
         assertEquals("Let me analyze this problem carefully.", thinkingEnd?.thinking)
         assertTrue(thinkingEnd?.isThinkingComplete ?: false)
-        assertEquals("Result: ", thinkingEnd?.text)
+        assertEquals("Result: ", thinkingEnd.text)
 
         // Text continues and ends
         val textEnd =
@@ -152,8 +152,8 @@ class AssistantTextAssemblerTest {
             )
         assertEquals("Result: 42", textEnd?.text)
         assertTrue(textEnd?.isFinal ?: false)
-        assertEquals("Let me analyze this problem carefully.", textEnd?.thinking)
-        assertTrue(textEnd?.isThinkingComplete ?: false)
+        assertEquals("Let me analyze this problem carefully.", textEnd.thinking)
+        assertTrue(textEnd.isThinkingComplete)
     }
 
     @Test
