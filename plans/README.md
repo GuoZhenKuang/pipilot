@@ -18,7 +18,7 @@ These plans deliberately retain the current architecture: Android connects to a 
 | [008](008-chat-experience-v2.md) | Deliver a compact, turn-centered mobile chat experience | P1 | L | 007 | IN PROGRESS |
 | [009](009-polish-native-chat-and-harden-platform.md) | Polish native chat and harden platform | P1 | XL | 008 | IN PROGRESS |
 | [010](010-performance-resume-and-session-navigation.md) | Performance overhaul for resume, trees, and session navigation | P1 | XL | 008, 009 | IN PROGRESS |
-| [011](011-agp9-api37-java25-modernization-and-quality.md) | Migrate to AGP 9/API 37/JDK 25 and modernize platform quality | P1 | XL | 009, 010 | TODO |
+| [011](011-agp9-api37-java25-modernization-and-quality.md) | Migrate to AGP 9/API 37/JDK 25 and modernize platform quality | P1 | XL | 009, 010 | BLOCKED (no stable detekt release supports required JDK 25/Gradle 9 matrix) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (reason) | REJECTED (reason)
 

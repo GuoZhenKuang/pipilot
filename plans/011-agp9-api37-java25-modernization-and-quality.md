@@ -19,6 +19,7 @@
 
 ## Status
 
+- **State**: BLOCKED — no stable detekt release supports the required JDK 25/Gradle 9 matrix
 - **Priority**: P1
 - **Effort**: XL
 - **Risk**: HIGH
@@ -398,6 +399,29 @@ Stop and report instead of improvising if:
 - A UI change requires device-only evidence before a safe source/unit test can be added; isolate it as operator-owned instead.
 - A benchmark/profile task would launch a device, emulator, connected test, `adb`, installation, or screenshot without the exact operator phrase `debug mode`.
 - Any command or file would expose tokens, authorization headers, `.env` values, credentials, private sessions, raw client/lock IDs, private paths, or transcript content.
+
+## Execution evidence (2026-07-17)
+
+### Step 0 baseline
+
+- Drift check: only this Plan 011 handoff and plan index differed from the plan baseline before execution.
+- Local tools: JDK 21.0.10, Gradle 8.14.5, Node 24.12.0, and pnpm 10.33.0. JDK 25 distributions are installed locally; Android API 37 is not installed.
+- `./gradlew tasks --all`: PASS.
+- Existing Android gate: PASS (`clean`, ktlint, detekt, all unit tests, debug lint, debug APK, and release APK).
+- Android test-source compilation: PASS.
+- Bridge frozen install/check: PASS (7 files, 63 tests).
+- Bridge production audit: PASS, no known vulnerabilities reported by the registry.
+- No lint baseline was changed.
+
+### Step 1 compatibility decision
+
+The candidate stable platform matrix is documented in `docs/dependency-matrix.md`: AGP 9.1.1, Gradle 9.3.1, JDK/JVM 25, Kotlin/Compose compiler 2.4.10, and Android API 37. Newer AGP 9.3 was intentionally rejected because Kotlin 2.4.10 does not document it as fully supported.
+
+Execution stopped before changing build files because the latest stable detekt (`1.23.8`) is documented against JDK 21 and Gradle 8.12.1. detekt's first documented JDK 25/Gradle 9 line is `2.0.0-alpha.1`, and the 2.0 line remains pre-release. Using it would violate this plan's stable-only rule; retaining stable 1.23.8 would violate the verified plugin compatibility and static-analysis JVM 25 requirements. This matches the plan STOP condition for a plugin with no documented stable compatible upgrade.
+
+No Android SDK package, AGP/Gradle/Kotlin version, source, CI, dependency, bridge protocol, lint baseline, device, emulator, ADB, installation, screenshot, or private runtime state was changed or exercised.
+
+Device-only validation remains **PENDING — operator-owned**. Evidence fields remain empty because execution stopped before migration and device commands are prohibited without `debug mode`.
 
 ## Maintenance notes
 
