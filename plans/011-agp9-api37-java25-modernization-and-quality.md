@@ -19,7 +19,7 @@
 
 ## Status
 
-- **State**: BLOCKED — no stable detekt release supports the required JDK 25/Gradle 9 matrix
+- **State**: IN PROGRESS — operator approved latest stable supported versions with detekt's analysis target retained at its supported JVM 21
 - **Priority**: P1
 - **Effort**: XL
 - **Risk**: HIGH
@@ -417,9 +417,7 @@ Stop and report instead of improvising if:
 
 The candidate stable platform matrix is documented in `docs/dependency-matrix.md`: AGP 9.1.1, Gradle 9.3.1, JDK/JVM 25, Kotlin/Compose compiler 2.4.10, and Android API 37. Newer AGP 9.3 was intentionally rejected because Kotlin 2.4.10 does not document it as fully supported.
 
-Execution stopped before changing build files because the latest stable detekt (`1.23.8`) is documented against JDK 21 and Gradle 8.12.1. detekt's first documented JDK 25/Gradle 9 line is `2.0.0-alpha.1`, and the 2.0 line remains pre-release. Using it would violate this plan's stable-only rule; retaining stable 1.23.8 would violate the verified plugin compatibility and static-analysis JVM 25 requirements. This matches the plan STOP condition for a plugin with no documented stable compatible upgrade.
-
-No Android SDK package, AGP/Gradle/Kotlin version, source, CI, dependency, bridge protocol, lint baseline, device, emulator, ADB, installation, screenshot, or private runtime state was changed or exercised.
+Execution initially stopped before changing build files because the latest stable detekt (`1.23.8`) is documented against JDK 21 and Gradle 8.12.1. detekt's first documented JDK 25/Gradle 9 line is `2.0.0-alpha.1`, and the 2.0 line remains pre-release. On 2026-07-17 the operator explicitly approved proceeding with the latest stable supported versions and retaining detekt's analysis JVM target at 21 as a tool-specific exception; project Gradle runtime and compilation toolchains still move to JDK/JVM 25. No alpha dependency is authorized.
 
 Device-only validation remains **PENDING — operator-owned**. Evidence fields remain empty because execution stopped before migration and device commands are prohibited without `debug mode`.
 

@@ -2,11 +2,11 @@
 
 Validated on 2026-07-17. Stable releases were required; previews were excluded.
 
-## Plan 011 candidate matrix — blocked before migration
+## Plan 011 selected matrix
 
-Plan 011 did not change build files because its stable-only compatibility rule cannot currently be satisfied. The blocker is detekt: the latest stable detekt release is not compatible with the required JDK 25/Gradle 9 analysis target, while the compatible detekt 2 line is still alpha. See [Blocked compatibility](#blocked-compatibility).
+The operator approved the newest mutually supported stable/LTS platform matrix. Gradle and production/test compilation use JDK/JVM 25. Stable detekt 1.23.8 cannot run on JDK 25, so the quality gate invokes its CLI with an isolated JDK 21 toolchain and analysis target 21. This preserves detekt without adopting its alpha 2.x line or weakening the gate.
 
-| Component | Previous | Candidate | Required JDK | Required Gradle | Required Android SDK | Rationale |
+| Component | Previous | Selected | Required JDK | Required Gradle | Required Android SDK | Rationale |
 |---|---:|---:|---:|---:|---:|---|
 | Android Gradle Plugin | 8.13.2 | 9.1.1 | 17 minimum; 25 selected runtime | 9.3.1 | API 37 maximum | API 37 requires AGP 9.1.1 or newer. AGP 9.1.1 is the first stable API 37-compatible line and remains within the Kotlin 2.4 compatibility family; newer AGP 9.3 was rejected because Kotlin 2.4.10 does not document that line as fully supported. |
 | Gradle | 8.14.5 | 9.3.1 | 17 minimum; supports running on 25 | — | — | Required by AGP 9.1.1. Gradle 9.1+ officially supports Java 25 as both daemon runtime and toolchain. |
@@ -15,7 +15,7 @@ Plan 011 did not change build files because its stable-only compatibility rule c
 | Kotlin Android integration | `org.jetbrains.kotlin.android` | AGP built-in Kotlin | 25 selected | 9.3.1 | API 37 | AGP 9 enables built-in Kotlin. Android modules must remove `org.jetbrains.kotlin.android`; JVM-only core modules retain `org.jetbrains.kotlin.jvm`. |
 | Compose compiler | Kotlin plugin 2.2.21 | Kotlin plugin 2.4.10 | 25 selected | Kotlin-compatible | API 37 | `org.jetbrains.kotlin.plugin.compose` must match Kotlin. |
 | compileSdk / targetSdk | 36 / 36 | 37 / 37 | — | AGP 9.1.1+ | Android 17/API 37 | Android 17 is stable and API level 37. |
-| Android SDK Build Tools | 36.0.0 | latest stable 37.x available from SDK Manager | — | AGP 9.1.1+ | API 37 | Android 17 setup requires the API 37 platform and latest 37.x build tools. The exact package must be resolved by SDK Manager before CI is pinned. |
+| Android SDK Build Tools | 36.0.0 | 37.0.0 | — | AGP 9.1.1+ | API 37.0 | Stable packages `platforms;android-37.0` and `build-tools;37.0.0` were resolved and installed from the official SDK repository. |
 | Compose BOM | 2026.06.00 | 2026.06.00 | — | — | — | Already the current stable BOM. |
 | AndroidX Core KTX | 1.18.0 | 1.19.0 | — | — | API 37 compatible | Current stable AndroidX Core line. |
 | AndroidX Activity Compose | 1.12.4 | 1.13.0 | — | — | API 37 compatible | Current stable Activity line, including current predictive Back integration. |
@@ -25,7 +25,7 @@ Plan 011 did not change build files because its stable-only compatibility rule c
 | AndroidX Test JUnit / Espresso / UIAutomator | 1.1.5 / 3.5.1 / 2.2.0 | 1.3.0 / 3.7.0 / 2.4.0 | — | — | API 37 compatible | Current stable AndroidX Test releases. |
 | Kotlinx Kover | 0.9.8 | 0.9.8 | 25 selected | Gradle 9 fixes present since 0.9.1 | — | Current stable Kover documentation uses 0.9.8. |
 | ktlint Gradle plugin | 12.1.1 | 14.2.0 candidate | 25 selected | Gradle 9 support added in 13.1.0 | — | Current stable plugin; focused verification would still be required after the blocker clears. |
-| detekt | 1.23.8 | **no eligible stable version** | **25 required** | **9.3.1 required** | — | Stable 1.23.8 is documented with JDK 21/Gradle 8.12.1/Kotlin 2.0.21. JDK 25/Gradle 9 compatibility is documented only for detekt 2.0 alpha releases. |
+| detekt | 1.23.8 Gradle plugin | 1.23.8 CLI | 21 isolated analysis launcher | Gradle 9 invokes the CLI | — | Stable 1.23.8 cannot parse Java 25 runtime version strings. It runs as a Gradle `JavaExec` quality task on the JDK 21 toolchain; detekt 2.x alpha remains rejected. |
 | Kotlin serialization JSON | 1.11.0 | 1.11.0 | 25 selected | Kotlin-compatible | — | Current stable runtime; compiler plugin would match Kotlin 2.4.10. |
 | Kotlin coroutines | 1.11.0 | 1.11.0 | 25 selected | Kotlin-compatible | — | Current stable runtime. |
 | OkHttp | 5.4.0 | 5.4.0 | 25 selected | — | — | Current stable release. |
@@ -35,24 +35,18 @@ Plan 011 did not change build files because its stable-only compatibility rule c
 | Google Code Scanner | 16.1.0 | 16.1.0 | — | — | API 37 compatible | Current permissionless scanner contract is retained. |
 | Node.js | 22 LTS in CI | 22 LTS in CI | — | — | — | Supported bridge baseline remains Node 22+; local Node 24 passed the baseline. |
 | pnpm | 10.33.0 | 10.33.0 | — | — | — | Matches `packageManager`, lockfile, and CI. |
-| Bridge runtime packages | current lockfile | unchanged while blocked | — | — | — | The frozen install, ESLint, typecheck, 63 Vitest tests, and production audit passed before migration. Protocol/process changes are out of scope. |
+| Bridge runtime packages | current lockfile | current stable lockfile | — | — | — | Frozen install, ESLint, typecheck, tests, and production audit remain mandatory. Protocol/process changes are out of scope. |
 | Pi | 0.80.6 minimum | 0.80.6 minimum | — | — | — | RPC compatibility baseline remains unchanged. |
 
-## Blocked compatibility
+## Tool-specific compatibility decision
 
-Plan 011 has a mandatory STOP condition when AGP 9 requires a plugin with no documented stable compatible upgrade. That condition applies:
+The first migration attempt confirmed that detekt 1.23.8 crashes under a JDK 25 Gradle daemon because its embedded Kotlin/IntelliJ runtime cannot parse the `25.0.1` Java version string. The operator approved a stable-only tool isolation decision:
 
-- The plan requires Gradle 9, JDK/JVM target 25 in static analysis, stable dependencies, and no preview artifact adopted merely to compile.
-- The latest stable detekt release is `1.23.8`; detekt's official compatibility table records Gradle 8.12.1, Kotlin 2.0.21, AGP 8.8.1, and JDK 21 for that release.
-- The first detekt row documenting Gradle 9 and JDK 25 is `2.0.0-alpha.1`; the current 2.0 releases remain alpha/pre-release.
-- Selecting detekt 2.0 alpha would violate Plan 011's stable-only rule. Retaining detekt 1.23.8 would fail the plan's verified compatibility and JVM-target requirements. Removing or weakening detekt would fail the required quality gate.
-
-Migration may resume when either:
-
-1. detekt 2.0 reaches a stable release documented for the selected Gradle/JDK/Kotlin/AGP matrix; or
-2. the operator explicitly changes Plan 011's stable-only/static-analysis policy after reviewing the risk.
-
-No AGP, Gradle, Kotlin, Java target, Android SDK, dependency, CI, source, or lint-baseline change was made under this blocked matrix.
+- Gradle, Android/JVM compilers, unit tests, and application bytecode use JDK/JVM 25.
+- The `detekt` Gradle gate remains present but invokes stable `detekt-cli:1.23.8` with Gradle's JDK 21 toolchain and `jvm-target=21`.
+- HTML, XML, and SARIF reports remain generated per module.
+- detekt 2.x alpha is not used; when detekt 2 reaches stable JDK 25 support, the isolated launcher can be removed.
+- ktlint uses the current Gradle 9-compatible plugin while pinning the established ktlint 1.0.1 formatting engine to avoid an unrelated repository-wide style rewrite.
 
 ## Preserved compatibility and security notes
 
