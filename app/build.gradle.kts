@@ -56,7 +56,8 @@ android {
         checkReleaseBuilds = true
         warningsAsErrors = true
         disable += "GradleDependency"
-        disable += "OldTargetApi"
+        // Keep the fully supported Gradle 9.3.1 matrix instead of lint's newer 9.6.1 suggestion.
+        informational += "AndroidGradlePluginVersion"
         baseline = file("lint-baseline.xml")
     }
 }
@@ -79,7 +80,7 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.9.8")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
-    implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("io.coil-kt.coil3:coil-compose:3.5.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")

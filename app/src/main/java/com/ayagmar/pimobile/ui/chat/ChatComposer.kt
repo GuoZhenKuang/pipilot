@@ -62,7 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.net.toUri
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.ayagmar.pimobile.chat.ChatImageSource
 import com.ayagmar.pimobile.chat.ChatViewModel
 import com.ayagmar.pimobile.chat.ImageEncoder

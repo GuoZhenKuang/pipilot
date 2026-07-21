@@ -67,7 +67,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.ayagmar.pimobile.chat.ChatImageSource
 import com.ayagmar.pimobile.chat.ChatTimelineItem
 import com.ayagmar.pimobile.chat.ChatTurn

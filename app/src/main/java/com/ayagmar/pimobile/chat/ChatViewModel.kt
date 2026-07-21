@@ -2775,7 +2775,6 @@ class ChatViewModel(
         resetStreamingDiagnostics(startNewRun = false)
         resetFreshnessWarningThrottle()
         pendingLocalUserIds.clear()
-        super.onCleared()
     }
 
     companion object {

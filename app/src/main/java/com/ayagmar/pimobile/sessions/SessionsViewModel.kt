@@ -649,7 +649,6 @@ class SessionsViewModel(
         searchDebounceJob?.cancel()
         warmupConnectionJob?.cancel()
         _navigateToChat.close()
-        super.onCleared()
     }
 }
 
