@@ -10,12 +10,11 @@ import org.junit.runner.RunWith
 /**
  * Generates a baseline profile for the app.
  *
- * Run with: ./gradlew :benchmark:pixel7Api34GenerateBaselineProfile
+ * Run only in operator-owned debug mode via connectedBenchmarkAndroidTest with this class filter.
  */
 @RunWith(AndroidJUnit4::class)
 @LargeTest
 class BaselineProfileGenerator {
-
     @get:Rule
     val baselineProfileRule = BaselineProfileRule()
 

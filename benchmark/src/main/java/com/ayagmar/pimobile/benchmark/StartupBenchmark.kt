@@ -20,7 +20,6 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 @LargeTest
 class StartupBenchmark {
-
     @get:Rule
     val benchmarkRule = MacrobenchmarkRule()
 
@@ -28,9 +27,10 @@ class StartupBenchmark {
     fun startupCompilationNone() = startup(CompilationMode.None())
 
     @Test
-    fun startupCompilationBaselineProfile() = startup(
-        CompilationMode.Partial(BaselineProfileMode.Require),
-    )
+    fun startupCompilationBaselineProfile() =
+        startup(
+            CompilationMode.Partial(BaselineProfileMode.Require),
+        )
 
     private fun startup(compilationMode: CompilationMode) {
         benchmarkRule.measureRepeated(

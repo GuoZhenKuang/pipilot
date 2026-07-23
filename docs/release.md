@@ -3,7 +3,7 @@
 Pi Mobile does not store signing credentials in the repository. The checked-in release task produces an unsigned/default release artifact for static verification.
 
 ```bash
-./gradlew clean ktlintCheck detekt test :app:lintDebug :app:assembleDebug :app:assembleRelease
+./gradlew clean ktlintCheck detekt test :benchmark:compileBenchmarkKotlin :app:lintDebug :app:assembleDebug :app:assembleRelease
 ./gradlew :app:compileDebugAndroidTestKotlin
 (cd bridge && pnpm install --frozen-lockfile && pnpm run check && pnpm audit --prod)
 ```
