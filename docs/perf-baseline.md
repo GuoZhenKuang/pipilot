@@ -1,6 +1,8 @@
 # Performance Baseline
 
-This document defines the performance metrics, measurement methodology, and baseline targets for the Pi Mobile app.
+This document defines performance budgets and the operator-owned measurement procedure for Pi Mobile. Deterministic non-device tests verify bounds, cache behavior, request counts, and cancellation; they are not substitutes for hardware timings.
+
+All connected benchmarks, profiler sessions, installations, ADB commands, and manual measurements are **PENDING — operator-owned** until the operator explicitly says `debug mode`.
 
 ## Performance Budgets
 
@@ -8,16 +10,16 @@ This document defines the performance metrics, measurement methodology, and base
 
 | Metric | Target | Max | Status |
 |--------|--------|-----|--------|
-| Cold app start to visible cached sessions | < 1.5s | < 2.5s | 🔄 Measuring |
-| Resume session to first rendered messages | < 1.0s | - | 🔄 Measuring |
-| Prompt send to first token (healthy LAN) | < 1.2s | - | 🔄 Measuring |
+| Cold app start to visible cached sessions | < 1.5s | < 2.5s | PENDING — operator-owned |
+| Resume session to first rendered messages | < 1.0s | - | PENDING — operator-owned |
+| Prompt send to first token (healthy LAN) | < 1.2s | - | PENDING — operator-owned |
 
 ### Rendering Budgets
 
 | Metric | Target | Status |
 |--------|--------|--------|
-| Main thread frame time | < 16ms (60fps) | 🔄 Measuring |
-| No sustained jank (>5min streaming) | 0 critical drops | 🔄 Measuring |
+| Main thread frame time | < 16ms (60fps) | PENDING — operator-owned |
+| No sustained jank (>5min streaming) | 0 critical drops | PENDING — operator-owned |
 | Large tool output default-collapsed | > 400 chars | ✅ Implemented |
 
 ### Memory Budgets
@@ -67,31 +69,27 @@ Jank severity levels:
 
 ## Running Benchmarks
 
+Do not run this section without explicit operator `debug mode`. Use a disposable API 37 device/emulator and record the device/API, app commit, compilation mode, iteration count, and raw benchmark artifact location.
+
 ### Startup Benchmark
 
-Measures cold start performance with and without baseline profiles:
-
 ```bash
-# Run on connected device
-./gradlew :benchmark:connectedBenchmarkAndroidTest
-
-# Run with baseline profile
-./gradlew :benchmark:connectedCheck -P android.testInstrumentationRunnerArguments.class=StartupBenchmark
+./gradlew :benchmark:connectedBenchmarkAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=com.ayagmar.pimobile.benchmark.StartupBenchmark
 ```
 
-### Baseline Profile Generation
+The benchmark source compares no compilation with a required baseline profile. The baseline-profile case is expected to remain pending until a profile is generated and deliberately adopted for the distribution model.
 
-Generate a new baseline profile:
+### Baseline Profile Scaffolding
+
+The repository contains `BaselineProfileGenerator`, but profile generation/adoption is not a current non-device release gate. If public distribution makes it worthwhile, run the generator class on an operator-owned device:
 
 ```bash
-# Run on emulator or device with API 33+
-./gradlew :benchmark:pixel7Api34GenerateBaselineProfile
-
-# Or use the generic task
-./gradlew :benchmark:connectedGenerateBaselineProfile
+./gradlew :benchmark:connectedBenchmarkAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=com.ayagmar.pimobile.benchmark.BaselineProfileGenerator
 ```
 
-Copy the generated profile to `app/src/main/baseline-prof.txt`.
+Review generated artifacts before copying any profile into `app/src/main`; do not claim profile benefit without an A/B startup benchmark.
 
 ## Profiling
 
@@ -139,25 +137,27 @@ For a session with 10,000 existing entries followed by 10 new entries:
 
 These are protocol payload counts derived from deterministic fixtures, not device timing claims.
 
-## Current Baseline (v1.0)
+## Current Hardware Baseline
 
-*To be populated with actual measurements*
+**PENDING — operator-owned.** No hardware timing, jank, or memory result has been recorded.
 
-### Device: Pixel 7 (API 34)
-
-| Metric | Compilation: None | Compilation: Baseline Profile |
-|--------|------------------|------------------------------|
-| Cold startup | TBD ms | TBD ms |
-| Resume to messages | TBD ms | TBD ms |
-| First token latency | TBD ms | TBD ms |
-
-### Device: Mid-range (API 30)
+### Primary acceptance device: Android API 37
 
 | Metric | Compilation: None | Compilation: Baseline Profile |
 |--------|------------------|------------------------------|
-| Cold startup | TBD ms | TBD ms |
-| Resume to messages | TBD ms | TBD ms |
-| First token latency | TBD ms | TBD ms |
+| Cold startup | PENDING | PENDING |
+| Resume to first new-session frame | PENDING | PENDING |
+| Prompt to first token | PENDING | PENDING |
+| Long-session tree open/refresh | PENDING | PENDING |
+
+### Lower supported API compatibility device
+
+| Metric | Result |
+|--------|--------|
+| Startup and reconnect smoke | PENDING |
+| 10+ minute streaming/jank | PENDING |
+| Rotation/background restore | PENDING |
+| Memory growth after repeated session switches | PENDING |
 
 ## Optimization Checklist
 
@@ -167,14 +167,16 @@ These are protocol payload counts derived from deterministic fixtures, not devic
 - [x] LRU eviction for old messages
 - [x] Frame metrics tracking
 - [x] Startup timing instrumentation
-- [ ] Baseline profile generation
-- [ ] Release build optimization verification
-- [ ] Stress test: 10+ minute streaming
-- [ ] Memory leak verification
+- [ ] Baseline profile generation — conditional on a distribution decision
+- [ ] Release build optimization verification — operator-owned
+- [ ] Stress test: 10+ minute streaming — operator-owned
+- [ ] Memory-growth/leak verification — operator-owned
 
-## Known Issues
+## Known Evidence Gaps
 
-*None recorded*
+- No API 37 hardware timing has been recorded.
+- No sustained-streaming jank or memory profile has been recorded.
+- Baseline profile generation and A/B benefit remain unverified and are not current release claims.
 
 ## Tools
 

@@ -6,7 +6,7 @@
 
 ## Status
 
-- **State**: IN PROGRESS
+- **State**: DONE (device acceptance pending — operator-owned; structural hotspot decomposition deferred)
 - **Priority**: P1
 - **Effort**: XL
 - **Depends on**: Plan 008 implementation
@@ -121,18 +121,24 @@ git diff --check
 
 If npm returns HTTP 410 for the retired audit endpoint, record the external failure verbatim and do not represent the audit as passing. Do not weaken tests, lint, AAR metadata checks, authentication, or session safety.
 
+## Reconciliation evidence (2026-07-17)
+
+Reconciled against `95ef4b9`. The implementation is present in live source: explicit-owner-only freshness conflict policy; bounded async image presentation/save/share; saved reading and draft state; current clipboard/test APIs; bounded tool sheets; expanded navigation rail and app-bar-owned insets; serialized bridge control handling; streaming/tail session indexing; and sanitized bridge errors. Plan 011 subsequently completed the intentionally separate AGP 9/API 37 migration and reran the complete non-device gate.
+
+The suggested structural split of `bridge/src/server.ts` and further `ChatViewModel` decomposition did not land. It is retained as post-plan maintainability work rather than represented as completed; the behavior/correctness hardening and regression coverage required by this plan are complete.
+
 ## Done criteria
 
-- [ ] Local invalidations never produce false sync/conflict warnings.
-- [ ] Image preview supports async bounded loading, metadata, zoom/pan, save, and share.
-- [ ] Reading state survives configuration recreation and distinguishes reply/tool unread activity.
-- [ ] Deprecated clipboard and Compose test APIs are gone.
-- [ ] Composer exposes delivery and dispatch state without losing drafts.
-- [ ] Heavy tool details use a bounded detail surface with copy/highlighting.
-- [ ] Compact and expanded layouts follow Material 3 navigation/inset rules.
-- [ ] AGP 9/API 37/Kotlin built-in migration remains deferred to a separate future task.
-- [ ] Bridge/mobile P1 audit findings have regression coverage.
-- [ ] Full non-device gates pass; device acceptance remains operator-owned.
+- [x] Local invalidations never produce false sync/conflict warnings.
+- [x] Image preview supports async bounded loading, metadata, zoom/pan, save, and share.
+- [x] Reading state survives configuration recreation and distinguishes reply/tool unread activity.
+- [x] Deprecated clipboard and Compose test APIs are gone.
+- [x] Composer exposes delivery and dispatch state without losing drafts.
+- [x] Heavy tool details use a bounded detail surface with copy/highlighting.
+- [x] Compact and expanded layouts follow Material 3 navigation/inset rules.
+- [x] AGP 9/API 37/Kotlin built-in migration was isolated from this plan and completed separately by Plan 011.
+- [x] Bridge/mobile P1 behavior findings have regression coverage.
+- [x] Full non-device gates pass; device acceptance remains operator-owned.
 
 ## STOP conditions
 

@@ -15,9 +15,9 @@ These plans deliberately retain the current architecture: Android connects to a 
 | [005](005-decompose-chat-architecture.md) | Decompose chat state and UI without changing behavior | P2 | L | 003 | DONE |
 | [006](006-redesign-onboarding-and-navigation.md) | Redesign onboarding, navigation, and recovery UX | P2 | L | 005 | DONE (device acceptance pending — operator-owned) |
 | [007](007-modernize-android-and-release-dx.md) | Modernize Android, CI, release checks, and contributor DX | P2 | L | 004, 006 | DONE (device acceptance pending — operator-owned) |
-| [008](008-chat-experience-v2.md) | Deliver a compact, turn-centered mobile chat experience | P1 | L | 007 | IN PROGRESS |
-| [009](009-polish-native-chat-and-harden-platform.md) | Polish native chat and harden platform | P1 | XL | 008 | IN PROGRESS |
-| [010](010-performance-resume-and-session-navigation.md) | Performance overhaul for resume, trees, and session navigation | P1 | XL | 008, 009 | IN PROGRESS |
+| [008](008-chat-experience-v2.md) | Deliver a compact, turn-centered mobile chat experience | P1 | L | 007 | DONE (device acceptance pending — operator-owned) |
+| [009](009-polish-native-chat-and-harden-platform.md) | Polish native chat and harden platform | P1 | XL | 008 | DONE (device acceptance pending — operator-owned; structural decomposition deferred) |
+| [010](010-performance-resume-and-session-navigation.md) | Performance overhaul for resume, trees, and session navigation | P1 | XL | 008, 009 | DONE (device performance acceptance pending — operator-owned) |
 | [011](011-agp9-api37-java25-modernization-and-quality.md) | Migrate to AGP 9/API 37/JDK 25 and modernize platform quality | P1 | XL | 009, 010 | DONE (device acceptance pending — operator-owned; detekt uses isolated JDK 21) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (reason) | REJECTED (reason)

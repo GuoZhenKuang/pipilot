@@ -8,7 +8,7 @@
 
 ## Status
 
-- **State**: IN PROGRESS
+- **State**: DONE (device acceptance pending — operator-owned)
 - **Priority**: P1
 - **Effort**: L
 - **Risk**: MED
@@ -443,6 +443,10 @@ Stop and report; do not improvise if:
 - A step's focused verification fails twice after a reasonable correction.
 - Any requested verification would launch an emulator/device without the operator explicitly enabling debug mode.
 - In-scope files materially drift from the excerpts before execution begins.
+
+## Reconciliation evidence (2026-07-17)
+
+Reconciled against `95ef4b9`. Every done criterion below was already checked, and the later Plan 011 clean Android gate, Android-test source compilation, bridge checks/audit, and `git diff --check` all passed. The stale `IN PROGRESS` label was bookkeeping drift only. Device acceptance remains **PENDING — operator-owned** until explicit `debug mode`.
 
 ## Review corrections
 

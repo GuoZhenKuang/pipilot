@@ -221,7 +221,7 @@ cd bridge && pnpm test
 cd bridge && pnpm run check
 
 # Complete non-device Android gate
-./gradlew clean ktlintCheck detekt test :app:lintDebug :app:assembleDebug :app:assembleRelease
+./gradlew clean ktlintCheck detekt test :benchmark:compileBenchmarkKotlin :app:lintDebug :app:assembleDebug :app:assembleRelease
 ./gradlew :app:compileDebugAndroidTestKotlin
 ```
 
@@ -263,7 +263,7 @@ BRIDGE_PI_COMMAND=pi                 # Pi executable path/name; probed with --ve
 
 ### App Build Variants
 
-Debug builds include logging and assertions. Release builds (if you make them) strip these for smaller size.
+Debug builds include development logging and assertions. The repository-safe release build is unsigned/default and currently keeps minification disabled; see [`docs/release.md`](docs/release.md) before distribution.
 
 ## Security Notes
 
@@ -279,22 +279,20 @@ Debug builds include logging and assertions. Release builds (if you make them) s
 ## Limitations
 
 - No offline mode - requires live connection to laptop
-- Session history is fetched via `get_messages` and rendered in a capped window (no true server-side pagination yet)
-- Tree navigation is MVP-level (functional, minimal rendering)
+- Active history prefers the cursor-based `get_entries` projection and falls back to documented `get_messages` when needed; the UI renders capped windows, not true server-side pages
+- Tree display is cached and generation-gated, but navigation still depends on the internal `pi-mobile-tree` extension because Pi 0.80.6 has no navigation RPC command
 - Mobile keyboard shortcuts vary by device/IME
 
 ## Testing
 
 See [docs/testing.md](docs/testing.md) for emulator setup and testing procedures.
 
-Quick start:
+Non-device quick check:
 ```bash
-# Start emulator, build, install
-./gradlew :app:installDebug
-
-# Watch logs
-adb logcat | grep -E "PiMobile|PerfMetrics"
+./gradlew test :app:lintDebug :app:assembleDebug
 ```
+
+Emulator/device, installation, ADB, benchmark, and manual acceptance commands are operator-owned and require the explicit phrase `debug mode`.
 
 ## License
 

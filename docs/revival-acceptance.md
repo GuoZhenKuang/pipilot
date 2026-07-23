@@ -82,6 +82,20 @@ Evidence/notes: ______________________________
 Result: **PENDING — operator-owned**
 Evidence/notes: ______________________________
 
+## Performance and large-session acceptance
+
+Record sanitized measurements using `docs/perf-baseline.md`:
+
+1. Cold-start an API 37 build to cached Sessions and record startup timing.
+2. Resume 1k-entry and 10k-entry sessions; record first state, first timeline payload, and first new-session frame.
+3. Switch repeatedly among three long sessions; verify the previous transcript never flashes and memory does not grow without bound.
+4. Open/refresh active and inactive trees repeatedly; verify cached stale state is labeled and replaced by authoritative active `get_tree` data.
+5. Stream for at least 10 minutes with tools, diffs, and image previews; record jank and memory evidence without transcript content.
+6. Disconnect/reconnect during switching, tree refresh, and streaming; verify late results cannot overwrite the active generation.
+
+Result: **PENDING — operator-owned**
+Evidence/notes: ______________________________
+
 ## Release APK
 
 The repository does not contain signing credentials. Install a safely signed operator copy of `app/build/outputs/apk/release/app-release-unsigned.apk`, launch it, connect, resume, prompt, and reconnect. Record signing method without recording key material.
@@ -92,16 +106,19 @@ Evidence/notes: ______________________________
 ## Non-device gate
 
 ```bash
-./gradlew clean ktlintCheck detekt test :app:lintDebug :app:assembleDebug :app:assembleRelease
+./gradlew clean ktlintCheck detekt test :benchmark:compileBenchmarkKotlin :app:lintDebug :app:assembleDebug :app:assembleRelease
+./gradlew :app:compileDebugAndroidTestKotlin
 (cd bridge && pnpm install --frozen-lockfile && pnpm run check && pnpm audit --prod)
 ```
 
 Expected: every command exits 0; APK paths above exist; production audit has no high vulnerabilities.
 
-Recorded non-device result (2026-07-13): **PASS**
+Recorded Plan 011 base (`95ef4b9`) plus reconciliation checks (2026-07-17): **PASS**
 
 - Android clean/static/unit/lint/debug/release gate: exit 0
-- Bridge frozen install/check/production audit: exit 0; no known vulnerabilities
+- Benchmark Kotlin source compilation: exit 0; no device launched
+- Android-test source compilation: exit 0; no device launched
+- Bridge frozen install/check/production audit: exit 0; 64 tests passed and registry reported no known vulnerabilities
 - Debug APK: `app/build/outputs/apk/debug/app-debug.apk`
 - Release APK: `app/build/outputs/apk/release/app-release-unsigned.apk`
 - Connected/manual sections above: **PENDING — operator-owned**

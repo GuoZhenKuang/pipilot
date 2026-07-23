@@ -14,7 +14,7 @@ For durable decision rationale, see [Architecture Decision Records](adr/README.m
   - [1) Connect and Resume Session](#1-connect-and-resume-session)
   - [2) Prompt and Streaming Events](#2-prompt-and-streaming-events)
   - [3) Reconnect and Resync](#3-reconnect-and-resync)
-  - [4) Session Tree Navigation](#4-session-tree-navigation)
+  - [4) Session Trees and Navigation](#4-session-trees-and-navigation)
   - [5) Session Coherency Monitoring + Sync](#5-session-coherency-monitoring--sync)
 - [Bridge Control Model](#bridge-control-model)
 - [State Management in Android](#state-management-in-android)
@@ -84,7 +84,8 @@ This retained boundary is documented in [ADR-0004](adr/ADR-0004-retain-rpc-subpr
 ### `core-sessions/`
 
 - Host-scoped session index state and filtering
-- merge + cache behavior for remote session lists
+- cache-first rendering with background refresh
+- per-host refresh coalescing, throttling, and failure backoff
 - in-memory and file cache implementations
 
 ### `bridge/`
@@ -92,22 +93,19 @@ This retained boundary is documented in [ADR-0004](adr/ADR-0004-retain-rpc-subpr
 - `server.ts`: WebSocket server, token validation, protocol dispatch, health endpoint
 - `process-manager.ts`: per-cwd forwarders + control locks
 - `rpc-forwarder.ts`: pi subprocess lifecycle/restart/backoff
-- `session-indexer.ts`: reads/normalizes session `.jsonl` files
+- `session-indexer.ts`: streaming JSONL indexing with shared revision snapshots, bounded tail freshness, tree caches, and bounded eviction
 - `extensions/`: internal mobile bridge extensions
 
 ## Key Runtime Flows
 
 ### 1) Connect and Resume Session
 
-1. App creates `PiRpcConnectionConfig` (`url`, `token`, `cwd`, `clientId`)
-2. Bridge returns `bridge_hello`
-3. If needed, app sends:
-   - `bridge_set_cwd`
-   - `bridge_acquire_control`
-4. App resyncs via:
-   - `get_state`
-   - `get_messages`
-5. If resuming a specific session path, app sends `switch_session`
+1. App creates `PiRpcConnectionConfig` (`url`, `token`, `cwd`, `clientId`).
+2. Bridge returns `bridge_hello`; the app sets cwd and acquires control.
+3. Before a retained Chat destination can render, `RpcSessionController` publishes a new active-session generation with `isSwitching = true`, so the previous transcript is hidden immediately.
+4. For a selected session, the controller sends documented `switch_session`, refreshes the authoritative active path, resets its entry projection, and publishes the settled generation.
+5. Controller-owned bootstrap stages `get_state` first, then uses the current `get_entries` projection. It falls back to documented `get_messages` only when no safe projection is available.
+6. `ChatViewModel` tags bootstrap and tree work with the generation and rejects late results after another switch.
 
 ### 2) Prompt and Streaming Events
 
@@ -129,31 +127,36 @@ On reconnect, `PiRpcConnection`:
 
 This keeps timeline and streaming flags consistent after network interruptions.
 
-### 4) Session Tree Navigation
+### 4) Session Trees and Navigation
 
-Tree flow uses both bridge control and internal extension command:
+Tree display and navigation have separate authority:
 
-1. App sends `bridge_navigate_tree { entryId }`
-2. Bridge checks internal command availability (`get_commands`)
-3. Current source checks command availability, then sends RPC `prompt` with internal command:
-   - `/pi-mobile-tree <entryId> <statusKey>`
-4. Extension emits `setStatus(statusKey, JSON payload)`
-5. Bridge parses payload and replies with `bridge_tree_navigation_result`
-6. App updates input text and tree state
+- The active session uses Pi's documented `get_tree`. The app may show its last cached result as stale while an authoritative refresh runs in the background.
+- Inactive-session browsing uses the bridge's validated, revision-keyed JSONL tree cache.
+- Session switches cancel or generation-reject late tree results.
+
+Navigation remains the one internal-extension path because Pi 0.80.6 has no tree-navigation RPC command:
+
+1. App sends `bridge_navigate_tree { entryId }`.
+2. Bridge validates cwd/control and the requested entry ID.
+3. Bridge sends RPC `prompt` with `/pi-mobile-tree <entryId> <statusKey>`.
+4. Extension emits `setStatus(statusKey, JSON payload)`.
+5. Bridge returns a sanitized `bridge_tree_navigation_result`.
+6. App updates the editor draft and refreshes the authoritative tree.
 
 ### 5) Session Coherency Monitoring + Sync
 
-To protect against cross-device edits on the same session file:
+Bridge-observed mutations push `bridge_session_invalidated` for immediate cursor resync. To cover direct terminal or other external edits, `ChatViewModel` also performs one safety freshness check every 60 seconds only while Chat is foreground-active.
 
-1. `ChatViewModel` polls `bridge_get_session_freshness` every few seconds
-2. Bridge computes a fingerprint (`mtime`, size, entry count, last ids/hash)
-3. Client compares fingerprint against previous snapshot
-4. If mismatch is outside local mutation grace window:
-   - show coherency warning banner
-   - emit warning notification with lock owner hints
-5. User can trigger **Sync now** to force timeline reload and clear warning
+The bridge computes a sanitized fingerprint from file revision and bounded parse/tail data. The app classifies a changed fingerprint as follows:
 
-This helps avoid writing on stale in-memory state after another client changed the session. Current Pi RPC provides `get_tree` and cursor-based `get_entries`; plans 003–004 may simplify the bridge tree read and polling paths, but that future behavior is not implemented here.
+- inside the local mutation grace window: update the baseline;
+- no explicit other-client owner while idle: refresh silently;
+- no explicit other-client owner while busy: defer refresh until idle;
+- explicit other-client lock ownership: show one throttled, actionable conflict with **Sync now**;
+- reload failure: show an actionable recovery error.
+
+Unknown cursors, branch moves, session replacement, unsupported entries, or invalid projections trigger exactly one explicit full rebuild. The app never treats a fingerprint change alone as proof of a conflict.
 
 ## Bridge Control Model
 
@@ -177,7 +180,7 @@ Important sub-states:
 - extension dialogs/notifications/widgets/title
 - bash dialog state
 - stats/model/tree bottom-sheet state
-- session coherency warning + sync-in-progress state
+- deferred freshness refresh, explicit-owner conflict, and sync-in-progress state
 
 High-level design:
 
@@ -200,11 +203,12 @@ High-level design:
 ### Commands
 
 ```bash
-# Android quality gates
-./gradlew ktlintCheck detekt test
+# Complete Android non-device gate
+./gradlew clean ktlintCheck detekt test :benchmark:compileBenchmarkKotlin :app:lintDebug :app:assembleDebug :app:assembleRelease
+./gradlew :app:compileDebugAndroidTestKotlin
 
-# Bridge quality gates
-cd bridge && pnpm run check
+# Bridge quality and production dependency gate
+(cd bridge && pnpm install --frozen-lockfile && pnpm run check && pnpm audit --prod)
 ```
 
 ## Common Change Scenarios

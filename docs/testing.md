@@ -1,5 +1,7 @@
 # Testing Pi Mobile
 
+> **Device boundary:** The emulator/device, ADB, installation, screenshot, manual acceptance, connected-test, and benchmark commands below are operator-owned. Do not run them until the operator explicitly says `debug mode`. Ordinary development uses the non-device gates at the end of this document.
+
 ## Running on Emulator
 
 ### 1. Start an Emulator
@@ -8,7 +10,7 @@
 - Open Android Studio
 - Tools → Device Manager → Create Device
 - Pick a phone (Pixel 7 recommended)
-- Download a system image (API 33 or 34)
+- Download a stable Android API 37 system image
 - Click the play button to launch
 
 **Option B: Via Command Line**
@@ -20,7 +22,7 @@ $ANDROID_HOME/emulator/emulator -list-avds
 
 Start one:
 ```bash
-$ANDROID_HOME/emulator/emulator -avd Pixel_7_API_34 -netdelay none -netspeed full
+$ANDROID_HOME/emulator/emulator -avd Pixel_7_API_37 -netdelay none -netspeed full
 ```
 
 ### 2. Build and Install
@@ -76,7 +78,7 @@ pnpm install  # if not done
 pnpm start
 ```
 
-The bridge logs the host/port it is listening on.
+Confirm the configured host and the sanitized listening-port log before connecting.
 
 ### 2. Configure the App
 
@@ -93,7 +95,7 @@ If the app shows "Connected" and lists your sessions, it's working.
 If not, check:
 - Is Tailscale running on both laptop and emulator host?
 - Can the emulator reach your laptop? Test with: `adb shell ping 100.x.x.x`
-- Is the bridge actually running? Check with: `curl http://100.x.x.x:8787/health`
+- Is the bridge actually running? If the optional health endpoint is enabled and allowed on that interface, check it without including credentials.
 
 ## Common Issues
 
@@ -116,8 +118,9 @@ Normal on first launch. Open the left drawer and go to the **Hosts** tab to add 
 
 ### App crashes on resume
 
-- Check `adb logcat` for stack traces
-- Large sessions might cause OOM - try compacting first in pi
+- Capture a sanitized stack trace without tokens, session content, or private paths.
+- Record session entry count and whether the failure occurred during bootstrap, first frame, or tree refresh.
+- The app uses bounded initial history and generation-gated loads; treat an OOM or stale-frame failure as a regression rather than expected large-session behavior.
 
 ## Quick Development Cycle
 
@@ -142,7 +145,8 @@ Use JDK 25 for Gradle and compilation, a JDK 21 toolchain for stable detekt, And
 Complete non-device gate:
 
 ```bash
-./gradlew clean ktlintCheck detekt test :app:lintDebug :app:assembleDebug :app:assembleRelease
+./gradlew clean ktlintCheck detekt test :benchmark:compileBenchmarkKotlin :app:lintDebug :app:assembleDebug :app:assembleRelease
+./gradlew :app:compileDebugAndroidTestKotlin
 (cd bridge && pnpm install --frozen-lockfile && pnpm run check && pnpm audit --prod)
 ```
 
@@ -158,4 +162,4 @@ Compile connected tests without launching an emulator/device:
 ./gradlew :app:compileDebugAndroidTestKotlin
 ```
 
-Chat Experience v2 device acceptance is **pending operator-owned debug mode**. Do not run an emulator, connected tests, `adb`, install an APK, or claim manual acceptance until the operator explicitly enables debug mode. Follow [`revival-acceptance.md`](revival-acceptance.md) when enabled.
+Device acceptance for Plans 006–011 is **PENDING — operator-owned**. Do not run an emulator, connected tests, `adb`, install an APK, benchmark, capture screenshots, or claim manual acceptance until the operator explicitly enables `debug mode`. Follow [`revival-acceptance.md`](revival-acceptance.md) and [`perf-baseline.md`](perf-baseline.md) when enabled.

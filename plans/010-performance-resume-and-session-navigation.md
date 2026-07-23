@@ -10,7 +10,7 @@
 
 ## Status
 
-- **State**: IN PROGRESS
+- **State**: DONE (device performance acceptance pending — operator-owned)
 - **Priority**: P1
 - **Effort**: XL
 - **Depends on**: 008 implementation; 009 may proceed independently where noted
@@ -181,17 +181,25 @@ In scope: `bridge/src/session-indexer.ts`, `bridge/src/server.ts`, bridge tests,
 
 Out of scope: Pi SDK migration, undocumented RPC commands, arbitrary laptop file access, removal of locks, deletion of cursor synchronization, changing the one-rebuild rule, or device execution before debug mode.
 
+## Reconciliation evidence (2026-07-17)
+
+Reconciled against `95ef4b9`. Live source and tests retain immediate session-identity switching, generation-gated bootstrap/tree results, controller-owned staged bootstrap, bounded recent-history projection, shared streaming JSONL snapshots, bounded tail freshness with full fallback, revision-keyed tree caches, active authoritative tree refresh/cancellation, host-scoped transport reuse, refresh coalescing/throttling/backoff, serialized control-plane handling, sanitized performance metrics, and bounded diff/highlight caches. Plan 011's clean gate passed all Android/core tests, Android-test source compilation, bridge checks (64 tests), production audit, debug/release assembly, and diff hygiene. Reconciliation also moved the macrobenchmark classes into the active `com.android.test` `src/main` source set and verified `:benchmark:compileBenchmarkKotlin`; previously AGP reported that task as `NO-SOURCE`.
+
+The reconciliation gate then passed `clean`, ktlint, detekt, all tests, active benchmark-source compilation, debug lint, debug/release assembly, and Android-test source compilation. Bridge lint/typecheck and 64 tests passed, the production audit reported no known vulnerabilities, and the cache-eviction test passed five repeated focused runs after its assertion was made independent of nondeterministic LRU order.
+
+Hardware timing, jank, memory, and long-session acceptance remain **PENDING — operator-owned** and are tracked in `docs/perf-baseline.md` and `docs/revival-acceptance.md`.
+
 ## Done criteria
 
-- [ ] No old-session transcript is visible after a target switch begins.
-- [ ] Late bootstrap/tree results cannot overwrite the current session.
-- [ ] Resume/bootstrap avoids duplicate state/timeline requests and renders staged loading state.
-- [ ] Bridge parses each unchanged session revision once for metadata/freshness/tree consumers.
-- [ ] Long-session tree requests use cache/cancellation and do not time out in approved synthetic fixtures.
-- [ ] Session index refresh is cache-first and coalesced.
-- [ ] Bridge ordering/process tests pass and errors are sanitized.
-- [ ] First-frame projection/formatting work is bounded and cached.
-- [ ] Full non-device gates pass; device acceptance remains operator-owned until debug mode.
+- [x] No old-session transcript is visible after a target switch begins.
+- [x] Late bootstrap/tree results cannot overwrite the current session.
+- [x] Resume/bootstrap avoids duplicate state/timeline requests and renders staged loading state.
+- [x] Bridge parses each unchanged session revision once for metadata/freshness/tree consumers.
+- [x] Long-session tree requests use cache/cancellation and pass approved synthetic fixtures.
+- [x] Session index refresh is cache-first and coalesced.
+- [x] Bridge ordering/process tests pass and errors are sanitized.
+- [x] First-frame projection/formatting work is bounded and cached.
+- [x] Full non-device gates pass; device performance acceptance remains operator-owned until debug mode.
 
 ## STOP conditions
 
