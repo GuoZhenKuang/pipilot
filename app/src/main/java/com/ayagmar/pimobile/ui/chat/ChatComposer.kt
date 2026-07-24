@@ -1,15 +1,14 @@
 package com.ayagmar.pimobile.ui.chat
 
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,46 +18,52 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.net.toUri
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
+import com.ayagmar.pimobile.chat.ChatImageSource
 import com.ayagmar.pimobile.chat.ChatViewModel
 import com.ayagmar.pimobile.chat.ImageEncoder
 import com.ayagmar.pimobile.chat.PendingImage
@@ -66,11 +71,13 @@ import com.ayagmar.pimobile.chat.PendingQueueItem
 import com.ayagmar.pimobile.chat.PendingQueueType
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Suppress("LongMethod", "LongParameterList")
 @Composable
 internal fun PromptControls(
     isStreaming: Boolean,
     isRetrying: Boolean,
+    isDispatchingMessage: Boolean = false,
     pendingQueueItems: List<PendingQueueItem>,
     steeringMode: String,
     followUpMode: String,
@@ -78,35 +85,83 @@ internal fun PromptControls(
     pendingImages: List<PendingImage>,
     callbacks: PromptControlsCallbacks,
 ) {
-    var showSteerDialog by remember { mutableStateOf(false) }
-    var showFollowUpDialog by remember { mutableStateOf(false) }
+    var deliveryMode by rememberSaveable { mutableStateOf(ActiveRunDeliveryMode.FOLLOW_UP) }
+    var showQueue by rememberSaveable { mutableStateOf(false) }
+    val isRunActive = isStreaming || isRetrying
+    val submit = {
+        if (inputText.isNotBlank()) {
+            if (!isRunActive) {
+                callbacks.onSendPrompt()
+            } else {
+                dispatchActiveRunMessage(inputText, deliveryMode, callbacks)
+            }
+        } else if (!isRunActive && pendingImages.isNotEmpty()) {
+            callbacks.onSendPrompt()
+        }
+    }
 
     Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .testTag(CHAT_PROMPT_CONTROLS_TAG),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().testTag(CHAT_PROMPT_CONTROLS_TAG),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        AnimatedVisibility(
-            visible = isStreaming || isRetrying,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically(),
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .testTag(CHAT_STREAMING_CONTROLS_TAG),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            StreamingControls(
-                isRetrying = isRetrying,
-                onAbort = callbacks.onAbort,
-                onAbortRetry = callbacks.onAbortRetry,
-                onSteerClick = { showSteerDialog = true },
-                onFollowUpClick = { showFollowUpDialog = true },
+            FilterChip(
+                selected = deliveryMode == ActiveRunDeliveryMode.FOLLOW_UP,
+                onClick = { deliveryMode = ActiveRunDeliveryMode.FOLLOW_UP },
+                label = { Text("Follow up") },
+                enabled = isRunActive,
             )
+            FilterChip(
+                selected = deliveryMode == ActiveRunDeliveryMode.STEER,
+                onClick = { deliveryMode = ActiveRunDeliveryMode.STEER },
+                label = { Text("Steer") },
+                enabled = isRunActive && !isRetrying,
+            )
+            if (isDispatchingMessage) {
+                Text(
+                    text =
+                        when (deliveryMode) {
+                            ActiveRunDeliveryMode.FOLLOW_UP -> "Sending follow-up…"
+                            ActiveRunDeliveryMode.STEER -> "Sending steer…"
+                        },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            } else if (isRunActive) {
+                TextButton(onClick = if (isRetrying) callbacks.onAbortRetry else callbacks.onAbort) {
+                    Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Text("Stop")
+                }
+            }
+            if (pendingQueueItems.isNotEmpty()) {
+                TextButton(onClick = { showQueue = true }) { Text("Queue ${pendingQueueItems.size}") }
+            }
         }
 
-        AnimatedVisibility(
-            visible = isStreaming && pendingQueueItems.isNotEmpty(),
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically(),
-        ) {
+        PromptInputRow(
+            inputText = inputText,
+            isStreaming = isRunActive,
+            activeRunDeliveryMode = deliveryMode.takeIf { isRunActive },
+            isDispatchingMessage = isDispatchingMessage,
+            pendingImages = pendingImages,
+            onInputTextChanged = callbacks.onInputTextChanged,
+            onSubmit = submit,
+            onShowCommandPalette = callbacks.onShowCommandPalette,
+            onAddImage = callbacks.onAddImage,
+            onRemoveImage = callbacks.onRemoveImage,
+        )
+    }
+
+    if (showQueue) {
+        androidx.compose.material3.ModalBottomSheet(onDismissRequest = { showQueue = false }) {
             PendingQueueInspector(
                 pendingItems = pendingQueueItems,
                 steeringMode = steeringMode,
@@ -114,113 +169,6 @@ internal fun PromptControls(
                 onRemoveItem = callbacks.onRemovePendingQueueItem,
                 onClear = callbacks.onClearPendingQueueItems,
             )
-        }
-
-        PromptInputRow(
-            inputText = inputText,
-            isStreaming = isStreaming,
-            pendingImages = pendingImages,
-            onInputTextChanged = callbacks.onInputTextChanged,
-            onSendPrompt = callbacks.onSendPrompt,
-            onShowCommandPalette = callbacks.onShowCommandPalette,
-            onAddImage = callbacks.onAddImage,
-            onRemoveImage = callbacks.onRemoveImage,
-        )
-    }
-
-    if (showSteerDialog) {
-        SteerFollowUpDialog(
-            title = "Steer",
-            onDismiss = { showSteerDialog = false },
-            onConfirm = { message ->
-                callbacks.onSteer(message)
-                showSteerDialog = false
-            },
-        )
-    }
-
-    if (showFollowUpDialog) {
-        SteerFollowUpDialog(
-            title = "Follow Up",
-            onDismiss = { showFollowUpDialog = false },
-            onConfirm = { message ->
-                callbacks.onFollowUp(message)
-                showFollowUpDialog = false
-            },
-        )
-    }
-}
-
-@Suppress("LongMethod")
-@Composable
-private fun StreamingControls(
-    isRetrying: Boolean,
-    onAbort: () -> Unit,
-    onAbortRetry: () -> Unit,
-    onSteerClick: () -> Unit,
-    onFollowUpClick: () -> Unit,
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth().testTag(CHAT_STREAMING_CONTROLS_TAG),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Button(
-                onClick = onAbort,
-                modifier = Modifier.weight(1f),
-                colors =
-                    androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                    ),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 8.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Stop,
-                    contentDescription = null,
-                    modifier = Modifier.padding(end = 4.dp),
-                )
-                Text(
-                    text = "Abort",
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-
-            if (isRetrying) {
-                OutlinedButton(
-                    onClick = onAbortRetry,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(text = "Abort Retry", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
-                }
-            }
-        }
-
-        if (!isRetrying) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                OutlinedButton(
-                    onClick = onSteerClick,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(text = "Steer", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
-                }
-
-                OutlinedButton(
-                    onClick = onFollowUpClick,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(text = "Follow Up", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
-                }
-            }
         }
     }
 }
@@ -310,6 +258,18 @@ private fun PendingQueueItemRow(
     }
 }
 
+private fun dispatchActiveRunMessage(
+    inputText: String,
+    deliveryMode: ActiveRunDeliveryMode,
+    callbacks: PromptControlsCallbacks,
+) {
+    val submission = createActiveRunSubmission(inputText, deliveryMode) ?: return
+    when (submission.deliveryMode) {
+        ActiveRunDeliveryMode.FOLLOW_UP -> callbacks.onFollowUp(submission.message)
+        ActiveRunDeliveryMode.STEER -> callbacks.onSteer(submission.message)
+    }
+}
+
 private fun deliveryModeLabel(mode: String): String {
     return when (mode) {
         ChatViewModel.DELIVERY_MODE_ONE_AT_A_TIME -> "one-at-a-time"
@@ -322,9 +282,11 @@ private fun deliveryModeLabel(mode: String): String {
 internal fun PromptInputRow(
     inputText: String,
     isStreaming: Boolean,
+    activeRunDeliveryMode: ActiveRunDeliveryMode? = null,
+    isDispatchingMessage: Boolean = false,
     pendingImages: List<PendingImage>,
     onInputTextChanged: (String) -> Unit,
-    onSendPrompt: () -> Unit,
+    onSubmit: () -> Unit,
     onShowCommandPalette: () -> Unit = {},
     onAddImage: (PendingImage) -> Unit,
     onRemoveImage: (Int) -> Unit,
@@ -332,10 +294,6 @@ internal fun PromptInputRow(
     val context = LocalContext.current
     val imageEncoder = remember { ImageEncoder(context) }
     var previewImageUri by rememberSaveable { mutableStateOf<String?>(null) }
-
-    val submitPrompt = {
-        onSendPrompt()
-    }
 
     val photoPickerLauncher =
         rememberLauncherForActivityResult(
@@ -367,7 +325,7 @@ internal fun PromptInputRow(
             minLines = 1,
             maxLines = 5,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
-            enabled = !isStreaming,
+            enabled = true,
             leadingIcon = {
                 IconButton(
                     onClick = {
@@ -394,13 +352,22 @@ internal fun PromptInputRow(
                     }
                 } else {
                     IconButton(
-                        onClick = submitPrompt,
-                        enabled = canSend && !isStreaming,
+                        onClick = onSubmit,
+                        enabled = canSend && !isDispatchingMessage,
                     ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Send",
-                        )
+                        if (isDispatchingMessage) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription =
+                                    when (activeRunDeliveryMode) {
+                                        ActiveRunDeliveryMode.FOLLOW_UP -> "Send as follow-up"
+                                        ActiveRunDeliveryMode.STEER -> "Send as steer"
+                                        null -> "Send message"
+                                    },
+                            )
+                        }
                     }
                 }
             },
@@ -408,7 +375,7 @@ internal fun PromptInputRow(
 
         previewImageUri?.let { uri ->
             ImagePreviewDialog(
-                uriString = uri,
+                image = ChatImageSource.LocalUri(uri),
                 onDismiss = { previewImageUri = null },
             )
         }
@@ -526,73 +493,182 @@ private fun formatFileSize(bytes: Long): String {
 
 @Composable
 internal fun ImagePreviewDialog(
-    uriString: String,
+    image: ChatImageSource,
     onDismiss: () -> Unit,
 ) {
-    val uri = remember(uriString) { uriString.toUri() }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val presentation by rememberChatImagePresentation(context, image)
+    var actionMessage by remember(image) { mutableStateOf<String?>(null) }
+    val saveLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.CreateDocument(image.mimeType()),
+        ) { targetUri ->
+            if (targetUri != null) {
+                scope.launch {
+                    actionMessage =
+                        runCatching { image.copyTo(context, targetUri) }
+                            .fold(onSuccess = { "Image saved" }, onFailure = { "Unable to save image" })
+                }
+            }
+        }
 
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize().background(Color.Black),
-            contentAlignment = Alignment.Center,
-        ) {
-            AsyncImage(
-                model = uri,
-                contentDescription = "Image preview",
-                modifier = Modifier.fillMaxSize().padding(16.dp),
-                contentScale = ContentScale.Fit,
-            )
-
-            IconButton(
-                onClick = onDismiss,
-                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Close image preview",
-                    tint = Color.White,
-                )
-            }
-        }
+        ImagePreviewSurface(
+            presentation = presentation,
+            actionMessage = actionMessage,
+            onSave = {
+                actionMessage = null
+                saveLauncher.launch(presentation.displayName ?: "pi-mobile-image")
+            },
+            onShare = {
+                actionMessage = null
+                scope.launch {
+                    runCatching { shareImage(context, image, presentation.mimeType) }
+                        .onFailure { actionMessage = "Unable to share image" }
+                }
+            },
+            onDismiss = onDismiss,
+        )
     }
 }
 
 @Composable
-private fun SteerFollowUpDialog(
-    title: String,
+private fun ImagePreviewSurface(
+    presentation: ChatImagePresentation,
+    actionMessage: String?,
+    onSave: () -> Unit,
+    onShare: () -> Unit,
     onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit,
 ) {
-    var text by rememberSaveable { mutableStateOf("") }
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color.Black),
+        contentAlignment = Alignment.Center,
+    ) {
+        ZoomablePreviewImage(presentation)
+        ImagePreviewFooter(
+            presentation = presentation,
+            actionMessage = actionMessage,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
+        ImagePreviewActions(
+            enabled = !presentation.isLoading && presentation.errorMessage == null,
+            onSave = onSave,
+            onShare = onShare,
+            onDismiss = onDismiss,
+            modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
+        )
+    }
+}
 
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                placeholder = { Text("Enter your message...") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = false,
-                maxLines = 6,
+@Composable
+private fun ZoomablePreviewImage(presentation: ChatImagePresentation) {
+    var scale by remember(presentation.model) { mutableFloatStateOf(MIN_IMAGE_SCALE) }
+    var offsetX by remember(presentation.model) { mutableFloatStateOf(0f) }
+    var offsetY by remember(presentation.model) { mutableFloatStateOf(0f) }
+    val transformState =
+        rememberTransformableState { _, zoomChange, panChange, _ ->
+            scale = (scale * zoomChange).coerceIn(MIN_IMAGE_SCALE, MAX_IMAGE_SCALE)
+            if (scale == MIN_IMAGE_SCALE) {
+                offsetX = 0f
+                offsetY = 0f
+            } else {
+                offsetX += panChange.x
+                offsetY += panChange.y
+            }
+        }
+
+    when {
+        presentation.isLoading -> CircularProgressIndicator(color = Color.White)
+        presentation.errorMessage != null ->
+            Text(
+                text = presentation.errorMessage,
+                color = Color.White,
+                style = MaterialTheme.typography.bodyLarge,
             )
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(text) },
-                enabled = text.isNotBlank(),
-            ) {
-                Text("Send")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        },
+        else ->
+            AsyncImage(
+                model = presentation.model,
+                contentDescription = presentation.displayName?.let { "Preview $it" } ?: "Image preview",
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                        .graphicsLayer(
+                            scaleX = scale,
+                            scaleY = scale,
+                            translationX = offsetX,
+                            translationY = offsetY,
+                        ).transformable(transformState),
+                contentScale = ContentScale.Fit,
+            )
+    }
+}
+
+@Composable
+private fun ImagePreviewFooter(
+    presentation: ChatImagePresentation,
+    actionMessage: String?,
+    modifier: Modifier = Modifier,
+) {
+    val metadata = formatImageMetadata(presentation)
+    if (presentation.isLoading || (metadata.isBlank() && actionMessage == null)) return
+    Text(
+        text = actionMessage ?: listOfNotNull(presentation.displayName, metadata).joinToString(" · "),
+        color = Color.White,
+        style = MaterialTheme.typography.labelMedium,
+        modifier =
+            modifier
+                .background(Color.Black.copy(alpha = IMAGE_METADATA_BACKGROUND_ALPHA))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
     )
 }
+
+@Composable
+private fun ImagePreviewActions(
+    enabled: Boolean,
+    onSave: () -> Unit,
+    onShare: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        ImageAction(Icons.Default.Download, "Save image", enabled, onSave)
+        ImageAction(Icons.Default.Share, "Share image", enabled, onShare)
+        ImageAction(Icons.Default.Close, "Close image preview", true, onDismiss)
+    }
+}
+
+@Composable
+private fun ImageAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    IconButton(onClick = onClick, enabled = enabled) {
+        Icon(imageVector = icon, contentDescription = label, tint = Color.White)
+    }
+}
+
+private suspend fun shareImage(
+    context: android.content.Context,
+    image: ChatImageSource,
+    resolvedMimeType: String?,
+) {
+    val shareUri = image.createShareUri(context)
+    val intent =
+        Intent(Intent.ACTION_SEND).apply {
+            type = resolvedMimeType ?: image.mimeType()
+            putExtra(Intent.EXTRA_STREAM, shareUri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    context.startActivity(Intent.createChooser(intent, "Share image"))
+}
+
+private const val MIN_IMAGE_SCALE = 1f
+private const val MAX_IMAGE_SCALE = 5f
+private const val IMAGE_METADATA_BACKGROUND_ALPHA = 0.72f

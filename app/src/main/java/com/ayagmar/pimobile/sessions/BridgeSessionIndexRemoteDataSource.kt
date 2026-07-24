@@ -10,6 +10,8 @@ import com.ayagmar.pimobile.hosts.HostProfileStore
 import com.ayagmar.pimobile.hosts.HostTokenStore
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -29,6 +31,10 @@ class BridgeSessionIndexRemoteDataSource(
     private val connectTimeoutMs: Long = DEFAULT_CONNECT_TIMEOUT_MS,
     private val requestTimeoutMs: Long = DEFAULT_REQUEST_TIMEOUT_MS,
 ) : SessionIndexRemoteDataSource {
+    private val transportsByHost = linkedMapOf<String, SocketTransport>()
+    private val mutexesByHost = linkedMapOf<String, Mutex>()
+
+    @Suppress("TooGenericExceptionCaught")
     override suspend fun fetch(hostId: String): List<SessionGroup> {
         val hostProfile =
             profileStore.list().firstOrNull { profile -> profile.id == hostId }
@@ -39,28 +45,37 @@ class BridgeSessionIndexRemoteDataSource(
             "No token configured for host: ${hostProfile.name}"
         }
 
-        val transport = transportFactory()
+        val hostMutex = synchronized(mutexesByHost) { mutexesByHost.getOrPut(hostId) { Mutex() } }
+        return hostMutex.withLock {
+            val transport =
+                synchronized(transportsByHost) {
+                    transportsByHost.getOrPut(hostId, transportFactory)
+                }
+            try {
+                if (transport.connectionState.value != ConnectionState.CONNECTED) {
+                    transport.connect(
+                        WebSocketTarget(
+                            url = hostProfile.endpoint,
+                            headers = mapOf(AUTHORIZATION_HEADER to "Bearer $token"),
+                            connectTimeoutMs = connectTimeoutMs,
+                        ),
+                    )
+                    withTimeout(connectTimeoutMs) {
+                        transport.connectionState.first { state -> state == ConnectionState.CONNECTED }
+                    }
+                }
 
-        return try {
-            transport.connect(
-                WebSocketTarget(
-                    url = hostProfile.endpoint,
-                    headers = mapOf(AUTHORIZATION_HEADER to "Bearer $token"),
-                    connectTimeoutMs = connectTimeoutMs,
-                ),
-            )
-
-            withTimeout(connectTimeoutMs) {
-                transport.connectionState.first { state -> state == ConnectionState.CONNECTED }
+                transport.send(createListSessionsEnvelope())
+                withTimeout(requestTimeoutMs) {
+                    awaitSessionGroups(transport)
+                }
+            } catch (error: Throwable) {
+                transport.disconnect()
+                synchronized(transportsByHost) {
+                    if (transportsByHost[hostId] === transport) transportsByHost.remove(hostId)
+                }
+                throw error
             }
-
-            transport.send(createListSessionsEnvelope())
-
-            withTimeout(requestTimeoutMs) {
-                awaitSessionGroups(transport)
-            }
-        } finally {
-            transport.disconnect()
         }
     }
 

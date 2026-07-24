@@ -7,20 +7,6 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 
-internal fun historyWindowSignature(messages: List<JsonObject>): String {
-    if (messages.isEmpty()) return "empty"
-
-    val marker =
-        messages
-            .joinToString(separator = "|") { message ->
-                val role = message.stringField("role").orEmpty()
-                val entryId = message.stringField("entryId").orEmpty()
-                "$role:$entryId:${message.toString().hashCode()}"
-            }
-
-    return "${messages.size}:$marker"
-}
-
 internal fun extractHistoryMessageWindow(data: JsonObject?): HistoryMessageWindow {
     val rawMessages = runCatching { data?.get("messages")?.jsonArray }.getOrNull() ?: JsonArray(emptyList())
     val startIndex = (rawMessages.size - HISTORY_WINDOW_MAX_ITEMS).coerceAtLeast(0)
@@ -59,11 +45,12 @@ internal fun parseHistoryItems(
             "user" -> {
                 val content = message["content"]
                 val text = extractUserText(content)
-                val imageCount = extractUserImageCount(content)
+                val images = extractUserImages(content)
                 ChatTimelineItem.User(
                     id = "history-user-$absoluteIndex",
                     text = text,
-                    imageCount = imageCount,
+                    imageCount = extractUserImageCount(content),
+                    images = images,
                 )
             }
 
@@ -115,6 +102,27 @@ internal fun extractUserText(content: JsonElement?): String {
                 }
             }.getOrDefault("")
         }
+    }
+}
+
+internal fun extractUserImages(content: JsonElement?): List<ChatImageSource.Embedded> {
+    val blocks =
+        when (content) {
+            is JsonObject -> listOf(content)
+            else ->
+                runCatching {
+                    content?.jsonArray?.mapNotNull { block ->
+                        runCatching { block.jsonObject }.getOrNull()
+                    }
+                }.getOrNull().orEmpty()
+        }
+
+    return blocks.mapNotNull { block ->
+        val type = block.stringField("type")?.lowercase().orEmpty()
+        if (!type.contains("image")) return@mapNotNull null
+        val data = block.stringField("data")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+        val mimeType = block.stringField("mimeType")?.takeIf { it.startsWith("image/") } ?: return@mapNotNull null
+        ChatImageSource.Embedded(base64Data = data, mimeType = mimeType)
     }
 }
 

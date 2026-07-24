@@ -147,18 +147,22 @@ App renders streaming text/tools
 
 ## Chat UX Highlights
 
-- **Thinking blocks**: streaming reasoning appears separately and can be collapsed/expanded.
-- **Tool cards**: tool args/output are grouped with icons and expandable output.
+- **Turn-centered conversation**: each prompt groups its assistant activity and final answer into one coherent turn.
+- **Quiet thinking disclosures**: reasoning stays collapsed and low-emphasis unless explicitly opened.
+- **Compact tool activity**: completed tools collapse into tool-specific summaries; arguments, output, and diffs remain available on demand.
 - **Edit diff viewer**: `edit` tool calls show before/after content.
 - **Command palette**: insert slash commands quickly from the prompt field menu, including bridge-backed mobile commands.
-- **Quick copy action**: copy the last assistant response from the chat header menu without typing `/copy`.
+- **Stable active-run composer**: type inline during a run and deliver the draft as a follow-up or steer without a separate dialog.
+- **Reading-position controls**: expanding details pauses live auto-scroll, loading older turns preserves position, and `N new` returns to live activity only when you choose.
+- **Image previews**: attached images render from local Android URIs or documented image data embedded in the remote Pi session, with a full-screen preview.
+- **Quick copy action**: copy an assistant answer inline or copy the latest response from session details.
 - **Bash dialog**: execute shell commands with timeout/truncation handling and history.
 - **Session status in chat**: shows the active session name and queued message count from pi state.
 - **Session names in session browser**: active named sessions are surfaced more clearly in the Sessions header, rename dialog, and cards.
-- **Session stats sheet**: token/cost/message/context counters, queued-message summary, and session path.
+- **Session details and handoff sheet**: stats, paths, secondary actions, safe handoff summary, latest-response copy, and export.
 - **Model picker**: provider-aware searchable model selection.
 - **Tree navigator**: inspect branch points, filter views, jump in-place, or fork from chosen entries.
-- **Session coherency guard**: warns on cross-device edits and offers **Sync now**.
+- **Session coherency guard**: routine freshness refreshes stay quiet; explicit other-client conflicts and reload failures remain actionable.
 - **Settings controls**: auto-compaction, auto-retry, steer/follow-up delivery modes, theme, and status-strip visibility.
 
 ## Troubleshooting
@@ -204,7 +208,7 @@ benchmark/        - Macrobenchmark / baseline profile scaffolding
 
 ### Running Tests
 
-Use JDK 21, Android SDK 36, Node 22+, and pnpm 10 for this repo. See [the dependency matrix](docs/dependency-matrix.md).
+Use JDK 25 for builds, a JDK 21 toolchain for stable detekt, Android SDK platform 37.0/build-tools 37.0.0, Node 24 LTS+, and pnpm 10. See [the dependency matrix](docs/dependency-matrix.md).
 
 ```bash
 # Android tests
@@ -217,7 +221,8 @@ cd bridge && pnpm test
 cd bridge && pnpm run check
 
 # Complete non-device Android gate
-./gradlew clean ktlintCheck detekt test :app:lintDebug :app:assembleDebug :app:assembleRelease
+./gradlew clean ktlintCheck detekt test :benchmark:compileBenchmarkKotlin :app:lintDebug :app:assembleDebug :app:assembleRelease
+./gradlew :app:compileDebugAndroidTestKotlin
 ```
 
 ### Logs to Watch
@@ -258,7 +263,7 @@ BRIDGE_PI_COMMAND=pi                 # Pi executable path/name; probed with --ve
 
 ### App Build Variants
 
-Debug builds include logging and assertions. Release builds (if you make them) strip these for smaller size.
+Debug builds include development logging and assertions. The repository-safe release build is unsigned/default and currently keeps minification disabled; see [`docs/release.md`](docs/release.md) before distribution.
 
 ## Security Notes
 
@@ -274,22 +279,20 @@ Debug builds include logging and assertions. Release builds (if you make them) s
 ## Limitations
 
 - No offline mode - requires live connection to laptop
-- Session history is fetched via `get_messages` and rendered in a capped window (no true server-side pagination yet)
-- Tree navigation is MVP-level (functional, minimal rendering)
+- Active history prefers the cursor-based `get_entries` projection and falls back to documented `get_messages` when needed; the UI renders capped windows, not true server-side pages
+- Tree display is cached and generation-gated, but navigation still depends on the internal `pi-mobile-tree` extension because Pi 0.80.6 has no navigation RPC command
 - Mobile keyboard shortcuts vary by device/IME
 
 ## Testing
 
 See [docs/testing.md](docs/testing.md) for emulator setup and testing procedures.
 
-Quick start:
+Non-device quick check:
 ```bash
-# Start emulator, build, install
-./gradlew :app:installDebug
-
-# Watch logs
-adb logcat | grep -E "PiMobile|PerfMetrics"
+./gradlew test :app:lintDebug :app:assembleDebug
 ```
+
+Emulator/device, installation, ADB, benchmark, and manual acceptance commands are operator-owned and require the explicit phrase `debug mode`.
 
 ## License
 

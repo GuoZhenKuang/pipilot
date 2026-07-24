@@ -9,8 +9,10 @@ import com.ayagmar.pimobile.corerpc.RpcResponse
 import com.ayagmar.pimobile.corerpc.SessionStats
 import com.ayagmar.pimobile.coresessions.SessionRecord
 import com.ayagmar.pimobile.hosts.HostProfile
+import com.ayagmar.pimobile.sessions.ActiveSessionState
 import com.ayagmar.pimobile.sessions.ForkableMessage
 import com.ayagmar.pimobile.sessions.ModelInfo
+import com.ayagmar.pimobile.sessions.SessionBootstrapSnapshot
 import com.ayagmar.pimobile.sessions.SessionController
 import com.ayagmar.pimobile.sessions.SessionFreshnessSnapshot
 import com.ayagmar.pimobile.sessions.SessionSyncMetrics
@@ -31,6 +33,7 @@ class FakeSessionController : SessionController {
     private val streamingState = MutableStateFlow(false)
     private val connectionStateFlow = MutableStateFlow(ConnectionState.DISCONNECTED)
     private val _sessionChanged = MutableSharedFlow<String?>(extraBufferCapacity = 16)
+    private val _activeSession = MutableStateFlow<ActiveSessionState?>(null)
     private val _timelineInvalidated = MutableSharedFlow<Unit>(extraBufferCapacity = 16)
     private val _syncMetrics = MutableStateFlow(SessionSyncMetrics())
 
@@ -39,6 +42,7 @@ class FakeSessionController : SessionController {
     var getLastAssistantTextCallCount: Int = 0
     var importSessionJsonlCallCount: Int = 0
     var sendPromptCallCount: Int = 0
+    var bootstrapCallCount: Int = 0
     var getMessagesCallCount: Int = 0
     var getStateCallCount: Int = 0
     var reloadActiveSessionCallCount: Int = 0
@@ -57,7 +61,10 @@ class FakeSessionController : SessionController {
     var lastImportedSessionFileName: String? = null
     var lastImportedSessionJsonlContent: String? = null
     var sendPromptResult: Result<Unit> = Result.success(Unit)
+    var steerResult: Result<Unit> = Result.success(Unit)
+    var followUpResult: Result<Unit> = Result.success(Unit)
     var sendPromptDelayMs: Long = 0L
+    var bootstrapMessagesDelayMs: Long = 0L
     var abortResult: Result<Unit> = Result.success(Unit)
     var abortRetryResult: Result<Unit> = Result.success(Unit)
     var abortCallCount: Int = 0
@@ -65,6 +72,10 @@ class FakeSessionController : SessionController {
     var messagesPayload: JsonObject? = null
     var sessionFreshnessResult: Result<SessionFreshnessSnapshot> =
         Result.failure(IllegalStateException("Not used"))
+    var cachedSessionTree: SessionTreeSnapshot? = null
+    var sessionTreeResult: Result<SessionTreeSnapshot> = Result.failure(IllegalStateException("Not used"))
+    var getSessionTreeCallCount: Int = 0
+    var sessionTreeDelayMs: Long = 0L
     var treeNavigationResult: Result<TreeNavigationResult> =
         Result.success(
             TreeNavigationResult(
@@ -98,6 +109,7 @@ class FakeSessionController : SessionController {
     override val connectionState: StateFlow<ConnectionState> = connectionStateFlow
     override val isStreaming: StateFlow<Boolean> = streamingState
     override val sessionChanged: SharedFlow<String?> = _sessionChanged
+    override val activeSession: StateFlow<ActiveSessionState?> = _activeSession
     override val timelineInvalidated: SharedFlow<Unit> = _timelineInvalidated
     override val syncMetrics: StateFlow<SessionSyncMetrics> = _syncMetrics
 
@@ -106,7 +118,16 @@ class FakeSessionController : SessionController {
     }
 
     suspend fun emitSessionChanged(sessionPath: String? = null) {
+        _activeSession.value = ActiveSessionState(sessionPath, (_activeSession.value?.generation ?: 0L) + 1L)
         _sessionChanged.emit(sessionPath)
+    }
+
+    fun beginSessionSwitch(sessionPath: String?) {
+        _activeSession.value = ActiveSessionState(sessionPath, (_activeSession.value?.generation ?: 0L) + 1L, true)
+    }
+
+    fun finishSessionSwitch(sessionPath: String?) {
+        _activeSession.value = _activeSession.value?.copy(sessionPath = sessionPath, isSwitching = false)
     }
 
     fun setStreaming(isStreaming: Boolean) {
@@ -115,6 +136,10 @@ class FakeSessionController : SessionController {
 
     fun setConnectionState(state: ConnectionState) {
         connectionStateFlow.value = state
+    }
+
+    fun invalidateTimeline() {
+        _timelineInvalidated.tryEmit(Unit)
     }
 
     override fun setTransportPreference(preference: TransportPreference) {
@@ -129,6 +154,8 @@ class FakeSessionController : SessionController {
 
     override fun getEffectiveTransportPreference(): TransportPreference = TransportPreference.WEBSOCKET
 
+    override fun getActiveCwd(): String? = null
+
     override suspend fun ensureConnected(
         hostProfile: HostProfile,
         token: String,
@@ -142,6 +169,21 @@ class FakeSessionController : SessionController {
         token: String,
         session: SessionRecord,
     ): Result<String?> = Result.success(null)
+
+    override suspend fun bootstrap(onStateAvailable: (RpcResponse) -> Unit): Result<SessionBootstrapSnapshot> {
+        bootstrapCallCount += 1
+        val stateResponse = getStateResult.getOrElse { return Result.failure(it) }
+        onStateAvailable(stateResponse)
+        if (bootstrapMessagesDelayMs > 0) delay(bootstrapMessagesDelayMs)
+        val messagesResponse =
+            RpcResponse(
+                type = "response",
+                command = "get_messages",
+                success = true,
+                data = messagesPayload,
+            )
+        return Result.success(SessionBootstrapSnapshot(stateResponse, messagesResponse))
+    }
 
     override suspend fun getMessages(): Result<RpcResponse> {
         getMessagesCallCount += 1
@@ -182,9 +224,9 @@ class FakeSessionController : SessionController {
         return abortResult
     }
 
-    override suspend fun steer(message: String): Result<Unit> = Result.success(Unit)
+    override suspend fun steer(message: String): Result<Unit> = steerResult
 
-    override suspend fun followUp(message: String): Result<Unit> = Result.success(Unit)
+    override suspend fun followUp(message: String): Result<Unit> = followUpResult
 
     override suspend fun renameSession(name: String): Result<String?> {
         renameSessionCallCount += 1
@@ -206,10 +248,19 @@ class FakeSessionController : SessionController {
 
     override suspend fun getForkMessages(): Result<List<ForkableMessage>> = Result.success(emptyList())
 
+    override fun getCachedSessionTree(
+        sessionPath: String,
+        filter: String?,
+    ): SessionTreeSnapshot? = cachedSessionTree?.takeIf { it.sessionPath == sessionPath }
+
     override suspend fun getSessionTree(
         sessionPath: String?,
         filter: String?,
-    ): Result<SessionTreeSnapshot> = Result.failure(IllegalStateException("Not used"))
+    ): Result<SessionTreeSnapshot> {
+        getSessionTreeCallCount += 1
+        if (sessionTreeDelayMs > 0) delay(sessionTreeDelayMs)
+        return sessionTreeResult
+    }
 
     override suspend fun getSessionFreshness(sessionPath: String): Result<SessionFreshnessSnapshot> {
         getSessionFreshnessCallCount += 1

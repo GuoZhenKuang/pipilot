@@ -8,6 +8,7 @@ import com.ayagmar.pimobile.corerpc.AgentSettledEvent
 import com.ayagmar.pimobile.corerpc.AssistantMessageEvent
 import com.ayagmar.pimobile.corerpc.MessageEndEvent
 import com.ayagmar.pimobile.corerpc.MessageUpdateEvent
+import com.ayagmar.pimobile.sessions.SessionTreeSnapshot
 import com.ayagmar.pimobile.sessions.SlashCommandInfo
 import com.ayagmar.pimobile.sessions.TreeNavigationResult
 import com.ayagmar.pimobile.testutil.FakeSessionController
@@ -253,6 +254,38 @@ class ChatViewModelThinkingExpansionTest {
 
             val item = viewModel.singleAssistantItem()
             assertEquals("Streaming integrity", item.text)
+        }
+
+    @Test
+    fun sessionSwitchClearsRetainedTimelineBeforeResponse() =
+        runTest(dispatcher) {
+            val controller = FakeSessionController()
+            val viewModel = createViewModel(controller)
+            dispatcher.scheduler.advanceUntilIdle()
+            awaitInitialLoad(viewModel)
+
+            controller.emitEvent(
+                textUpdate(
+                    assistantType = "text_start",
+                    messageTimestamp = "old-session",
+                ),
+            )
+            controller.emitEvent(
+                textUpdate(
+                    assistantType = "text_delta",
+                    delta = "Old transcript",
+                    messageTimestamp = "old-session",
+                ),
+            )
+            dispatcher.scheduler.advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.timeline.isNotEmpty())
+
+            controller.beginSessionSwitch("/tmp/new-session.jsonl")
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.isLoading)
+            assertTrue(viewModel.uiState.value.timeline.isEmpty())
+            assertEquals("/tmp/new-session.jsonl", viewModel.uiState.value.sessionPath)
         }
 
     @Test
@@ -570,6 +603,40 @@ class ChatViewModelThinkingExpansionTest {
         }
 
     @Test
+    fun activeRunDraftClearsOnlyAfterSuccessfulDispatch() =
+        runTest(dispatcher) {
+            val controller = FakeSessionController()
+            val viewModel = createViewModel(controller)
+            dispatcher.scheduler.advanceUntilIdle()
+            awaitInitialLoad(viewModel)
+
+            viewModel.onInputTextChanged("Keep concise")
+            viewModel.steer("Keep concise")
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals("", viewModel.uiState.value.inputText)
+        }
+
+    @Test
+    fun failedActiveRunDispatchPreservesDraft() =
+        runTest(dispatcher) {
+            val controller =
+                FakeSessionController().apply {
+                    followUpResult = Result.failure(IllegalStateException("dispatch failed"))
+                }
+            val viewModel = createViewModel(controller)
+            dispatcher.scheduler.advanceUntilIdle()
+            awaitInitialLoad(viewModel)
+
+            viewModel.onInputTextChanged("Run tests")
+            viewModel.followUp("Run tests")
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals("Run tests", viewModel.uiState.value.inputText)
+            assertEquals("dispatch failed", viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
     fun pendingQueueCanBeRemovedClearedAndResetsWhenStreamingStops() =
         runTest(dispatcher) {
             val controller = FakeSessionController()
@@ -739,7 +806,25 @@ class ChatViewModelThinkingExpansionTest {
         }
 
     @Test
-    fun syncNowFlagsPotentialCrossDeviceEditsWhenHistoryChanges() =
+    fun timelineInvalidationRefreshesWithoutFalseCrossDeviceWarning() =
+        runTest(dispatcher) {
+            val controller = FakeSessionController()
+            controller.messagesPayload = historyWithMessageTexts(listOf("baseline"))
+            val viewModel = createViewModel(controller)
+            dispatcher.scheduler.advanceUntilIdle()
+            awaitInitialLoad(viewModel)
+
+            controller.messagesPayload = historyWithMessageTexts(listOf("baseline", "local-update"))
+            controller.invalidateTimeline()
+            dispatcher.scheduler.advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(null, state.sessionCoherencyWarning)
+            assertFalse(state.notifications.any { it.message.contains("edited elsewhere", ignoreCase = true) })
+        }
+
+    @Test
+    fun syncNowSilentlyRefreshesHistoryChangesWithoutExplicitConflict() =
         runTest(dispatcher) {
             val controller = FakeSessionController()
             controller.messagesPayload = historyWithMessageTexts(listOf("baseline"))
@@ -754,10 +839,8 @@ class ChatViewModelThinkingExpansionTest {
             waitForState(viewModel) { state -> !state.isSyncingSession }
             val state = viewModel.uiState.value
             assertEquals(1, controller.reloadActiveSessionCallCount)
-            assertEquals(
-                "Potential cross-device session edits detected. Use Sync now before continuing.",
-                state.sessionCoherencyWarning,
-            )
+            assertEquals(null, state.sessionCoherencyWarning)
+            assertFalse(state.notifications.any { it.message.contains("Session sync complete") })
         }
 
     @Test
@@ -772,7 +855,7 @@ class ChatViewModelThinkingExpansionTest {
             controller.messagesPayload = historyWithMessageTexts(listOf("unchanged", "changed"))
             viewModel.syncNow()
             dispatcher.scheduler.advanceUntilIdle()
-            waitForState(viewModel) { state -> !state.isSyncingSession && state.sessionCoherencyWarning != null }
+            waitForState(viewModel) { state -> !state.isSyncingSession }
 
             controller.messagesPayload = historyWithMessageTexts(listOf("unchanged", "changed"))
             viewModel.syncNow()
@@ -808,6 +891,37 @@ class ChatViewModelThinkingExpansionTest {
                 "Potential cross-device session edits detected. Use Sync now before continuing.",
                 viewModel.uiState.value.sessionCoherencyWarning,
             )
+        }
+
+    @Test
+    fun cachedTreeRendersStaleUntilAuthoritativeReplacementArrives() =
+        runTest(dispatcher) {
+            val sessionPath = "/tmp/tree-session.jsonl"
+            val cached = SessionTreeSnapshot(sessionPath, emptyList(), "old-leaf", emptyList())
+            val authoritative = SessionTreeSnapshot(sessionPath, emptyList(), "new-leaf", emptyList())
+            val controller =
+                FakeSessionController().apply {
+                    beginSessionSwitch(sessionPath)
+                    finishSessionSwitch(sessionPath)
+                    cachedSessionTree = cached
+                    sessionTreeResult = Result.success(authoritative)
+                    sessionTreeDelayMs = 100
+                }
+            val viewModel = createViewModel(controller)
+            dispatcher.scheduler.advanceUntilIdle()
+            awaitInitialLoad(viewModel)
+
+            viewModel.showTreeSheet()
+            dispatcher.scheduler.runCurrent()
+            assertEquals("old-leaf", viewModel.uiState.value.sessionTree?.currentLeafId)
+            assertTrue(viewModel.uiState.value.sessionTree?.isStale == true)
+            assertTrue(viewModel.uiState.value.isLoadingTree)
+
+            dispatcher.scheduler.advanceTimeBy(100)
+            dispatcher.scheduler.runCurrent()
+            assertEquals("new-leaf", viewModel.uiState.value.sessionTree?.currentLeafId)
+            assertFalse(viewModel.uiState.value.sessionTree?.isStale == true)
+            assertFalse(viewModel.uiState.value.isLoadingTree)
         }
 
     @Test
@@ -920,6 +1034,8 @@ class ChatViewModelThinkingExpansionTest {
 
             viewModel.onInputTextChanged("original draft")
             viewModel.sendPrompt()
+            dispatcher.scheduler.runCurrent()
+            assertTrue(viewModel.uiState.value.isDispatchingMessage)
 
             viewModel.onInputTextChanged("new draft")
 
@@ -929,6 +1045,7 @@ class ChatViewModelThinkingExpansionTest {
 
             assertEquals("new draft", viewModel.uiState.value.inputText)
             assertEquals("rpc failed", viewModel.uiState.value.errorMessage)
+            assertFalse(viewModel.uiState.value.isDispatchingMessage)
         }
 
     @Test
@@ -1017,7 +1134,7 @@ class ChatViewModelThinkingExpansionTest {
 
             val userItem = viewModel.userItems().single { it.id == "user-server-image" }
             assertEquals(1, userItem.imageCount)
-            assertEquals(listOf(imageUri), userItem.imageUris)
+            assertEquals(listOf(ChatImageSource.LocalUri(imageUri)), userItem.images)
         }
 
     private fun ChatViewModel.userItems(): List<ChatTimelineItem.User> =

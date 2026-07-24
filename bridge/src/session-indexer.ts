@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import type { Dirent } from "node:fs";
+import { createReadStream, type Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { StringDecoder } from "node:string_decoder";
 
 import type { Logger } from "pino";
 
@@ -55,10 +56,20 @@ export interface SessionFreshnessSnapshot {
     fingerprint: SessionFreshnessFingerprint;
 }
 
+export interface SessionIndexerMetrics {
+    parseCacheHits: number;
+    parseCacheMisses: number;
+    inflightParseHits: number;
+    fullFileReads: number;
+    treeCacheHits: number;
+    treeCacheMisses: number;
+}
+
 export interface SessionIndexer {
     listSessions(): Promise<SessionIndexGroup[]>;
     getSessionTree(sessionPath: string, filter?: SessionTreeFilter): Promise<SessionTreeSnapshot>;
     getSessionFreshness(sessionPath: string): Promise<SessionFreshnessSnapshot>;
+    getMetrics?(): SessionIndexerMetrics;
 }
 
 export interface SessionIndexerOptions {
@@ -76,12 +87,46 @@ interface CachedSessionFreshness {
     mtimeMs: number;
     size: number;
     freshness: SessionFreshnessSnapshot;
+    tailLines: string[];
+    endedWithNewline: boolean;
 }
+
+interface ParsedSessionFile {
+    mtimeMs: number;
+    size: number;
+    lines: string[];
+    entries: Record<string, unknown>[];
+    endedWithNewline: boolean;
+}
+
+interface ParsedFreshness {
+    snapshot: SessionFreshnessSnapshot;
+    tailLines: string[];
+    endedWithNewline: boolean;
+}
+
+const MAX_PARSED_SESSION_CACHE_FILES = 16;
+const MAX_PARSED_SESSION_CACHE_BYTES = 32 * 1024 * 1024;
+const MAX_TREE_CACHE_ENTRIES = 32;
+const MAX_INCREMENTAL_FRESHNESS_BYTES = 256 * 1024;
 
 export function createSessionIndexer(options: SessionIndexerOptions): SessionIndexer {
     const sessionsRoot = path.resolve(options.sessionsDirectory);
     const sessionMetadataCache = new Map<string, CachedSessionMetadata>();
     const sessionFreshnessCache = new Map<string, CachedSessionFreshness>();
+    // One parsed snapshot is shared by metadata/freshness/tree consumers. The key
+    // is the canonical path plus the stat revision; mutation naturally invalidates it.
+    const parsedSessionCache = new Map<string, ParsedSessionFile>();
+    const parsedSessionInflight = new Map<string, Promise<ParsedSessionFile>>();
+    const treeCache = new Map<string, SessionTreeSnapshot>();
+    const metrics: SessionIndexerMetrics = {
+        parseCacheHits: 0,
+        parseCacheMisses: 0,
+        inflightParseHits: 0,
+        fullFileReads: 0,
+        treeCacheHits: 0,
+        treeCacheMisses: 0,
+    };
 
     return {
         async listSessions(): Promise<SessionIndexGroup[]> {
@@ -100,10 +145,20 @@ export function createSessionIndexer(options: SessionIndexerOptions): SessionInd
                 }
             }
 
-            for (const sessionFile of sessionFiles) {
-                const entry = await parseSessionFileWithCache(sessionFile, options.logger, sessionMetadataCache);
-                if (!entry) continue;
-                sessions.push(entry);
+            const parsedEntries = await mapWithConcurrency(
+                sessionFiles,
+                4,
+                (sessionFile) =>
+                    parseSessionFileWithCache(
+                        sessionFile,
+                        options.logger,
+                        sessionMetadataCache,
+                        parsedSessionCache,
+                        metrics,
+                    ),
+            );
+            for (const entry of parsedEntries) {
+                if (entry) sessions.push(entry);
             }
 
             const groups = new Map<string, SessionIndexEntry[]>();
@@ -126,14 +181,51 @@ export function createSessionIndexer(options: SessionIndexerOptions): SessionInd
 
         async getSessionTree(sessionPath: string, filter?: SessionTreeFilter): Promise<SessionTreeSnapshot> {
             const resolvedSessionPath = await resolveSessionPath(sessionPath, sessionsRoot);
-            return parseSessionTreeFile(resolvedSessionPath, options.logger, filter);
+            return parseSessionTreeFile(
+                resolvedSessionPath,
+                options.logger,
+                filter,
+                parsedSessionCache,
+                treeCache,
+                parsedSessionInflight,
+                metrics,
+            );
         },
 
         async getSessionFreshness(sessionPath: string): Promise<SessionFreshnessSnapshot> {
             const resolvedSessionPath = await resolveSessionPath(sessionPath, sessionsRoot);
-            return parseSessionFreshnessWithCache(resolvedSessionPath, options.logger, sessionFreshnessCache);
+            return parseSessionFreshnessWithCache(
+                resolvedSessionPath,
+                options.logger,
+                sessionFreshnessCache,
+                parsedSessionCache,
+                parsedSessionInflight,
+                metrics,
+            );
+        },
+
+        getMetrics(): SessionIndexerMetrics {
+            return { ...metrics };
         },
     };
+}
+
+async function mapWithConcurrency<T, R>(
+    values: T[],
+    concurrency: number,
+    mapper: (value: T) => Promise<R>,
+): Promise<R[]> {
+    const results = new Array<R>(values.length);
+    let nextIndex = 0;
+    const worker = async (): Promise<void> => {
+        while (true) {
+            const index = nextIndex++;
+            if (index >= values.length) return;
+            results[index] = await mapper(values[index]);
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, worker));
+    return results;
 }
 
 async function resolveSessionPath(sessionPath: string, sessionsRoot: string): Promise<string> {
@@ -176,7 +268,7 @@ async function findSessionFiles(rootDir: string, logger: Logger): Promise<string
         directoryEntries = await fs.readdir(rootDir, { withFileTypes: true });
     } catch (error: unknown) {
         if (isErrorWithCode(error, "ENOENT")) {
-            logger.warn({ rootDir }, "Session directory does not exist");
+            logger.warn("Session directory does not exist");
             return [];
         }
 
@@ -206,14 +298,16 @@ async function parseSessionFileWithCache(
     sessionPath: string,
     logger: Logger,
     cache: Map<string, CachedSessionMetadata>,
+    parsedCache: Map<string, ParsedSessionFile>,
+    metrics: SessionIndexerMetrics,
 ): Promise<SessionIndexEntry | undefined> {
     let fileStats: Awaited<ReturnType<typeof fs.stat>>;
 
     try {
         fileStats = await fs.stat(sessionPath);
-    } catch (error: unknown) {
+    } catch {
         cache.delete(sessionPath);
-        logger.warn({ sessionPath, error }, "Failed to stat session file");
+        logger.warn("Failed to stat session file");
         return undefined;
     }
 
@@ -222,7 +316,7 @@ async function parseSessionFileWithCache(
         return cached.entry;
     }
 
-    const entry = await parseSessionFile(sessionPath, fileStats, logger);
+    const entry = await parseSessionFile(sessionPath, fileStats, logger, parsedCache, metrics);
     cache.set(sessionPath, {
         mtimeMs: fileStats.mtimeMs,
         size: fileStats.size,
@@ -236,6 +330,9 @@ async function parseSessionFreshnessWithCache(
     sessionPath: string,
     logger: Logger,
     cache: Map<string, CachedSessionFreshness>,
+    parsedCache: Map<string, ParsedSessionFile>,
+    parsedInflight: Map<string, Promise<ParsedSessionFile>>,
+    metrics: SessionIndexerMetrics,
 ): Promise<SessionFreshnessSnapshot> {
     let fileStats: Awaited<ReturnType<typeof fs.stat>>;
 
@@ -243,8 +340,8 @@ async function parseSessionFreshnessWithCache(
         fileStats = await fs.stat(sessionPath);
     } catch (error: unknown) {
         cache.delete(sessionPath);
-        logger.warn({ sessionPath, error }, "Failed to stat session file for freshness");
-        throw new Error(`Failed to read session freshness for ${sessionPath}`);
+        logger.warn("Failed to stat session file for freshness");
+        throw new Error("Failed to read session freshness", { cause: error });
     }
 
     const cached = cache.get(sessionPath);
@@ -252,60 +349,125 @@ async function parseSessionFreshnessWithCache(
         return cached.freshness;
     }
 
-    const freshness = await parseSessionFreshness(sessionPath, fileStats, logger);
+    if (cached) {
+        const incremental = await tryIncrementalFreshness(sessionPath, fileStats, cached);
+        if (incremental) {
+            cache.set(sessionPath, incremental);
+            return incremental.freshness;
+        }
+    }
+
+    const parsedFreshness = await parseSessionFreshness(
+        sessionPath,
+        fileStats,
+        logger,
+        parsedCache,
+        parsedInflight,
+        metrics,
+    );
     cache.set(sessionPath, {
         mtimeMs: fileStats.mtimeMs,
         size: fileStats.size,
-        freshness,
+        freshness: parsedFreshness.snapshot,
+        tailLines: parsedFreshness.tailLines,
+        endedWithNewline: parsedFreshness.endedWithNewline,
     });
 
-    return freshness;
+    return parsedFreshness.snapshot;
+}
+
+async function tryIncrementalFreshness(
+    sessionPath: string,
+    fileStats: Awaited<ReturnType<typeof fs.stat>>,
+    cached: CachedSessionFreshness,
+): Promise<CachedSessionFreshness | undefined> {
+    const nextSize = Number(fileStats.size);
+    const appendedBytes = nextSize - cached.size;
+    if (
+        !cached.endedWithNewline ||
+        appendedBytes <= 0 ||
+        appendedBytes > MAX_INCREMENTAL_FRESHNESS_BYTES
+    ) {
+        return undefined;
+    }
+
+    const handle = await fs.open(sessionPath, "r");
+    try {
+        const buffer = Buffer.alloc(appendedBytes);
+        const { bytesRead } = await handle.read(buffer, 0, appendedBytes, cached.size);
+        if (bytesRead !== appendedBytes) return undefined;
+        const appendedText = buffer.toString("utf8");
+        const appendedLines = appendedText.split("\n")
+            .map((line) => line.replace(/\r$/, "").trim())
+            .filter((line) => line.length > 0);
+        const appendedEntries = appendedLines.map(tryParseJson);
+        if (appendedEntries.some((entry) => !entry)) return undefined;
+        const validEntries = appendedEntries.filter((entry): entry is Record<string, unknown> => !!entry);
+        const tailLines = [...cached.tailLines, ...appendedLines].slice(-FRESHNESS_HASH_LINE_WINDOW);
+
+        return {
+            mtimeMs: Number(fileStats.mtimeMs),
+            size: nextSize,
+            freshness: {
+                sessionPath,
+                cwd: cached.freshness.cwd,
+                fingerprint: {
+                    mtimeMs: Number(fileStats.mtimeMs),
+                    sizeBytes: nextSize,
+                    entryCount: cached.freshness.fingerprint.entryCount + validEntries.length,
+                    lastEntryId: findLastEntryId(validEntries) ?? cached.freshness.fingerprint.lastEntryId,
+                    lastEntriesHash: computeLastEntriesHash(tailLines),
+                },
+            },
+            tailLines,
+            endedWithNewline: appendedText.endsWith("\n"),
+        };
+    } finally {
+        await handle.close();
+    }
 }
 
 async function parseSessionFreshness(
     sessionPath: string,
     fileStats: Awaited<ReturnType<typeof fs.stat>>,
     logger: Logger,
-): Promise<SessionFreshnessSnapshot> {
-    let fileContent: string;
-
-    try {
-        fileContent = await fs.readFile(sessionPath, "utf-8");
-    } catch (error: unknown) {
-        logger.warn({ sessionPath, error }, "Failed to read session file for freshness");
-        throw new Error(`Failed to read session file: ${sessionPath}`);
-    }
-
-    const lines = fileContent
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
-
-    if (lines.length === 0) {
-        throw new Error("Session file is empty");
-    }
-
+    parsedCache: Map<string, ParsedSessionFile>,
+    parsedInflight: Map<string, Promise<ParsedSessionFile>>,
+    metrics: SessionIndexerMetrics,
+): Promise<ParsedFreshness> {
+    const parsed = await getParsedSession(
+        sessionPath,
+        fileStats,
+        logger,
+        parsedCache,
+        parsedInflight,
+        metrics,
+    );
+    const { lines, entries: parsedEntries } = parsed;
     const header = tryParseJson(lines[0]);
     if (!header || header.type !== "session" || typeof header.cwd !== "string") {
-        logger.warn({ sessionPath }, "Invalid session header while computing freshness");
+        logger.warn("Invalid session header while computing freshness");
         throw new Error("Invalid session header");
     }
 
     const entryLines = lines.slice(1);
-    const parsedEntries = entryLines.map(tryParseJson).filter((entry): entry is Record<string, unknown> => !!entry);
     const lastEntryId = findLastEntryId(parsedEntries);
     const lastEntriesHash = computeLastEntriesHash(entryLines);
 
     return {
-        sessionPath,
-        cwd: header.cwd,
-        fingerprint: {
-            mtimeMs: Number(fileStats.mtimeMs),
-            sizeBytes: Number(fileStats.size),
-            entryCount: parsedEntries.length,
-            lastEntryId,
-            lastEntriesHash,
+        snapshot: {
+            sessionPath,
+            cwd: header.cwd,
+            fingerprint: {
+                mtimeMs: Number(fileStats.mtimeMs),
+                sizeBytes: Number(fileStats.size),
+                entryCount: parsedEntries.length,
+                lastEntryId,
+                lastEntriesHash,
+            },
         },
+        tailLines: entryLines.slice(-FRESHNESS_HASH_LINE_WINDOW),
+        endedWithNewline: parsed.endedWithNewline,
     };
 }
 
@@ -313,28 +475,17 @@ async function parseSessionFile(
     sessionPath: string,
     fileStats: Awaited<ReturnType<typeof fs.stat>>,
     logger: Logger,
+    parsedCache: Map<string, ParsedSessionFile>,
+    metrics: SessionIndexerMetrics,
 ): Promise<SessionIndexEntry | undefined> {
-    let fileContent: string;
+    const parsed = await getParsedSession(sessionPath, fileStats, logger, parsedCache, undefined, metrics)
+        .catch(() => undefined);
+    if (!parsed || parsed.lines.length === 0) return undefined;
 
-    try {
-        fileContent = await fs.readFile(sessionPath, "utf-8");
-    } catch (error: unknown) {
-        logger.warn({ sessionPath, error }, "Failed to read session file");
-        return undefined;
-    }
-
-    const lines = fileContent
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
-
-    if (lines.length === 0) {
-        return undefined;
-    }
-
+    const { lines } = parsed;
     const header = tryParseJson(lines[0]);
     if (!header || header.type !== "session" || typeof header.cwd !== "string") {
-        logger.warn({ sessionPath }, "Skipping invalid session header");
+        logger.warn("Skipping invalid session header");
         return undefined;
     }
 
@@ -345,9 +496,7 @@ async function parseSessionFile(
     let messageCount = 0;
     let lastModel: string | undefined;
 
-    for (const line of lines.slice(1)) {
-        const entry = tryParseJson(line);
-        if (!entry) continue;
+    for (const entry of parsed.entries) {
 
         const activityEpoch = getSessionActivityEpoch(entry);
         if (activityEpoch !== undefined && activityEpoch > updatedAtEpoch) {
@@ -391,31 +540,36 @@ async function parseSessionTreeFile(
     sessionPath: string,
     logger: Logger,
     filter: SessionTreeFilter = "default",
+    parsedCache: Map<string, ParsedSessionFile>,
+    treeCache: Map<string, SessionTreeSnapshot>,
+    parsedInflight: Map<string, Promise<ParsedSessionFile>>,
+    metrics: SessionIndexerMetrics,
 ): Promise<SessionTreeSnapshot> {
-    let fileContent: string;
-
-    try {
-        fileContent = await fs.readFile(sessionPath, "utf-8");
-    } catch (error: unknown) {
-        logger.warn({ sessionPath, error }, "Failed to read session tree file");
-        throw new Error(`Failed to read session file: ${sessionPath}`);
+    const fileStats = await fs.stat(sessionPath);
+    const cacheKey = `${sessionPath}:${fileStats.mtimeMs}:${fileStats.size}:${filter}`;
+    const cachedTree = treeCache.get(cacheKey);
+    if (cachedTree) {
+        metrics.treeCacheHits += 1;
+        treeCache.delete(cacheKey);
+        treeCache.set(cacheKey, cachedTree);
+        return cachedTree;
     }
-
-    const lines = fileContent
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
-
-    if (lines.length === 0) {
-        throw new Error("Session file is empty");
-    }
+    metrics.treeCacheMisses += 1;
+    const parsed = await getParsedSession(
+        sessionPath,
+        fileStats,
+        logger,
+        parsedCache,
+        parsedInflight,
+        metrics,
+    );
+    const { lines, entries: parsedEntries } = parsed;
+    if (lines.length === 0) throw new Error("Session file is empty");
 
     const header = tryParseJson(lines[0]);
     if (!header || header.type !== "session") {
         throw new Error("Invalid session header");
     }
-
-    const parsedEntries = lines.slice(1).map(tryParseJson).filter((entry): entry is Record<string, unknown> => !!entry);
     const rawEntries = normalizeTreeEntries(parsedEntries);
     const labelsByTargetId = collectLabelsByTargetId(rawEntries);
 
@@ -452,12 +606,115 @@ async function parseSessionTreeFile(
         .filter((entry) => entry.parentId === null || !filteredEntryIds.has(entry.parentId))
         .map((entry) => entry.entryId);
 
-    return {
+    const snapshot = {
         sessionPath,
         rootIds,
         currentLeafId: resolveVisibleLeafId(currentLeafIdRaw, filteredEntryIds, parentIdsByEntryId),
         entries: filteredEntries,
     };
+    treeCache.set(cacheKey, snapshot);
+    while (treeCache.size > MAX_TREE_CACHE_ENTRIES) {
+        const oldest = treeCache.keys().next().value;
+        if (!oldest) break;
+        treeCache.delete(oldest);
+    }
+    return snapshot;
+}
+
+async function getParsedSession(
+    sessionPath: string,
+    fileStats: Awaited<ReturnType<typeof fs.stat>>,
+    logger: Logger,
+    cache: Map<string, ParsedSessionFile>,
+    inflight: Map<string, Promise<ParsedSessionFile>> = new Map(),
+    metrics?: SessionIndexerMetrics,
+): Promise<ParsedSessionFile> {
+    const revisionKey = `${sessionPath}:${fileStats.mtimeMs}:${fileStats.size}`;
+    const pending = inflight.get(revisionKey);
+    if (pending) {
+        if (metrics) metrics.inflightParseHits += 1;
+        return pending;
+    }
+
+    const read = readParsedSession(sessionPath, fileStats, logger, cache, metrics);
+    inflight.set(revisionKey, read);
+    try {
+        return await read;
+    } finally {
+        inflight.delete(revisionKey);
+    }
+}
+
+async function readParsedSession(
+    sessionPath: string,
+    fileStats: Awaited<ReturnType<typeof fs.stat>>,
+    logger: Logger,
+    cache: Map<string, ParsedSessionFile>,
+    metrics?: SessionIndexerMetrics,
+): Promise<ParsedSessionFile> {
+    const cached = cache.get(sessionPath);
+    if (cached && cached.mtimeMs === fileStats.mtimeMs && cached.size === fileStats.size) {
+        if (metrics) metrics.parseCacheHits += 1;
+        cache.delete(sessionPath);
+        cache.set(sessionPath, cached);
+        return cached;
+    }
+
+    if (metrics) {
+        metrics.parseCacheMisses += 1;
+        metrics.fullFileReads += 1;
+    }
+    let streamed: { lines: string[]; endedWithNewline: boolean };
+    try {
+        streamed = await readJsonlLines(sessionPath);
+    } catch (error: unknown) {
+        logger.warn("Failed to read session file");
+        throw new Error("Failed to read session file", { cause: error });
+    }
+    const parsed: ParsedSessionFile = {
+        mtimeMs: Number(fileStats.mtimeMs),
+        size: Number(fileStats.size),
+        lines: streamed.lines,
+        entries: streamed.lines.slice(1).map(tryParseJson)
+            .filter((entry): entry is Record<string, unknown> => !!entry),
+        endedWithNewline: streamed.endedWithNewline,
+    };
+    cache.set(sessionPath, parsed);
+    while (cache.size > MAX_PARSED_SESSION_CACHE_FILES ||
+        [...cache.values()].reduce((total, item) => total + item.size, 0) > MAX_PARSED_SESSION_CACHE_BYTES) {
+        const oldest = cache.keys().next().value;
+        if (!oldest) break;
+        cache.delete(oldest);
+    }
+    return parsed;
+}
+
+async function readJsonlLines(
+    sessionPath: string,
+): Promise<{ lines: string[]; endedWithNewline: boolean }> {
+    const decoder = new StringDecoder("utf8");
+    const lines: string[] = [];
+    let buffer = "";
+
+    const appendCompleteLines = (): void => {
+        while (true) {
+            const newlineIndex = buffer.indexOf("\n");
+            if (newlineIndex < 0) return;
+            const line = buffer.slice(0, newlineIndex).replace(/\r$/, "").trim();
+            buffer = buffer.slice(newlineIndex + 1);
+            if (line.length > 0) lines.push(line);
+        }
+    };
+
+    for await (const chunk of createReadStream(sessionPath)) {
+        buffer += decoder.write(chunk as Buffer);
+        appendCompleteLines();
+    }
+    buffer += decoder.end();
+    const endedWithNewline = buffer.length === 0;
+    const finalLine = buffer.replace(/\r$/, "").trim();
+    if (finalLine.length > 0) lines.push(finalLine);
+    return { lines, endedWithNewline };
 }
 
 function normalizeTreeEntries(entries: Record<string, unknown>[]): Record<string, unknown>[] {

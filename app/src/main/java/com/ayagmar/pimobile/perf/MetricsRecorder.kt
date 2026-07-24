@@ -17,6 +17,11 @@ interface MetricsRecorder {
 
     fun recordFirstToken()
 
+    fun recordOperation(
+        operation: String,
+        durationMs: Long,
+    )
+
     fun flushTimings(): List<TimingRecord>
 
     fun getPendingTimings(): List<TimingRecord>
@@ -76,6 +81,15 @@ object DefaultMetricsRecorder : MetricsRecorder {
         pendingTimings.add(TimingRecord("prompt_to_first_token", duration))
     }
 
+    override fun recordOperation(
+        operation: String,
+        durationMs: Long,
+    ) {
+        val sanitizedDuration = durationMs.coerceAtLeast(0L)
+        log("Operation $operation: ${sanitizedDuration}ms")
+        pendingTimings.add(TimingRecord(operation, sanitizedDuration))
+    }
+
     override fun flushTimings(): List<TimingRecord> {
         val copy = pendingTimings.toList()
         pendingTimings.clear()
@@ -114,6 +128,11 @@ object NoOpMetricsRecorder : MetricsRecorder {
     override fun recordPromptSend() = Unit
 
     override fun recordFirstToken() = Unit
+
+    override fun recordOperation(
+        operation: String,
+        durationMs: Long,
+    ) = Unit
 
     override fun flushTimings(): List<TimingRecord> = emptyList()
 

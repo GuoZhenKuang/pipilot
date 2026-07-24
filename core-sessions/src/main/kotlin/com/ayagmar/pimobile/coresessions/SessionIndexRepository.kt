@@ -1,5 +1,6 @@
 package com.ayagmar.pimobile.coresessions
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -18,9 +19,14 @@ class SessionIndexRepository(
     private val cache: SessionIndexCache,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     private val nowEpochMs: () -> Long = { System.currentTimeMillis() },
+    private val minimumRefreshIntervalMs: Long = 1_000L,
+    private val maximumRefreshBackoffMs: Long = 60_000L,
 ) {
     private val stateByHost = linkedMapOf<String, MutableStateFlow<SessionIndexState>>()
     private val refreshMutexByHost = linkedMapOf<String, Mutex>()
+    private val inFlightRefreshes = linkedMapOf<String, CompletableDeferred<SessionIndexState>>()
+    private val lastRefreshAttemptByHost = linkedMapOf<String, Long>()
+    private val refreshFailuresByHost = linkedMapOf<String, Int>()
 
     suspend fun initialize(hostId: String) {
         val state = stateForHost(hostId)
@@ -51,7 +57,58 @@ class SessionIndexRepository(
         }
     }
 
+    @Suppress("TooGenericExceptionCaught", "ReturnCount")
     suspend fun refresh(hostId: String): SessionIndexState {
+        val state = stateForHost(hostId)
+        val existingRefresh = synchronized(inFlightRefreshes) { inFlightRefreshes[hostId] }
+        if (existingRefresh != null) return existingRefresh.await()
+
+        val now = nowEpochMs()
+        synchronized(lastRefreshAttemptByHost) {
+            val lastAttempt = lastRefreshAttemptByHost[hostId]
+            val failureCount = synchronized(refreshFailuresByHost) { refreshFailuresByHost[hostId] ?: 0 }
+            val backoffMultiplier = 1L shl failureCount.coerceAtMost(MAX_BACKOFF_SHIFT)
+            val refreshInterval =
+                (minimumRefreshIntervalMs * backoffMultiplier).coerceAtMost(maximumRefreshBackoffMs)
+            if (lastAttempt != null && now - lastAttempt < refreshInterval) {
+                return state.value
+            }
+            lastRefreshAttemptByHost[hostId] = now
+        }
+
+        val (deferred, owner) =
+            synchronized(inFlightRefreshes) {
+                val existing = inFlightRefreshes[hostId]
+                if (existing != null) {
+                    existing to false
+                } else {
+                    CompletableDeferred<SessionIndexState>().also { inFlightRefreshes[hostId] = it } to true
+                }
+            }
+        if (!owner) return deferred.await()
+
+        return try {
+            val result = refreshInternal(hostId)
+            synchronized(refreshFailuresByHost) {
+                if (result.errorMessage == null) {
+                    refreshFailuresByHost.remove(hostId)
+                } else {
+                    refreshFailuresByHost[hostId] = (refreshFailuresByHost[hostId] ?: 0) + 1
+                }
+            }
+            deferred.complete(result)
+            result
+        } catch (throwable: Throwable) {
+            deferred.completeExceptionally(throwable)
+            throw throwable
+        } finally {
+            synchronized(inFlightRefreshes) {
+                if (inFlightRefreshes[hostId] === deferred) inFlightRefreshes.remove(hostId)
+            }
+        }
+    }
+
+    private suspend fun refreshInternal(hostId: String): SessionIndexState {
         val mutex = mutexForHost(hostId)
         val state = stateForHost(hostId)
 
@@ -115,6 +172,8 @@ class SessionIndexRepository(
         }
     }
 }
+
+private const val MAX_BACKOFF_SHIFT = 6
 
 private fun SessionIndexState.filter(query: String): SessionIndexState {
     if (query.isBlank()) return this

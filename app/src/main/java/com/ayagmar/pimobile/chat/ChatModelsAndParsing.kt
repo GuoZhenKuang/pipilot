@@ -2,6 +2,8 @@ package com.ayagmar.pimobile.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.createSavedStateHandle
+import androidx.lifecycle.viewmodel.CreationExtras
 import com.ayagmar.pimobile.corenet.ConnectionState
 import com.ayagmar.pimobile.corerpc.AvailableModel
 import com.ayagmar.pimobile.corerpc.SessionStats
@@ -16,6 +18,7 @@ data class ChatUiState(
     val connectionState: ConnectionState = ConnectionState.DISCONNECTED,
     val isStreaming: Boolean = false,
     val isRetrying: Boolean = false,
+    val isDispatchingMessage: Boolean = false,
     val timeline: List<ChatTimelineItem> = emptyList(),
     val hasOlderMessages: Boolean = false,
     val hiddenHistoryCount: Int = 0,
@@ -24,6 +27,7 @@ data class ChatUiState(
     val currentModel: ModelInfo? = null,
     val thinkingLevel: String? = null,
     val sessionName: String? = null,
+    val sessionPath: String? = null,
     val pendingMessageCount: Int = 0,
     val activeExtensionRequest: ExtensionUiRequest? = null,
     val notifications: List<ExtensionNotification> = emptyList(),
@@ -53,6 +57,7 @@ data class ChatUiState(
     val bashHistory: List<String> = emptyList(),
     // Tool argument expansion state (per tool ID)
     val expandedToolArguments: Set<String> = emptySet(),
+    val selectedToolId: String? = null,
     // Session stats state
     val isStatsSheetVisible: Boolean = false,
     val sessionStats: SessionStats? = null,
@@ -136,7 +141,7 @@ sealed interface ChatTimelineItem {
         override val id: String,
         val text: String,
         val imageCount: Int = 0,
-        val imageUris: List<String> = emptyList(),
+        val images: List<ChatImageSource> = emptyList(),
     ) : ChatTimelineItem
 
     data class Assistant(
@@ -161,6 +166,15 @@ sealed interface ChatTimelineItem {
     ) : ChatTimelineItem
 }
 
+sealed interface ChatImageSource {
+    data class LocalUri(val uri: String) : ChatImageSource
+
+    data class Embedded(
+        val base64Data: String,
+        val mimeType: String,
+    ) : ChatImageSource
+}
+
 /**
  * Information about a file edit for diff display.
  */
@@ -174,7 +188,10 @@ class ChatViewModelFactory(
     private val sessionController: SessionController,
     private val imageEncoder: ImageEncoder? = null,
 ) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+    override fun <T : ViewModel> create(
+        modelClass: Class<T>,
+        extras: CreationExtras,
+    ): T {
         check(modelClass == ChatViewModel::class.java) {
             "Unsupported ViewModel class: ${modelClass.name}"
         }
@@ -183,6 +200,7 @@ class ChatViewModelFactory(
         return ChatViewModel(
             sessionController = sessionController,
             imageEncoder = imageEncoder,
+            savedStateHandle = extras.createSavedStateHandle(),
         ) as T
     }
 }

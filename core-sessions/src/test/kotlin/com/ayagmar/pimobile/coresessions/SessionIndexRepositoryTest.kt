@@ -2,6 +2,8 @@ package com.ayagmar.pimobile.coresessions
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
@@ -73,6 +75,62 @@ class SessionIndexRepositoryTest {
             assertEquals("modernized", changedRef.firstUserMessagePreview)
 
             assertFilteredPaymentState(repository = repository, hostId = hostId)
+        }
+
+    @Test
+    fun `concurrent refreshes share one remote fetch`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val remote = FakeSessionRemoteDataSource().apply { fetchDelayMs = 10 }
+            remote.groupsByHost["host-a"] = emptyList()
+            val repository = createRepository(remote, InMemorySessionIndexCache(), dispatcher)
+
+            val first = async { repository.refresh("host-a") }
+            val second = async { repository.refresh("host-a") }
+            advanceUntilIdle()
+
+            first.await()
+            second.await()
+            assertEquals(1, remote.fetchCount)
+        }
+
+    @Test
+    fun `refresh interval prevents redundant remote fetches`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val remote = FakeSessionRemoteDataSource()
+            val repository = createRepository(remote, InMemorySessionIndexCache(), dispatcher)
+
+            repository.refresh("host-a")
+            repository.refresh("host-a")
+
+            assertEquals(1, remote.fetchCount)
+        }
+
+    @Test
+    fun `failed refresh applies bounded retry backoff`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            var now = 1_000L
+            val remote = FakeSessionRemoteDataSource().apply { failingHosts += "host-a" }
+            val repository =
+                SessionIndexRepository(
+                    remoteDataSource = remote,
+                    cache = InMemorySessionIndexCache(),
+                    scope = CoroutineScope(dispatcher),
+                    nowEpochMs = { now },
+                    minimumRefreshIntervalMs = 1_000L,
+                    maximumRefreshBackoffMs = 8_000L,
+                )
+
+            repository.refresh("host-a")
+            now = 2_500L
+            repository.refresh("host-a")
+            assertEquals(1, remote.fetchCount)
+
+            now = 3_000L
+            repository.refresh("host-a")
+            assertEquals(2, remote.fetchCount)
         }
 
     @Test
@@ -172,8 +230,14 @@ class SessionIndexRepositoryTest {
 
     private class FakeSessionRemoteDataSource : SessionIndexRemoteDataSource {
         val groupsByHost = linkedMapOf<String, List<SessionGroup>>()
+        val failingHosts = mutableSetOf<String>()
+        var fetchCount: Int = 0
+        var fetchDelayMs: Long = 0
 
         override suspend fun fetch(hostId: String): List<SessionGroup> {
+            fetchCount += 1
+            if (fetchDelayMs > 0) delay(fetchDelayMs)
+            if (hostId in failingHosts) error("sanitized failure")
             return groupsByHost[hostId] ?: emptyList()
         }
     }

@@ -15,6 +15,10 @@ These plans deliberately retain the current architecture: Android connects to a 
 | [005](005-decompose-chat-architecture.md) | Decompose chat state and UI without changing behavior | P2 | L | 003 | DONE |
 | [006](006-redesign-onboarding-and-navigation.md) | Redesign onboarding, navigation, and recovery UX | P2 | L | 005 | DONE (device acceptance pending — operator-owned) |
 | [007](007-modernize-android-and-release-dx.md) | Modernize Android, CI, release checks, and contributor DX | P2 | L | 004, 006 | DONE (device acceptance pending — operator-owned) |
+| [008](008-chat-experience-v2.md) | Deliver a compact, turn-centered mobile chat experience | P1 | L | 007 | DONE (device acceptance pending — operator-owned) |
+| [009](009-polish-native-chat-and-harden-platform.md) | Polish native chat and harden platform | P1 | XL | 008 | DONE (device acceptance pending — operator-owned; structural decomposition deferred) |
+| [010](010-performance-resume-and-session-navigation.md) | Performance overhaul for resume, trees, and session navigation | P1 | XL | 008, 009 | DONE (device performance acceptance pending — operator-owned) |
+| [011](011-agp9-api37-java25-modernization-and-quality.md) | Migrate to AGP 9/API 37/JDK 25 and modernize platform quality | P1 | XL | 009, 010 | DONE (device acceptance pending — operator-owned; detekt uses isolated JDK 21) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (reason) | REJECTED (reason)
 
@@ -25,7 +29,11 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (reason) | REJECTED (reason)
 - 003 creates a current RPC compatibility baseline. Plans 004 and 005 must not begin without it.
 - 004 changes synchronization semantics and should remain separate from the UI/state decomposition in 005.
 - 006 depends on 005 so the UX redesign is not added to the current 3,900-line screen and 3,252-line ViewModel.
-- 007 runs last because framework upgrades mixed with feature work make failures difficult to diagnose.
+- 007 completed the revival roadmap and established the current Android/CI baseline.
+- 008 builds on that baseline in strict sequence: quiet freshness policy → turn projection → compact rendering → handoff → active-run composer → unread/reading behavior. Device execution is forbidden until the operator explicitly enables debug mode.
+- 009 is the native polish/accessibility/dependency hardening pass.
+- 010 is the performance pass for resume, long-session trees, transport reuse, staged bootstrap, and stale-session rendering.
+- 011 is the separate platform modernization pass for AGP 9, API 37, JDK 25, built-in Kotlin integration, dependency convergence, CI, quality, adaptive UI, and migration-enabled performance. It must not be started by assuming AGP 8 compatibility; Step 1 selects and records the official stable matrix first.
 
 ## Global completion gate
 
@@ -36,10 +44,11 @@ After all plans are DONE, run from the repository root:
 (cd bridge && pnpm install --frozen-lockfile && pnpm run check && pnpm audit --prod)
 ```
 
-Expected: every command exits 0, bridge audit reports no high vulnerabilities, and both APKs are produced. Then execute the manual end-to-end checklist added by plan 007 on an Android device or emulator against a real bridge and Pi installation.
+Expected: every command exits 0, bridge audit reports no high vulnerabilities, and both APKs are produced. For Plan 008, stop after non-device verification and Android-test compilation. Do not launch an emulator, run connected tests, install an APK, use adb, or perform manual phone acceptance until the operator explicitly says debug mode.
 
 ## Findings considered and rejected
 
 - Replace the subprocess bridge with the Pi SDK: rejected for this roadmap. RPC preserves process isolation, directly consumes Pi's supported cross-language contract, and avoids rebuilding Pi's RPC dispatcher inside the bridge.
 - Remove the bridge: rejected. Android cannot directly consume stdio RPC, and the bridge owns authentication, WebSocket transport, remote session discovery, cwd locks, and reconnect policy.
 - Add offline agent execution on Android: rejected for now; it conflicts with the product's remote-control purpose and would substantially expand credential, filesystem, and runtime scope.
+- Treat AGP 9/API 37/JDK 25 as part of Plans 009/010: rejected. The migration is intentionally isolated as Plan 011 so feature/performance changes can be verified independently.

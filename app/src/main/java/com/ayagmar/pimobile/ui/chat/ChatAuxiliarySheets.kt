@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
@@ -27,10 +28,11 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,10 +43,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.ayagmar.pimobile.chat.ChatTimelineItem
 import com.ayagmar.pimobile.chat.ChatViewModel
 import com.ayagmar.pimobile.corerpc.AvailableModel
 import com.ayagmar.pimobile.corerpc.SessionStats
@@ -52,122 +53,163 @@ import com.ayagmar.pimobile.sessions.ModelInfo
 import com.ayagmar.pimobile.sessions.SessionTreeEntry
 import com.ayagmar.pimobile.sessions.SessionTreeSnapshot
 
+private const val MAX_TOOL_ARGUMENT_PREVIEW_CHARS = 12_000
+private const val MAX_TOOL_OUTPUT_PREVIEW_CHARS = 20_000
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongMethod")
+@Composable
+internal fun ToolDetailsSheet(
+    isVisible: Boolean,
+    tool: ChatTimelineItem.Tool?,
+    onDismiss: () -> Unit,
+) {
+    if (!isVisible || tool == null) return
+
+    val copyToClipboard = rememberClipboardCopy()
+    val argumentsText =
+        remember(tool.arguments) {
+            tool.arguments.entries
+                .joinToString("\n") { (key, value) -> "$key: $value" }
+                .take(MAX_TOOL_ARGUMENT_PREVIEW_CHARS)
+        }
+    val outputText = remember(tool.output) { tool.output.ifBlank { "(no output)" }.take(MAX_TOOL_OUTPUT_PREVIEW_CHARS) }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 640.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(tool.toolName.ifBlank { "Tool details" }, style = MaterialTheme.typography.titleLarge)
+            Text(
+                text =
+                    if (tool.isError) {
+                        "Failed"
+                    } else if (tool.isStreaming) {
+                        "Running"
+                    } else {
+                        "Completed"
+                    },
+                style = MaterialTheme.typography.labelMedium,
+                color = if (tool.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+            )
+            if (tool.arguments.isNotEmpty()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Arguments", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { copyToClipboard(argumentsText) }) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy tool arguments")
+                        Text("Copy")
+                    }
+                }
+                SelectionContainer {
+                    Text(
+                        argumentsText,
+                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Output", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                TextButton(onClick = { copyToClipboard(outputText) }) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy tool output")
+                    Text("Copy")
+                }
+            }
+            SelectionContainer {
+                Text(
+                    outputText,
+                    fontFamily = FontFamily.Monospace,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Suppress("LongParameterList", "LongMethod")
 @Composable
 internal fun SessionStatsSheet(
     isVisible: Boolean,
     stats: SessionStats?,
     sessionName: String?,
+    cwd: String?,
+    model: ModelInfo?,
     pendingMessageCount: Int,
+    isRunActive: Boolean,
+    isRetrying: Boolean,
     isLoading: Boolean,
     onRefresh: () -> Unit,
+    onSync: () -> Unit,
+    onCompact: () -> Unit,
+    onCopyLatestResponse: () -> Unit,
+    onExportSession: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     if (!isVisible) return
 
-    val clipboardManager = LocalClipboardManager.current
+    val copyToClipboard = rememberClipboardCopy()
+    val status =
+        when {
+            isRetrying -> HandoffRunStatus.RETRYING
+            isRunActive -> HandoffRunStatus.WORKING
+            else -> HandoffRunStatus.IDLE
+        }
+    val summary =
+        formatHandoffSummary(
+            HandoffSummaryData(
+                sessionName = sessionName,
+                cwd = cwd,
+                sessionPath = null,
+                model = model?.let { "${it.provider}/${it.id}" },
+                runStatus = status,
+            ),
+        )
 
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Session Statistics")
-                IconButton(onClick = onRefresh) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Refresh",
-                    )
-                }
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Session details", style = MaterialTheme.typography.titleLarge)
+            StatsSection(title = "Session") {
+                sessionName?.let { StatRow("Name", it) }
+                cwd?.let { StatRow("Working directory", it) }
+                model?.let { StatRow("Model", "${it.provider}/${it.id}") }
+                StatRow("Status", status.label)
+                StatRow("Queued", pendingMessageCount.toString())
             }
-        },
-        text = {
             if (isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().padding(32.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
-                }
-            } else if (stats == null) {
-                Text(
-                    text = "No statistics available",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            } else {
-                Column(
-                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    if (sessionName != null || pendingMessageCount > 0) {
-                        StatsSection(title = "Session") {
-                            sessionName?.let { StatRow("Name", it) }
-                            if (pendingMessageCount > 0) {
-                                StatRow("Queued Messages", pendingMessageCount.toString())
-                            }
-                        }
-                    }
-
-                    // Token stats
-                    StatsSection(title = "Tokens") {
-                        StatRow("Input Tokens", formatNumber(stats.inputTokens))
-                        StatRow("Output Tokens", formatNumber(stats.outputTokens))
-                        StatRow("Cache Read", formatNumber(stats.cacheReadTokens))
-                        StatRow("Cache Write", formatNumber(stats.cacheWriteTokens))
-                    }
-
-                    // Cost
-                    StatsSection(title = "Cost") {
-                        StatRow("Total Cost", formatCost(stats.totalCost))
-                    }
-
-                    // Messages
-                    StatsSection(title = "Messages") {
-                        StatRow("Total", stats.messageCount.toString())
-                        StatRow("User", stats.userMessageCount.toString())
-                        StatRow("Assistant", stats.assistantMessageCount.toString())
-                        StatRow("Tool Results", stats.toolResultCount.toString())
-                    }
-
-                    // Session path
-                    stats.sessionPath?.let { path ->
-                        StatsSection(title = "Session File") {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    text = path.takeLast(SESSION_PATH_DISPLAY_LENGTH),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontFamily = FontFamily.Monospace,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                IconButton(
-                                    onClick = { clipboardManager.setText(AnnotatedString(path)) },
-                                    modifier = Modifier.size(24.dp),
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.ContentCopy,
-                                        contentDescription = "Copy path",
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                }
-                            }
-                        }
-                    }
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+            } else if (stats != null) {
+                StatsSection(title = "Usage") {
+                    StatRow("Input tokens", formatNumber(stats.inputTokens))
+                    StatRow("Output tokens", formatNumber(stats.outputTokens))
+                    StatRow("Messages", stats.messageCount.toString())
+                    StatRow("Total cost", formatCost(stats.totalCost))
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Close")
+            Text("Handoff to computer", style = MaterialTheme.typography.titleMedium)
+            SelectionContainer { Text(summary, style = MaterialTheme.typography.bodySmall) }
+            TextButton(onClick = { copyToClipboard(summary) }) {
+                Icon(Icons.Default.ContentCopy, contentDescription = null)
+                Text("Copy handoff summary")
             }
-        },
-    )
+            TextButton(onClick = onCopyLatestResponse) { Text("Copy latest response") }
+            TextButton(onClick = onExportSession) { Text("Export conversation/session") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onSync) { Text("Sync now") }
+                TextButton(onClick = onRefresh) { Text("Refresh stats") }
+                TextButton(onClick = onCompact) { Text("Compact") }
+            }
+        }
+    }
 }
 
 @Composable
@@ -455,9 +497,9 @@ internal fun TreeNavigationSheet(
         title = { Text("Session tree") },
         text = {
             Column(modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
-                tree?.sessionPath?.let { sessionPath ->
+                if (tree != null) {
                     Text(
-                        text = truncatePath(sessionPath),
+                        text = "Current session tree",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 8.dp),
@@ -481,8 +523,17 @@ internal fun TreeNavigationSheet(
                     }
                 }
 
+                if (isLoading && entries.isNotEmpty()) {
+                    Text(
+                        text = "Updating tree…",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.padding(bottom = 6.dp),
+                    )
+                }
+
                 when {
-                    isLoading -> {
+                    isLoading && entries.isEmpty() -> {
                         Box(
                             modifier = Modifier.fillMaxWidth().padding(24.dp),
                             contentAlignment = Alignment.Center,
@@ -726,13 +777,3 @@ private val TREE_FILTER_OPTIONS =
     )
 
 private const val MODEL_PICKER_SCROLL_OFFSET_ITEMS = 1
-private const val SESSION_PATH_DISPLAY_LENGTH = 40
-
-private fun truncatePath(path: String): String {
-    if (path.length <= SESSION_PATH_DISPLAY_LENGTH) {
-        return path
-    }
-    val head = SESSION_PATH_DISPLAY_LENGTH / 2
-    val tail = SESSION_PATH_DISPLAY_LENGTH - head - 1
-    return "${path.take(head)}…${path.takeLast(tail)}"
-}

@@ -1,3 +1,5 @@
+@file:Suppress("ktlint:standard:max-line-length")
+
 package com.ayagmar.pimobile.ui
 
 import android.content.Context
@@ -7,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,23 +20,26 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.automirrored.filled.MenuOpen
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -67,6 +73,8 @@ private data class AppDestination(
     val label: String,
     val icon: ImageVector,
 )
+
+private val EXPANDED_NAVIGATION_MIN_WIDTH = 840.dp
 
 private val destinations =
     listOf(
@@ -174,7 +182,8 @@ private fun DrawerDestinationItem(
     }
 }
 
-@Suppress("LongMethod")
+@OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongMethod", "MaxLineLength")
 @Composable
 fun PiMobileApp(appGraph: AppGraph) {
     val context = LocalContext.current
@@ -233,139 +242,147 @@ fun PiMobileApp(appGraph: AppGraph) {
         val startDestination = if (hasConfiguredHost) "sessions" else "hosts"
         val availableDestinations = destinations.filter { destination -> destination.route != "chat" }
 
-        ModalNavigationDrawer(
-            drawerState = drawerState,
-            gesturesEnabled = drawerState.isOpen,
-            drawerContent = {
-                ModalDrawerSheet(
-                    modifier = Modifier.widthIn(min = 220.dp, max = 270.dp),
-                    drawerShape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp),
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                Text(
-                                    text = "Navigation",
-                                    style = MaterialTheme.typography.titleMedium,
-                                )
-                                Text(
-                                    text = "Slides from the left. Tap outside to close.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-
-                        HorizontalDivider()
-
-                        Text(
-                            text = "WORKSPACE",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 8.dp),
-                        )
-
+        BoxWithConstraints {
+            val isExpanded = maxWidth >= EXPANDED_NAVIGATION_MIN_WIDTH
+            Row(modifier = Modifier.fillMaxSize()) {
+                if (isExpanded) {
+                    NavigationRail {
                         availableDestinations.forEach { destination ->
-                            DrawerDestinationItem(
-                                destination = destination,
+                            NavigationRailItem(
                                 selected = currentRoute == destination.route,
-                                onClick = {
-                                    navigateTo(destination.route)
-                                    scope.launch { drawerState.close() }
+                                onClick = { navigateTo(destination.route) },
+                                icon = {
+                                    Icon(
+                                        imageVector = destination.icon,
+                                        contentDescription = destination.label,
+                                    )
                                 },
+                                label = { Text(destination.label) },
                             )
                         }
                     }
                 }
-            },
-        ) {
-            Scaffold { paddingValues ->
-                Box(
-                    modifier = Modifier.fillMaxSize().padding(paddingValues),
-                ) {
-                    NavHost(
-                        navController = navController,
-                        startDestination = startDestination,
-                        modifier = Modifier.fillMaxSize().padding(top = 56.dp),
-                    ) {
-                        composable(route = "hosts") {
-                            HostsRoute(
-                                profileStore = appGraph.hostProfileStore,
-                                tokenStore = appGraph.hostTokenStore,
-                                diagnostics = appGraph.connectionDiagnostics,
-                                onHostSaved = {
-                                    navigateTo("sessions")
-                                },
-                            )
-                        }
-                        composable(route = "sessions") {
-                            SessionsRoute(
-                                profileStore = appGraph.hostProfileStore,
-                                tokenStore = appGraph.hostTokenStore,
-                                repository = appGraph.sessionIndexRepository,
-                                sessionController = appGraph.sessionController,
-                                cwdPreferenceStore = appGraph.sessionCwdPreferenceStore,
-                                onNavigateToChat = {
-                                    navigateTo("chat")
-                                },
-                            )
-                        }
-                        composable(route = "chat") {
-                            ChatRoute(
-                                sessionController = appGraph.sessionController,
-                                showExtensionStatusStrip = showExtensionStatusStrip,
-                            )
-                        }
-                        composable(route = "settings") {
-                            SettingsRoute(sessionController = appGraph.sessionController)
-                        }
-                    }
 
-                    Surface(
-                        shape = CircleShape,
-                        tonalElevation = 3.dp,
-                        shadowElevation = 6.dp,
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
-                        modifier =
-                            Modifier
-                                .align(Alignment.TopStart)
-                                .padding(8.dp),
-                    ) {
-                        FilledTonalIconButton(
-                            modifier = Modifier.size(48.dp),
-                            onClick = {
-                                scope.launch {
-                                    if (drawerState.isOpen) {
-                                        drawerState.close()
-                                    } else {
-                                        drawerState.open()
+                Box(modifier = Modifier.fillMaxSize()) {
+                    ModalNavigationDrawer(
+                        drawerState = drawerState,
+                        gesturesEnabled = drawerState.isOpen,
+                        drawerContent = {
+                            ModalDrawerSheet(
+                                modifier = Modifier.widthIn(min = 220.dp, max = 270.dp),
+                                drawerShape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp),
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                                        ) {
+                                            Text(
+                                                text = "Navigation",
+                                                style = MaterialTheme.typography.titleMedium,
+                                            )
+                                            Text(
+                                                text = "Slides from the left. Tap outside to close.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
+
+                                    HorizontalDivider()
+
+                                    Text(
+                                        text = "WORKSPACE",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 8.dp),
+                                    )
+
+                                    availableDestinations.forEach { destination ->
+                                        DrawerDestinationItem(
+                                            destination = destination,
+                                            selected = currentRoute == destination.route,
+                                            onClick = {
+                                                navigateTo(destination.route)
+                                                scope.launch { drawerState.close() }
+                                            },
+                                        )
                                     }
                                 }
+                            }
+                        },
+                    ) {
+                        Scaffold(
+                            topBar = {
+                                TopAppBar(
+                                    title = { Text(currentRoute?.replaceFirstChar(Char::uppercase) ?: "Pi Mobile") },
+                                    navigationIcon = {
+                                        if (!isExpanded) {
+                                            IconButton(
+                                                onClick = {
+                                                    scope.launch {
+                                                        if (drawerState.isOpen) drawerState.close() else drawerState.open()
+                                                    }
+                                                },
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Menu,
+                                                    contentDescription = "Open navigation",
+                                                )
+                                            }
+                                        }
+                                    },
+                                )
                             },
-                        ) {
-                            Icon(
-                                imageVector =
-                                    if (drawerState.isOpen) {
-                                        Icons.AutoMirrored.Filled.MenuOpen
-                                    } else {
-                                        Icons.Default.Menu
-                                    },
-                                contentDescription =
-                                    if (drawerState.isOpen) {
-                                        "Close left navigation"
-                                    } else {
-                                        "Open left navigation"
-                                    },
-                            )
+                        ) { paddingValues ->
+                            Box(
+                                modifier = Modifier.fillMaxSize().padding(paddingValues),
+                            ) {
+                                NavHost(
+                                    navController = navController,
+                                    startDestination = startDestination,
+                                    modifier = Modifier.fillMaxSize(),
+                                ) {
+                                    composable(route = "hosts") {
+                                        HostsRoute(
+                                            profileStore = appGraph.hostProfileStore,
+                                            tokenStore = appGraph.hostTokenStore,
+                                            diagnostics = appGraph.connectionDiagnostics,
+                                            onHostSaved = {
+                                                navigateTo("sessions")
+                                            },
+                                        )
+                                    }
+                                    composable(route = "sessions") {
+                                        SessionsRoute(
+                                            profileStore = appGraph.hostProfileStore,
+                                            tokenStore = appGraph.hostTokenStore,
+                                            repository = appGraph.sessionIndexRepository,
+                                            sessionController = appGraph.sessionController,
+                                            cwdPreferenceStore = appGraph.sessionCwdPreferenceStore,
+                                            onNavigateToChat = {
+                                                navigateTo("chat")
+                                            },
+                                        )
+                                    }
+                                    composable(route = "chat") {
+                                        ChatRoute(
+                                            sessionController = appGraph.sessionController,
+                                            showExtensionStatusStrip = showExtensionStatusStrip,
+                                        )
+                                    }
+                                    composable(route = "settings") {
+                                        SettingsRoute(sessionController = appGraph.sessionController)
+                                    }
+                                }
+                            }
                         }
                     }
                 }

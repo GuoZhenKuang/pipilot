@@ -21,10 +21,10 @@ Keep regression tests beside the owning module. Protocol fixtures belong in `cor
 
 ## Required commands
 
-Use JDK 21, Node 22+, pnpm 10, Android SDK 36, and Pi 0.80.6+.
+Use JDK 25 for Gradle and compilation, retain a JDK 21 toolchain for the stable detekt CLI, and install Android SDK platform 37.0/build-tools 37.0.0. Use Node 24 LTS+, pnpm 10, and Pi 0.80.6+.
 
 ```bash
-./gradlew clean ktlintCheck detekt test :app:lintDebug :app:assembleDebug :app:assembleRelease
+./gradlew clean ktlintCheck detekt test :benchmark:compileBenchmarkKotlin :app:lintDebug :app:assembleDebug :app:assembleRelease
 (cd bridge && pnpm install --frozen-lockfile && pnpm run check && pnpm audit --prod)
 ```
 

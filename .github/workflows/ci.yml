@@ -15,16 +15,30 @@ jobs:
         timeout-minutes: 30
         steps:
             - uses: actions/checkout@v7
-            - uses: actions/setup-java@v5
+            - name: Set up JDK 21 for stable detekt
+              uses: actions/setup-java@v5
               with:
                   distribution: temurin
                   java-version: 21
+            - name: Set up JDK 25 build runtime
+              uses: actions/setup-java@v5
+              with:
+                  distribution: temurin
+                  java-version: 25
                   cache: gradle
             - uses: android-actions/setup-android@v4
-            - name: Install Android SDK 36
-              run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+            - name: Install Android SDK 37
+              run: sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
+            - name: Verify toolchain
+              run: |
+                  java -version
+                  ./gradlew --version
+                  test -f "$ANDROID_HOME/platforms/android-37.0/android.jar"
+                  test -x "$ANDROID_HOME/build-tools/37.0.0/aapt2"
             - name: Verify Android
-              run: ./gradlew clean ktlintCheck detekt test :app:lintDebug :app:assembleDebug :app:assembleRelease
+              run: ./gradlew clean ktlintCheck detekt test :benchmark:compileBenchmarkKotlin :app:lintDebug :app:assembleDebug :app:assembleRelease
+            - name: Compile Android test sources
+              run: ./gradlew :app:compileDebugAndroidTestKotlin
             - name: Upload debug APK
               uses: actions/upload-artifact@v7
               with:
@@ -46,7 +60,7 @@ jobs:
                   version: 10.33.0
             - uses: actions/setup-node@v6
               with:
-                  node-version: 22
+                  node-version: 24
                   cache: pnpm
                   cache-dependency-path: bridge/pnpm-lock.yaml
             - run: pnpm install --frozen-lockfile

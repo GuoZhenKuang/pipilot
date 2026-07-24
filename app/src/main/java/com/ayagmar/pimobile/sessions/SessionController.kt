@@ -26,6 +26,10 @@ interface SessionController {
      * ChatViewModel observes this to reload the timeline.
      */
     val sessionChanged: SharedFlow<String?>
+
+    /** Replayable identity used to invalidate retained chat content before a switch completes. */
+
+    val activeSession: StateFlow<ActiveSessionState?>
     val timelineInvalidated: SharedFlow<Unit>
     val syncMetrics: StateFlow<SessionSyncMetrics>
 
@@ -36,6 +40,8 @@ interface SessionController {
     fun getTransportPreference(): TransportPreference
 
     fun getEffectiveTransportPreference(): TransportPreference
+
+    fun getActiveCwd(): String?
 
     suspend fun ensureConnected(
         hostProfile: HostProfile,
@@ -50,6 +56,8 @@ interface SessionController {
         token: String,
         session: SessionRecord,
     ): Result<String?>
+
+    suspend fun bootstrap(onStateAvailable: (RpcResponse) -> Unit = {}): Result<SessionBootstrapSnapshot>
 
     suspend fun getMessages(): Result<RpcResponse>
 
@@ -77,6 +85,11 @@ interface SessionController {
     suspend fun forkSessionFromEntryId(entryId: String): Result<String?>
 
     suspend fun getForkMessages(): Result<List<ForkableMessage>>
+
+    fun getCachedSessionTree(
+        sessionPath: String,
+        filter: String? = null,
+    ): SessionTreeSnapshot?
 
     suspend fun getSessionTree(
         sessionPath: String? = null,
@@ -143,6 +156,17 @@ interface SessionController {
 /**
  * Information about a forkable message from get_fork_messages response.
  */
+data class ActiveSessionState(
+    val sessionPath: String?,
+    val generation: Long,
+    val isSwitching: Boolean = false,
+)
+
+data class SessionBootstrapSnapshot(
+    val stateResponse: RpcResponse,
+    val messagesResponse: RpcResponse,
+)
+
 data class SessionSyncMetrics(
     val fullRebuilds: Int = 0,
     val incrementalEntries: Int = 0,
@@ -160,6 +184,7 @@ data class SessionTreeSnapshot(
     val rootIds: List<String>,
     val currentLeafId: String?,
     val entries: List<SessionTreeEntry>,
+    val isStale: Boolean = false,
 )
 
 data class SessionFreshnessSnapshot(

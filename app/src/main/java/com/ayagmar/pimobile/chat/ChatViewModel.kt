@@ -1,5 +1,6 @@
 package com.ayagmar.pimobile.chat
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ayagmar.pimobile.corenet.ConnectionState
@@ -28,7 +29,6 @@ import com.ayagmar.pimobile.corerpc.UiUpdateThrottler
 import com.ayagmar.pimobile.perf.PerformanceMetrics
 import com.ayagmar.pimobile.sessions.SessionController
 import com.ayagmar.pimobile.sessions.SessionFreshnessFingerprint
-import com.ayagmar.pimobile.sessions.SessionFreshnessSnapshot
 import com.ayagmar.pimobile.sessions.SlashCommandInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -48,13 +48,20 @@ import java.util.UUID
 
 internal const val HISTORY_WINDOW_MAX_ITEMS = 1_200
 
-@Suppress("TooManyFunctions", "LargeClass")
+@Suppress("TooManyFunctions", "LargeClass", "VisibleForTests")
 class ChatViewModel(
     private val sessionController: SessionController,
     private val imageEncoder: ImageEncoder? = null,
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
     private val assembler = AssistantTextAssembler()
-    private val _uiState = MutableStateFlow(ChatUiState(isLoading = true))
+    private val _uiState =
+        MutableStateFlow(
+            ChatUiState(
+                isLoading = true,
+                inputText = savedStateHandle.get<String>(DRAFT_TEXT_KEY).orEmpty(),
+            ),
+        )
     private val assistantUpdateThrottler = UiUpdateThrottler<AssistantTextUpdate>(ASSISTANT_UPDATE_THROTTLE_MS)
     private val toolUpdateThrottlers = mutableMapOf<String, UiUpdateThrottler<ToolExecutionUpdateEvent>>()
     private val toolUpdateFlushJobs = mutableMapOf<String, Job>()
@@ -77,6 +84,7 @@ class ChatViewModel(
     private var localSessionMutationGraceUntilMs: Long = 0
     private var isSessionFreshnessUnsupported = false
     private var lastFreshnessWarningAtMs: Long = 0
+    private var hasDeferredFreshnessRefresh = false
 
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
@@ -84,11 +92,13 @@ class ChatViewModel(
         observeConnection()
         observeStreamingState()
         observeEvents()
+        observeActiveSessionIdentity()
         loadInitialMessages(reason = TimelineReloadReason.INITIAL)
         loadSessionStats()
     }
 
     fun onInputTextChanged(text: String) {
+        savedStateHandle[DRAFT_TEXT_KEY] = text
         val slashQuery = extractSlashCommandQuery(text)
         var shouldLoadCommands = false
 
@@ -119,6 +129,7 @@ class ChatViewModel(
         if (shouldLoadCommands) {
             loadCommands()
         }
+        applyDeferredFreshnessRefreshIfIdle()
     }
 
     @Suppress("ReturnCount")
@@ -133,6 +144,7 @@ class ChatViewModel(
         }
 
         preparePromptDispatch()
+        _uiState.update { it.copy(isDispatchingMessage = true) }
         val optimisticUserId = addOptimisticUserMessage(message = message, pendingImages = pendingImages)
 
         viewModelScope.launch {
@@ -146,6 +158,7 @@ class ChatViewModel(
             val clearedDraftState = clearDraftAfterPromptDispatch(currentState)
 
             val result = sessionController.sendPrompt(message, imagePayloads)
+            _uiState.update { it.copy(isDispatchingMessage = false) }
             if (result.isFailure) {
                 handleSendPromptFailure(
                     result = result,
@@ -193,7 +206,7 @@ class ChatViewModel(
                 id = optimisticUserId,
                 text = message,
                 imageCount = pendingImages.size,
-                imageUris = pendingImages.map { it.uri },
+                images = pendingImages.map { ChatImageSource.LocalUri(it.uri) },
             ),
         )
         pendingLocalUserIds.addLast(optimisticUserId)
@@ -212,7 +225,10 @@ class ChatViewModel(
     private fun handleImageEncodingFailure(optimisticUserId: String) {
         discardPendingLocalUserItem(optimisticUserId)
         _uiState.update {
-            it.copy(errorMessage = "Unable to attach image. Please try again.")
+            it.copy(
+                isDispatchingMessage = false,
+                errorMessage = "Unable to attach image. Please try again.",
+            )
         }
     }
 
@@ -232,6 +248,8 @@ class ChatViewModel(
                 errorMessage = null,
             )
         }
+
+        if (inputWasCleared) savedStateHandle[DRAFT_TEXT_KEY] = ""
 
         return DraftClearState(
             inputWasCleared = inputWasCleared,
@@ -289,11 +307,19 @@ class ChatViewModel(
         if (trimmedMessage.isEmpty()) return
 
         viewModelScope.launch {
-            _uiState.update { it.copy(errorMessage = null) }
+            _uiState.update {
+                it.copy(
+                    errorMessage = null,
+                    isDispatchingMessage = true,
+                )
+            }
             markLocalSessionMutationExpected()
             val queueItemId = maybeTrackStreamingQueueItem(PendingQueueType.STEER, trimmedMessage)
             val result = sessionController.steer(trimmedMessage)
-            if (result.isFailure) {
+            _uiState.update { it.copy(isDispatchingMessage = false) }
+            if (result.isSuccess) {
+                clearActiveRunDraftAfterDispatch(trimmedMessage)
+            } else {
                 queueItemId?.let(::removePendingQueueItem)
                 _uiState.update { it.copy(errorMessage = result.exceptionOrNull()?.message) }
             }
@@ -305,15 +331,35 @@ class ChatViewModel(
         if (trimmedMessage.isEmpty()) return
 
         viewModelScope.launch {
-            _uiState.update { it.copy(errorMessage = null) }
+            _uiState.update {
+                it.copy(
+                    errorMessage = null,
+                    isDispatchingMessage = true,
+                )
+            }
             markLocalSessionMutationExpected()
             val queueItemId = maybeTrackStreamingQueueItem(PendingQueueType.FOLLOW_UP, trimmedMessage)
             val result = sessionController.followUp(trimmedMessage)
-            if (result.isFailure) {
+            _uiState.update { it.copy(isDispatchingMessage = false) }
+            if (result.isSuccess) {
+                clearActiveRunDraftAfterDispatch(trimmedMessage)
+            } else {
                 queueItemId?.let(::removePendingQueueItem)
                 _uiState.update { it.copy(errorMessage = result.exceptionOrNull()?.message) }
             }
         }
+    }
+
+    private fun clearActiveRunDraftAfterDispatch(submittedMessage: String) {
+        _uiState.update { state ->
+            if (state.inputText.trim() == submittedMessage) {
+                savedStateHandle[DRAFT_TEXT_KEY] = ""
+                state.copy(inputText = "")
+            } else {
+                state
+            }
+        }
+        applyDeferredFreshnessRefreshIfIdle()
     }
 
     fun cycleModel() {
@@ -539,6 +585,10 @@ class ChatViewModel(
         }
     }
 
+    fun exportSession() {
+        runExportSlashCommand()
+    }
+
     private fun runExportSlashCommand() {
         viewModelScope.launch {
             val result = sessionController.exportSession()
@@ -672,9 +722,13 @@ class ChatViewModel(
     }
 
     fun toggleToolExpansion(itemId: String) {
-        updateTimelineState { state ->
-            ChatTimelineReducer.toggleToolExpansion(state, itemId)
+        _uiState.update { state ->
+            state.copy(selectedToolId = itemId)
         }
+    }
+
+    fun dismissToolDetails() {
+        _uiState.update { it.copy(selectedToolId = null) }
     }
 
     fun toggleDiffExpansion(itemId: String) {
@@ -734,6 +788,7 @@ class ChatViewModel(
         sessionFreshnessMonitorJob = null
     }
 
+    @Suppress("CyclomaticComplexMethod")
     private suspend fun refreshSessionFreshness(trigger: FreshnessCheckTrigger) {
         if (trigger == FreshnessCheckTrigger.POLL) {
             sessionController.recordSafetyPoll()
@@ -760,66 +815,54 @@ class ChatViewModel(
             latestSessionPath = freshness.sessionPath
             val previous = lastKnownSessionFreshness
 
-            when {
-                previous == null -> {
-                    lastKnownSessionFreshness = freshness.fingerprint
-                }
+            val state = _uiState.value
+            val lock = freshness.lock
+            val differentClientOwnsLock =
+                !lock.cwdOwnerClientId.isNullOrBlank() && !lock.isCurrentClientCwdOwner ||
+                    !lock.sessionOwnerClientId.isNullOrBlank() && !lock.isCurrentClientSessionOwner
+            val action =
+                classifySessionFreshness(
+                    SessionFreshnessPolicyInput(
+                        fingerprintChanged =
+                            trigger != FreshnessCheckTrigger.POST_LOAD &&
+                                previous != null && previous != freshness.fingerprint,
+                        currentClientOwnsLock =
+                            lock.isCurrentClientCwdOwner || lock.isCurrentClientSessionOwner,
+                        differentClientOwnsLock = differentClientOwnsLock,
+                        chatIsBusy = isChatBusy(state),
+                        insideLocalMutationGraceWindow = isWithinLocalMutationGraceWindow(),
+                    ),
+                )
 
-                previous == freshness.fingerprint -> {
-                    // No-op
+            when (action) {
+                SessionFreshnessAction.UPDATE_BASELINE -> Unit
+                SessionFreshnessAction.REFRESH_SILENTLY -> {
+                    hasDeferredFreshnessRefresh = false
+                    loadInitialMessages(reason = TimelineReloadReason.AUTO_FRESHNESS_REFRESH)
                 }
+                SessionFreshnessAction.DEFER_REFRESH -> hasDeferredFreshnessRefresh = true
+                SessionFreshnessAction.SHOW_CONFLICT -> showSessionFreshnessConflict(trigger)
+            }
+            lastKnownSessionFreshness = freshness.fingerprint
 
-                isWithinLocalMutationGraceWindow() -> {
-                    lastKnownSessionFreshness = freshness.fingerprint
-                }
-
-                else -> {
-                    handleSessionFreshnessMismatch(freshness, trigger)
-                    lastKnownSessionFreshness = freshness.fingerprint
-                }
+            val currentClientOwnsLock = lock.isCurrentClientCwdOwner || lock.isCurrentClientSessionOwner
+            if (currentClientOwnsLock && !differentClientOwnsLock) {
+                _uiState.update { it.copy(sessionCoherencyWarning = null) }
             }
         }
     }
 
-    private fun handleSessionFreshnessMismatch(
-        freshness: SessionFreshnessSnapshot,
-        trigger: FreshnessCheckTrigger,
-    ) {
-        val state = _uiState.value
-        val isEditing = state.inputText.isNotBlank() || state.pendingImages.isNotEmpty()
-        val isBusy = state.isStreaming || isEditing || state.isRetrying || state.isSyncingSession
-
-        if (!isBusy && initialLoadJob?.isActive != true) {
-            loadInitialMessages(reason = TimelineReloadReason.AUTO_FRESHNESS_REFRESH)
-            return
-        }
-
+    private fun showSessionFreshnessConflict(trigger: FreshnessCheckTrigger) {
         _uiState.update {
             it.copy(sessionCoherencyWarning = SESSION_COHERENCY_WARNING_MESSAGE)
         }
 
         if (trigger == FreshnessCheckTrigger.POLL && shouldEmitFreshnessWarning()) {
             addSystemNotification(
-                message = buildSessionFreshnessWarningMessage(freshness),
+                message = "Another client is editing this session. Use Sync now before continuing.",
                 type = "warning",
             )
         }
-    }
-
-    private fun buildSessionFreshnessWarningMessage(freshness: SessionFreshnessSnapshot): String {
-        val lock = freshness.lock
-        val ownerHint =
-            when {
-                !lock.sessionOwnerClientId.isNullOrBlank() && !lock.isCurrentClientSessionOwner ->
-                    " (owner=${lock.sessionOwnerClientId})"
-
-                !lock.cwdOwnerClientId.isNullOrBlank() && !lock.isCurrentClientCwdOwner ->
-                    " (owner=${lock.cwdOwnerClientId})"
-
-                else -> ""
-            }
-
-        return "Potential cross-device edits detected$ownerHint. Use Sync now before continuing."
     }
 
     private fun shouldEmitFreshnessWarning(): Boolean {
@@ -869,9 +912,26 @@ class ChatViewModel(
                         pendingMessageCount = if (isStreaming) current.pendingMessageCount else 0,
                     )
                 }
+
+                if (!isStreaming) {
+                    applyDeferredFreshnessRefreshIfIdle()
+                }
             }
         }
     }
+
+    private fun applyDeferredFreshnessRefreshIfIdle() {
+        if (!shouldApplyDeferredFreshnessRefresh(hasDeferredFreshnessRefresh, isChatBusy(_uiState.value))) return
+        hasDeferredFreshnessRefresh = false
+        loadInitialMessages(reason = TimelineReloadReason.AUTO_FRESHNESS_REFRESH)
+    }
+
+    private fun isChatBusy(state: ChatUiState): Boolean =
+        state.isStreaming ||
+            state.isRetrying ||
+            state.isSyncingSession ||
+            state.inputText.isNotBlank() ||
+            state.pendingImages.isNotEmpty()
 
     private fun maybeTrackStreamingQueueItem(
         type: PendingQueueType,
@@ -911,6 +971,43 @@ class ChatViewModel(
 
     private inline fun recordMetricsSafely(record: () -> Unit) {
         runCatching(record)
+    }
+
+    private fun observeActiveSessionIdentity() {
+        viewModelScope.launch {
+            sessionController.activeSession.collect { identity ->
+                if (identity?.isSwitching != true) return@collect
+
+                // A retained Chat destination must never keep painting the source session
+                // while the bridge is switching. The generation also guards late replies.
+                initialLoadJob?.cancel()
+                treeLoadJob?.cancel()
+                fullTimeline = emptyList()
+                visibleTimelineSize = 0
+                pendingLocalUserIds.clear()
+                resetHistoryWindow()
+                latestSessionPath = identity.sessionPath
+                lastKnownSessionFreshness = null
+                _uiState.update {
+                    it.copy(
+                        isLoading = true,
+                        timeline = emptyList(),
+                        hasOlderMessages = false,
+                        hiddenHistoryCount = 0,
+                        sessionPath = identity.sessionPath,
+                        sessionName = null,
+                        errorMessage = null,
+                        sessionCoherencyWarning = null,
+                        isSyncingSession = true,
+                        sessionTree = null,
+                        isLoadingTree = false,
+                        treeErrorMessage = null,
+                        selectedToolId = null,
+                        extensionStatuses = emptyMap(),
+                    )
+                }
+            }
+        }
     }
 
     @Suppress("CyclomaticComplexMethod", "LongMethod")
@@ -1133,6 +1230,7 @@ class ChatViewModel(
     private fun updateEditorText(event: ExtensionUiRequestEvent) {
         event.text?.let { text ->
             _uiState.update { it.copy(inputText = text) }
+            applyDeferredFreshnessRefreshIfIdle()
         }
     }
 
@@ -1155,6 +1253,7 @@ class ChatViewModel(
                     id = "user-$entryId",
                     text = text,
                     imageCount = imageCount,
+                    images = extractUserImages(content),
                 )
             replacePendingUserItemOrUpsert(userItem)
         }
@@ -1177,6 +1276,7 @@ class ChatViewModel(
                 pendingQueueItems = emptyList(),
             )
         }
+        applyDeferredFreshnessRefreshIfIdle()
     }
 
     private fun handleExtensionError(event: ExtensionErrorEvent) {
@@ -1216,6 +1316,7 @@ class ChatViewModel(
 
     private fun handleRetryEnd(event: AutoRetryEndEvent) {
         _uiState.update { it.copy(isRetrying = false) }
+        applyDeferredFreshnessRefreshIfIdle()
         val message =
             if (event.success) {
                 "Retry successful (attempt ${event.attempt})"
@@ -1636,22 +1737,13 @@ class ChatViewModel(
 
     @Suppress("LongMethod", "CyclomaticComplexMethod")
     private fun loadInitialMessages(reason: TimelineReloadReason) {
-        val previousHistorySignature =
-            if (
-                reason == TimelineReloadReason.MANUAL_SYNC ||
-                reason == TimelineReloadReason.CONNECTION_RECOVERY ||
-                reason == TimelineReloadReason.AUTO_FRESHNESS_REFRESH
-            ) {
-                historyWindowSignature(historyWindowMessages)
-            } else {
-                null
-            }
-
         val shouldForceRuntimeReload =
             reason == TimelineReloadReason.MANUAL_SYNC ||
                 reason == TimelineReloadReason.AUTO_FRESHNESS_REFRESH
 
         initialLoadJob?.cancel()
+        val loadGeneration = sessionController.activeSession.value?.generation
+        val bootstrapStartedAt = System.currentTimeMillis()
         initialLoadJob =
             viewModelScope.launch(Dispatchers.IO) {
                 val reloadResult =
@@ -1662,35 +1754,54 @@ class ChatViewModel(
                     }
                 val reloadError = reloadResult?.exceptionOrNull()
 
-                val messagesResult =
+                var metadata = emptyInitialLoadMetadata()
+                val bootstrapResult =
                     if (reloadError == null) {
-                        sessionController.getMessages()
-                    } else {
-                        Result.failure(reloadError)
-                    }
-                val stateResult =
-                    if (reloadError == null) {
-                        sessionController.getState()
+                        sessionController.bootstrap { stateResponse ->
+                            recordMetricsSafely {
+                                PerformanceMetrics.recordOperation(
+                                    operation = "chat_state_response",
+                                    durationMs = System.currentTimeMillis() - bootstrapStartedAt,
+                                )
+                            }
+                            metadata = parseInitialLoadMetadata(stateResponse.data)
+                            val isCurrentGeneration =
+                                loadGeneration == null ||
+                                    sessionController.activeSession.value?.generation == loadGeneration
+                            if (isCurrentGeneration) {
+                                _uiState.update { state ->
+                                    state.copy(
+                                        currentModel = metadata.modelInfo,
+                                        thinkingLevel = metadata.thinkingLevel,
+                                        isStreaming = metadata.isStreaming,
+                                        steeringMode = metadata.steeringMode,
+                                        followUpMode = metadata.followUpMode,
+                                        sessionPath = metadata.sessionPath ?: reloadResult?.getOrNull(),
+                                        sessionName = metadata.sessionName,
+                                        pendingMessageCount = metadata.pendingMessageCount,
+                                    )
+                                }
+                            }
+                        }
                     } else {
                         Result.failure(reloadError)
                     }
 
-                if (messagesResult.isSuccess) {
-                    recordMetricsSafely { PerformanceMetrics.recordFirstMessagesRendered() }
+                if (loadGeneration != null && sessionController.activeSession.value?.generation != loadGeneration) {
+                    return@launch
                 }
 
-                val stateData = stateResult.getOrNull()?.data
-                val metadata =
-                    InitialLoadMetadata(
-                        modelInfo = stateData?.let { parseModelInfo(it) },
-                        thinkingLevel = stateData?.stringField("thinkingLevel"),
-                        isStreaming = stateData?.booleanField("isStreaming") ?: false,
-                        steeringMode = stateData.deliveryModeField("steeringMode", "steering_mode"),
-                        followUpMode = stateData.deliveryModeField("followUpMode", "follow_up_mode"),
-                        sessionPath = stateData?.stringField("sessionFile"),
-                        sessionName = stateData?.stringField("sessionName"),
-                        pendingMessageCount = stateData?.intField("pendingMessageCount") ?: 0,
-                    )
+                val messagesResult = bootstrapResult.map { snapshot -> snapshot.messagesResponse }
+
+                if (messagesResult.isSuccess) {
+                    recordMetricsSafely {
+                        PerformanceMetrics.recordFirstMessagesRendered()
+                        PerformanceMetrics.recordOperation(
+                            operation = "chat_first_timeline_payload",
+                            durationMs = System.currentTimeMillis() - bootstrapStartedAt,
+                        )
+                    }
+                }
 
                 _uiState.update { state ->
                     if (messagesResult.isFailure) {
@@ -1711,36 +1822,19 @@ class ChatViewModel(
                 latestSessionPath = metadata.sessionPath ?: reloadResult?.getOrNull() ?: latestSessionPath
                 refreshSessionFreshness(trigger = FreshnessCheckTrigger.POST_LOAD)
 
-                val refreshedHistorySignature = historyWindowSignature(historyWindowMessages)
-                val hasPotentialExternalChanges =
-                    messagesResult.isSuccess &&
-                        previousHistorySignature != null &&
-                        previousHistorySignature != refreshedHistorySignature
-
                 if (reason == TimelineReloadReason.MANUAL_SYNC) {
                     _uiState.update { state ->
                         state.copy(
                             isSyncingSession = false,
                             sessionCoherencyWarning =
-                                if (messagesResult.isFailure || hasPotentialExternalChanges) {
-                                    SESSION_COHERENCY_WARNING_MESSAGE
-                                } else {
-                                    null
-                                },
+                                if (messagesResult.isFailure) SESSION_COHERENCY_WARNING_MESSAGE else null,
                         )
                     }
 
                     if (messagesResult.isSuccess) {
                         resetFreshnessWarningThrottle()
-                        val message =
-                            if (hasPotentialExternalChanges) {
-                                "Potential cross-device edits detected. Timeline refreshed."
-                            } else {
-                                "Session sync complete"
-                            }
-                        val type = if (hasPotentialExternalChanges) "warning" else "info"
-                        addSystemNotification(message = message, type = type)
                     }
+                    applyDeferredFreshnessRefreshIfIdle()
                 } else if (reason == TimelineReloadReason.AUTO_FRESHNESS_REFRESH) {
                     _uiState.update {
                         it.copy(
@@ -1755,25 +1849,34 @@ class ChatViewModel(
 
                     if (messagesResult.isSuccess) {
                         resetFreshnessWarningThrottle()
-                        val message =
-                            if (hasPotentialExternalChanges) {
-                                "Session changed externally. Timeline auto-refreshed."
-                            } else {
-                                "Session freshness changed. Timeline refreshed."
-                            }
-                        addSystemNotification(message = message, type = "info")
                     }
-                } else if (hasPotentialExternalChanges) {
-                    _uiState.update {
-                        it.copy(sessionCoherencyWarning = SESSION_COHERENCY_WARNING_MESSAGE)
-                    }
-                    addSystemNotification(
-                        message = "Session changed while disconnected or edited elsewhere. Review before continuing.",
-                        type = "warning",
-                    )
                 }
             }
     }
+
+    private fun parseInitialLoadMetadata(stateData: JsonObject?): InitialLoadMetadata =
+        InitialLoadMetadata(
+            modelInfo = stateData?.let { parseModelInfo(it) },
+            thinkingLevel = stateData?.stringField("thinkingLevel"),
+            isStreaming = stateData?.booleanField("isStreaming") ?: false,
+            steeringMode = stateData.deliveryModeField("steeringMode", "steering_mode"),
+            followUpMode = stateData.deliveryModeField("followUpMode", "follow_up_mode"),
+            sessionPath = stateData?.stringField("sessionFile"),
+            sessionName = stateData?.stringField("sessionName"),
+            pendingMessageCount = stateData?.intField("pendingMessageCount") ?: 0,
+        )
+
+    private fun emptyInitialLoadMetadata(): InitialLoadMetadata =
+        InitialLoadMetadata(
+            modelInfo = null,
+            thinkingLevel = null,
+            isStreaming = false,
+            steeringMode = DELIVERY_MODE_ONE_AT_A_TIME,
+            followUpMode = DELIVERY_MODE_ONE_AT_A_TIME,
+            sessionPath = null,
+            sessionName = null,
+            pendingMessageCount = 0,
+        )
 
     private fun buildInitialLoadFailureState(
         state: ChatUiState,
@@ -1797,6 +1900,7 @@ class ChatViewModel(
             steeringMode = metadata.steeringMode,
             followUpMode = metadata.followUpMode,
             sessionName = metadata.sessionName,
+            sessionPath = metadata.sessionPath,
             pendingMessageCount = metadata.pendingMessageCount,
         )
     }
@@ -1839,6 +1943,7 @@ class ChatViewModel(
             steeringMode = metadata.steeringMode,
             followUpMode = metadata.followUpMode,
             sessionName = metadata.sessionName,
+            sessionPath = metadata.sessionPath,
             pendingMessageCount = metadata.pendingMessageCount,
         )
     }
@@ -1851,6 +1956,7 @@ class ChatViewModel(
 
     private var hasRecordedFirstToken = false
     private var initialLoadJob: Job? = null
+    private var treeLoadJob: Job? = null
 
     private fun handleMessageUpdate(event: MessageUpdateEvent) {
         // Record first token received for TTFT tracking
@@ -2123,6 +2229,7 @@ class ChatViewModel(
     }
 
     fun hideTreeSheet() {
+        treeLoadJob?.cancel()
         _uiState.update { it.copy(isTreeSheetVisible = false) }
     }
 
@@ -2182,49 +2289,88 @@ class ChatViewModel(
         }
     }
 
+    @Suppress("LongMethod")
     private fun loadSessionTree() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingTree = true) }
+        treeLoadJob?.cancel()
+        val requestGeneration = sessionController.activeSession.value?.generation
+        treeLoadJob =
+            viewModelScope.launch {
+                _uiState.update { it.copy(isLoadingTree = true) }
 
-            val stateResult = sessionController.getState()
-            if (stateResult.isFailure) {
-                _uiState.update {
-                    it.copy(
-                        isLoadingTree = false,
-                        treeErrorMessage = stateResult.exceptionOrNull()?.message ?: "Failed to load session state",
+                val activePath = sessionController.activeSession.value?.sessionPath
+                val stateResult =
+                    if (!activePath.isNullOrBlank()) {
+                        Result.success<RpcResponse?>(null)
+                    } else {
+                        sessionController.getState()
+                    }
+                if (stateResult.isFailure) {
+                    _uiState.update {
+                        it.copy(
+                            isLoadingTree = false,
+                            treeErrorMessage = stateResult.exceptionOrNull()?.message ?: "Failed to load session state",
+                        )
+                    }
+                    return@launch
+                }
+
+                if (
+                    requestGeneration != null &&
+                    sessionController.activeSession.value?.generation != requestGeneration
+                ) {
+                    return@launch
+                }
+
+                val sessionPath = activePath ?: stateResult.getOrNull()?.data?.stringField("sessionFile")
+                if (sessionPath.isNullOrBlank()) {
+                    _uiState.update {
+                        it.copy(
+                            isLoadingTree = false,
+                            treeErrorMessage = "No active session path available",
+                        )
+                    }
+                    return@launch
+                }
+
+                val filter = _uiState.value.treeFilter
+                sessionController.getCachedSessionTree(sessionPath, filter)?.let { cachedTree ->
+                    _uiState.update {
+                        it.copy(
+                            sessionTree = cachedTree.copy(isStale = true),
+                            isLoadingTree = true,
+                            treeErrorMessage = null,
+                        )
+                    }
+                }
+                val treeStartedAt = System.currentTimeMillis()
+                val result = sessionController.getSessionTree(sessionPath = sessionPath, filter = filter)
+                recordMetricsSafely {
+                    PerformanceMetrics.recordOperation(
+                        operation = "chat_tree_response",
+                        durationMs = System.currentTimeMillis() - treeStartedAt,
                     )
                 }
-                return@launch
-            }
-
-            val sessionPath = stateResult.getOrNull()?.data?.stringField("sessionFile")
-            if (sessionPath.isNullOrBlank()) {
-                _uiState.update {
-                    it.copy(
-                        isLoadingTree = false,
-                        treeErrorMessage = "No active session path available",
-                    )
+                if (
+                    requestGeneration != null &&
+                    sessionController.activeSession.value?.generation != requestGeneration
+                ) {
+                    return@launch
                 }
-                return@launch
-            }
-
-            val filter = _uiState.value.treeFilter
-            val result = sessionController.getSessionTree(sessionPath = sessionPath, filter = filter)
-            _uiState.update { state ->
-                if (result.isSuccess) {
-                    state.copy(
-                        sessionTree = result.getOrNull(),
-                        isLoadingTree = false,
-                        treeErrorMessage = null,
-                    )
-                } else {
-                    state.copy(
-                        isLoadingTree = false,
-                        treeErrorMessage = result.exceptionOrNull()?.message ?: "Failed to load session tree",
-                    )
+                _uiState.update { state ->
+                    if (result.isSuccess) {
+                        state.copy(
+                            sessionTree = result.getOrNull(),
+                            isLoadingTree = false,
+                            treeErrorMessage = null,
+                        )
+                    } else {
+                        state.copy(
+                            isLoadingTree = false,
+                            treeErrorMessage = result.exceptionOrNull()?.message ?: "Failed to load session tree",
+                        )
+                    }
                 }
             }
-        }
     }
 
     private fun handleToolStart(event: ToolExecutionStartEvent) {
@@ -2450,7 +2596,7 @@ class ChatViewModel(
         val mergedUserItem =
             userItem.copy(
                 imageCount = maxOf(userItem.imageCount, pendingItem.imageCount),
-                imageUris = userItem.imageUris.ifEmpty { pendingItem.imageUris },
+                images = userItem.images.ifEmpty { pendingItem.images },
             )
 
         fullTimeline =
@@ -2554,21 +2700,25 @@ class ChatViewModel(
     }
 
     private fun visibleTimeline(): List<ChatTimelineItem> {
-        if (fullTimeline.isEmpty()) {
-            return emptyList()
-        }
+        if (fullTimeline.isEmpty()) return emptyList()
+        return fullTimeline.drop(visibleTimelineStartIndex())
+    }
 
+    private fun visibleTimelineStartIndex(): Int {
         val visibleCount = visibleTimelineSize.coerceIn(0, fullTimeline.size)
-        return fullTimeline.takeLast(visibleCount)
+        var startIndex = fullTimeline.size - visibleCount
+        while (startIndex > 0 && fullTimeline[startIndex] !is ChatTimelineItem.User) {
+            startIndex -= 1
+        }
+        return startIndex
     }
 
     private fun hasOlderMessages(): Boolean {
-        return historyParsedStartIndex > 0 || fullTimeline.size > visibleTimelineSize
+        return historyParsedStartIndex > 0 || visibleTimelineStartIndex() > 0
     }
 
     private fun hiddenHistoryCount(): Int {
-        val hiddenLoadedItems = (fullTimeline.size - visibleTimelineSize).coerceAtLeast(0)
-        return hiddenLoadedItems + historyParsedStartIndex
+        return visibleTimelineStartIndex() + historyParsedStartIndex
     }
 
     fun addImage(pendingImage: PendingImage) {
@@ -2587,6 +2737,7 @@ class ChatViewModel(
                 pendingImages = state.pendingImages.filterIndexed { i, _ -> i != index },
             )
         }
+        applyDeferredFreshnessRefreshIfIdle()
     }
 
     private data class SlashCommandInvocation(
@@ -2624,10 +2775,11 @@ class ChatViewModel(
         resetStreamingDiagnostics(startNewRun = false)
         resetFreshnessWarningThrottle()
         pendingLocalUserIds.clear()
-        super.onCleared()
     }
 
     companion object {
+        private const val DRAFT_TEXT_KEY = "chat_draft_text"
+
         const val TREE_FILTER_DEFAULT = "default"
         const val TREE_FILTER_ALL = "all"
         const val TREE_FILTER_NO_TOOLS = "no-tools"

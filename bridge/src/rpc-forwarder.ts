@@ -70,7 +70,6 @@ export function createPiRpcForwarder(config: PiRpcForwarderConfig, logger: Logge
 
         logger.warn(
             {
-                cwd: config.cwd,
                 restartAttempt,
                 delayMs,
             },
@@ -83,8 +82,8 @@ export function createPiRpcForwarder(config: PiRpcForwarderConfig, logger: Logge
 
             try {
                 startProcess();
-            } catch (error: unknown) {
-                logger.error({ error }, "Failed to restart pi RPC subprocess");
+            } catch {
+                logger.error("Failed to restart pi RPC subprocess");
                 scheduleRestart();
             }
         }, delayMs);
@@ -105,8 +104,8 @@ export function createPiRpcForwarder(config: PiRpcForwarderConfig, logger: Logge
             stdio: "pipe",
         });
 
-        child.on("error", (error) => {
-            logger.error({ error }, "pi RPC subprocess error");
+        child.on("error", () => {
+            logger.error("pi RPC subprocess error");
         });
 
         child.on("exit", (code, signal) => {
@@ -149,15 +148,7 @@ export function createPiRpcForwarder(config: PiRpcForwarderConfig, logger: Logge
         processRef = child;
         restartAttempt = 0;
 
-        logger.info(
-            {
-                command: config.command,
-                args: config.args,
-                pid: child.pid,
-                cwd: config.cwd,
-            },
-            "Started pi RPC subprocess",
-        );
+        logger.info("Started pi RPC subprocess");
 
         lifecycleHandler({
             type: "start",

@@ -206,8 +206,8 @@ class PiRpcConnection(
         return requestResponse(GetEntriesCommand(id = requestIdFactory(), since = since))
     }
 
-    suspend fun requestTree(): RpcResponse {
-        return requestResponse(GetTreeCommand(id = requestIdFactory()))
+    suspend fun requestTree(timeoutMs: Long? = null): RpcResponse {
+        return requestResponse(GetTreeCommand(id = requestIdFactory()), timeoutMs)
     }
 
     suspend fun resync(): RpcResyncSnapshot {
@@ -369,7 +369,10 @@ class PiRpcConnection(
         pendingResponses.clear()
     }
 
-    private suspend fun requestResponse(command: RpcCommand): RpcResponse {
+    private suspend fun requestResponse(
+        command: RpcCommand,
+        timeoutOverrideMs: Long? = null,
+    ): RpcResponse {
         val commandId = requireNotNull(command.id) { "RPC command id is required for request/response operations" }
         val responseDeferred = CompletableDeferred<RpcResponse>()
         pendingResponses[commandId] = responseDeferred
@@ -377,7 +380,7 @@ class PiRpcConnection(
         return try {
             sendCommand(command)
 
-            val timeoutMs = activeConfig?.requestTimeoutMs ?: DEFAULT_REQUEST_TIMEOUT_MS
+            val timeoutMs = timeoutOverrideMs ?: activeConfig?.requestTimeoutMs ?: DEFAULT_REQUEST_TIMEOUT_MS
             withTimeout(timeoutMs) {
                 responseDeferred.await()
             }
@@ -481,9 +484,7 @@ private suspend fun ensureBridgeControl(
 
     withTimeout(config.requestTimeoutMs) {
         select<Unit> {
-            cwdSetChannel.onReceive {
-                Unit
-            }
+            cwdSetChannel.onReceive { }
             errorChannel.onReceive { message ->
                 throw IllegalStateException(parseBridgeErrorMessage(message))
             }
@@ -507,9 +508,7 @@ private suspend fun ensureBridgeControl(
 
     withTimeout(config.requestTimeoutMs) {
         select<Unit> {
-            controlAcquiredChannel.onReceive {
-                Unit
-            }
+            controlAcquiredChannel.onReceive { }
             errorChannel.onReceive { message ->
                 throw IllegalStateException(parseBridgeErrorMessage(message))
             }

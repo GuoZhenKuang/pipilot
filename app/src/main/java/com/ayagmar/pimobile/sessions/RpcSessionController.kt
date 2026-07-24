@@ -43,6 +43,7 @@ import com.ayagmar.pimobile.corerpc.SteerCommand
 import com.ayagmar.pimobile.corerpc.SwitchSessionCommand
 import com.ayagmar.pimobile.coresessions.SessionRecord
 import com.ayagmar.pimobile.hosts.HostProfile
+import com.ayagmar.pimobile.perf.PerformanceMetrics
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -69,6 +70,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 @Suppress("TooManyFunctions", "LargeClass")
 class RpcSessionController(
@@ -76,6 +78,7 @@ class RpcSessionController(
     private val connectionFactory: () -> PiRpcConnection = { PiRpcConnection() },
     private val connectTimeoutMs: Long = DEFAULT_TIMEOUT_MS,
     private val requestTimeoutMs: Long = DEFAULT_TIMEOUT_MS,
+    private val treeRequestTimeoutMs: Long = TREE_REQUEST_TIMEOUT_MS,
 ) : SessionController {
     private val mutex = Mutex()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -83,9 +86,11 @@ class RpcSessionController(
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     private val _isStreaming = MutableStateFlow(false)
     private val _sessionChanged = MutableSharedFlow<String?>(extraBufferCapacity = 16)
+    private val _activeSession = MutableStateFlow<ActiveSessionState?>(null)
     private val _timelineInvalidated = MutableSharedFlow<Unit>(extraBufferCapacity = 16)
     private val _syncMetrics = MutableStateFlow(SessionSyncMetrics())
     private val entryProjection = SessionEntryProjection()
+    private val activeTreeCache = ConcurrentHashMap<String, SessionTreeSnapshot>()
 
     private var projectedMessagesResponse: RpcResponse? = null
     private var activeConnection: PiRpcConnection? = null
@@ -102,6 +107,7 @@ class RpcSessionController(
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
     override val isStreaming: StateFlow<Boolean> = _isStreaming.asStateFlow()
     override val sessionChanged: SharedFlow<String?> = _sessionChanged
+    override val activeSession: StateFlow<ActiveSessionState?> = _activeSession.asStateFlow()
     override val timelineInvalidated: SharedFlow<Unit> = _timelineInvalidated
     override val syncMetrics: StateFlow<SessionSyncMetrics> = _syncMetrics.asStateFlow()
 
@@ -119,11 +125,14 @@ class RpcSessionController(
         return resolveEffectiveTransport(transportPreference)
     }
 
+    override fun getActiveCwd(): String? = activeContext?.cwd
+
     override suspend fun ensureConnected(
         hostProfile: HostProfile,
         token: String,
         cwd: String,
     ): Result<Unit> {
+        val startedAt = System.currentTimeMillis()
         return mutex.withLock {
             runCatching {
                 ensureConnectionLocked(
@@ -131,6 +140,12 @@ class RpcSessionController(
                     token = token,
                     cwd = cwd,
                 )
+                runCatching {
+                    PerformanceMetrics.recordOperation(
+                        operation = "bridge_handshake_control",
+                        durationMs = System.currentTimeMillis() - startedAt,
+                    )
+                }
                 Unit
             }
         }
@@ -145,19 +160,36 @@ class RpcSessionController(
         }
     }
 
+    @Suppress("TooGenericExceptionCaught", "LongMethod")
     override suspend fun resume(
         hostProfile: HostProfile,
         token: String,
         session: SessionRecord,
     ): Result<String?> {
+        val resumeStartedAt = System.currentTimeMillis()
+        val previousIdentity = _activeSession.value
+        val nextGeneration = (previousIdentity?.generation ?: 0L) + 1L
+        _activeSession.value =
+            ActiveSessionState(
+                sessionPath = session.sessionPath.takeIf { it.isNotBlank() },
+                generation = nextGeneration,
+                isSwitching = true,
+            )
+
         return mutex.withLock {
-            runCatching {
+            try {
                 val connection =
                     ensureConnectionLocked(
                         hostProfile = hostProfile,
                         token = token,
                         cwd = session.cwd,
                     )
+                runCatching {
+                    PerformanceMetrics.recordOperation(
+                        operation = "resume_control_ready",
+                        durationMs = System.currentTimeMillis() - resumeStartedAt,
+                    )
+                }
 
                 if (session.sessionPath.isNotBlank()) {
                     val switchResponse =
@@ -173,12 +205,45 @@ class RpcSessionController(
                         ).requireSuccess("Failed to resume selected session")
 
                     switchResponse.requireNotCancelled("Session switch was cancelled")
+                    runCatching {
+                        PerformanceMetrics.recordOperation(
+                            operation = "session_switch_response",
+                            durationMs = System.currentTimeMillis() - resumeStartedAt,
+                        )
+                    }
                 }
 
                 val newPath = refreshCurrentSessionPath(connection)
                 resetSessionProjection()
+                _activeSession.value =
+                    ActiveSessionState(
+                        sessionPath = newPath,
+                        generation = nextGeneration,
+                        isSwitching = false,
+                    )
                 _sessionChanged.emit(newPath)
-                newPath
+                Result.success(newPath)
+            } catch (error: Throwable) {
+                _activeSession.value = previousIdentity?.copy(isSwitching = false)
+                previousIdentity?.let { _sessionChanged.emit(it.sessionPath) }
+                Result.failure(error)
+            }
+        }
+    }
+
+    override suspend fun bootstrap(onStateAvailable: (RpcResponse) -> Unit): Result<SessionBootstrapSnapshot> {
+        return mutex.withLock {
+            runCatching {
+                val connection = ensureActiveConnection()
+                val stateResponse = connection.requestState().requireSuccess("Failed to load state")
+                onStateAvailable(stateResponse)
+                val messagesResponse =
+                    projectedMessagesResponse
+                        ?: connection.requestMessages().requireSuccess("Failed to load messages")
+                SessionBootstrapSnapshot(
+                    stateResponse = stateResponse,
+                    messagesResponse = messagesResponse,
+                )
             }
         }
     }
@@ -301,6 +366,11 @@ class RpcSessionController(
         }
     }
 
+    override fun getCachedSessionTree(
+        sessionPath: String,
+        filter: String?,
+    ): SessionTreeSnapshot? = activeTreeCache[treeCacheKey(sessionPath, filter)]
+
     override suspend fun getSessionTree(
         sessionPath: String?,
         filter: String?,
@@ -310,12 +380,17 @@ class RpcSessionController(
                 val connection = ensureActiveConnection()
                 val activeSessionPath = refreshCurrentSessionPath(connection)
                 if (sessionPath.isNullOrBlank() || sessionPath == activeSessionPath) {
-                    val response = connection.requestTree().requireSuccess("Failed to load active session tree")
-                    return@runCatching parseRpcSessionTreeSnapshot(
-                        data = response.data,
-                        sessionPath = activeSessionPath.orEmpty(),
-                        filter = filter,
-                    )
+                    val response =
+                        connection.requestTree(treeRequestTimeoutMs)
+                            .requireSuccess("Failed to load active session tree")
+                    val snapshot =
+                        parseRpcSessionTreeSnapshot(
+                            data = response.data,
+                            sessionPath = activeSessionPath.orEmpty(),
+                            filter = filter,
+                        )
+                    activeTreeCache[treeCacheKey(snapshot.sessionPath, filter)] = snapshot
+                    return@runCatching snapshot
                 }
 
                 val bridgePayload =
@@ -377,6 +452,25 @@ class RpcSessionController(
         }
     }
 
+    private fun treeCacheKey(
+        sessionPath: String,
+        filter: String?,
+    ): String = "$sessionPath:${filter.orEmpty()}"
+
+    private fun markActiveTreesStale() {
+        activeTreeCache.replaceAll { _, snapshot -> snapshot.copy(isStale = true) }
+    }
+
+    private suspend fun publishSessionChanged(sessionPath: String?) {
+        _activeSession.value =
+            ActiveSessionState(
+                sessionPath = sessionPath,
+                generation = (_activeSession.value?.generation ?: 0L) + 1L,
+                isSwitching = false,
+            )
+        _sessionChanged.emit(sessionPath)
+    }
+
     private suspend fun forkWithEntryId(
         connection: PiRpcConnection,
         entryId: String,
@@ -400,7 +494,7 @@ class RpcSessionController(
 
         val newPath = refreshCurrentSessionPath(connection)
         resetSessionProjection()
-        _sessionChanged.emit(newPath)
+        publishSessionChanged(newPath)
         return newPath
     }
 
@@ -598,7 +692,7 @@ class RpcSessionController(
 
                 val newPath = refreshCurrentSessionPath(connection)
                 resetSessionProjection()
-                _sessionChanged.emit(newPath)
+                publishSessionChanged(newPath)
                 Unit
             }
         }
@@ -664,7 +758,7 @@ class RpcSessionController(
 
                 val sessionPath = bridgeResponse.payload.stringField("sessionPath")
                 resetSessionProjection()
-                _sessionChanged.emit(sessionPath)
+                publishSessionChanged(sessionPath)
                 sessionPath
             }
         }
@@ -1073,6 +1167,7 @@ class RpcSessionController(
         return scope.launch {
             connection.bridgeEvents.collect { event ->
                 if (event.type == BRIDGE_SESSION_INVALIDATED_TYPE) {
+                    markActiveTreesStale()
                     runCatching { connection.resync() }
                         .onFailure { error ->
                             Log.w(
@@ -1175,6 +1270,7 @@ class RpcSessionController(
         private const val SET_AUTO_RETRY_COMMAND = "set_auto_retry"
         private const val SET_STEERING_MODE_COMMAND = "set_steering_mode"
         private const val SET_FOLLOW_UP_MODE_COMMAND = "set_follow_up_mode"
+        private const val TREE_REQUEST_TIMEOUT_MS = 30_000L
         private const val BRIDGE_GET_SESSION_TREE_TYPE = "bridge_get_session_tree"
         private const val BRIDGE_SESSION_TREE_TYPE = "bridge_session_tree"
         private const val BRIDGE_GET_SESSION_FRESHNESS_TYPE = "bridge_get_session_freshness"

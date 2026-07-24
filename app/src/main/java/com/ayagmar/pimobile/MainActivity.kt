@@ -3,6 +3,7 @@ package com.ayagmar.pimobile
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.lifecycleScope
 import com.ayagmar.pimobile.di.AppGraph
 import com.ayagmar.pimobile.perf.PerformanceMetrics
@@ -20,6 +21,7 @@ class MainActivity : ComponentActivity() {
         recordAppStart()
 
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         setContent {
             PiMobileApp(appGraph = appGraph)
         }
