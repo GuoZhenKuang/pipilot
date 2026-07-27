@@ -1,4 +1,5 @@
 {
   "reviewPolicy": "single",
-  "maxRunCost": 10
+  "maxCostPerTask": 15,
+  "maxRunCost": 35
 }
