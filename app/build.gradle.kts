@@ -1,3 +1,4 @@
+import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -39,6 +40,15 @@ android {
 
     kotlin {
         compilerOptions.jvmTarget.set(JvmTarget.JVM_25)
+    }
+
+    // Declare the toolchain rather than inheriting the daemon's JVM. Without
+    // it, a Gradle daemon on an older JDK fails with "invalid source release:
+    // 25" only once it reaches :app, long after the real work is done.
+    java {
+        toolchain {
+            languageVersion.set(JavaLanguageVersion.of(25))
+        }
     }
 
     buildFeatures {
