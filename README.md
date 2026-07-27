@@ -27,6 +27,7 @@ Pi runs on your laptop. This app lets you:
 - Detect cross-device session drift and run **Sync now** for safe refresh
 - Attach images to prompts
 - Navigate session tree branches in-place (jump+continue), filter tree views, and fork from selected entries
+- Share sessions with authenticated durable opaque links; copy, revoke, and regenerate links without exposing Pi session IDs
 - Switch between projects (different working directories)
 - Handle extension dialogs/widgets/status updates (confirm/input/select/editor/setStatus/setWidget)
 
@@ -83,7 +84,7 @@ pnpm start
 curl --fail http://127.0.0.1:8787/health
 ```
 
-The bridge binds to `127.0.0.1:8787` by default. Set `BRIDGE_HOST` to your laptop Tailscale IP to allow phone access (avoid `0.0.0.0` unless you enforce firewall restrictions). It spawns pi processes on demand per working directory.
+The bridge binds to `127.0.0.1:8787` by default. Set `BRIDGE_HOST` to your laptop Tailscale IP to allow phone access (avoid `0.0.0.0` unless you enforce firewall restrictions). It spawns pi processes on demand per working directory. Set `BRIDGE_STATE_DIR` for owner-only durable share references and optionally `BRIDGE_SHARE_ORIGIN` for a metadata-free self-hosted landing URL; never put tokens or Pi session metadata in links.
 
 ### 2. Phone Setup
 

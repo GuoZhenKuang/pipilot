@@ -22,6 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -33,6 +35,7 @@ import com.ayagmar.pimobile.hosts.HostTokenStore
 import com.ayagmar.pimobile.sessions.CwdSessionGroupUiState
 import com.ayagmar.pimobile.sessions.SessionAction
 import com.ayagmar.pimobile.sessions.SessionController
+import com.ayagmar.pimobile.sessions.BridgeSessionShareRemoteDataSource
 import com.ayagmar.pimobile.sessions.SessionCwdPreferenceStore
 import com.ayagmar.pimobile.sessions.SessionsUiState
 import com.ayagmar.pimobile.sessions.SessionsViewModel
@@ -53,6 +56,7 @@ fun SessionsRoute(
     repository: SessionIndexRepository,
     sessionController: SessionController,
     cwdPreferenceStore: SessionCwdPreferenceStore,
+    shareRemoteDataSource: BridgeSessionShareRemoteDataSource? = null,
     onNavigateToChat: () -> Unit = {},
 ) {
     val factory =
@@ -63,10 +67,12 @@ fun SessionsRoute(
                 repository = repository,
                 sessionController = sessionController,
                 cwdPreferenceStore = cwdPreferenceStore,
+                shareRemoteDataSource = shareRemoteDataSource,
             )
         }
     val sessionsViewModel: SessionsViewModel = viewModel(factory = factory)
     val uiState by sessionsViewModel.uiState.collectAsStateWithLifecycle()
+    val clipboard = LocalClipboardManager.current
     var transientStatusMessage by remember { mutableStateOf<String?>(null) }
 
     // Refresh hosts when screen is resumed (e.g., after adding a host)
@@ -112,6 +118,9 @@ fun SessionsRoute(
                 onDismissForkDialog = sessionsViewModel::dismissForkPicker,
                 onExport = { sessionsViewModel.runSessionAction(SessionAction.Export) },
                 onCompact = { sessionsViewModel.runSessionAction(SessionAction.Compact) },
+                onShare = sessionsViewModel::shareActiveSession,
+                onRevokeShare = sessionsViewModel::revokeActiveSessionShare,
+                onCopyLink = { link -> clipboard.setText(AnnotatedString(link)) },
             ),
     )
 }
@@ -130,6 +139,9 @@ private data class SessionsScreenCallbacks(
     val onDismissForkDialog: () -> Unit,
     val onExport: () -> Unit,
     val onCompact: () -> Unit,
+    val onShare: () -> Unit,
+    val onRevokeShare: () -> Unit,
+    val onCopyLink: (String) -> Unit,
 )
 
 private data class ActiveSessionActionCallbacks(
@@ -137,6 +149,8 @@ private data class ActiveSessionActionCallbacks(
     val onFork: () -> Unit,
     val onExport: () -> Unit,
     val onCompact: () -> Unit,
+    val onShare: () -> Unit,
+    val onRevokeShare: () -> Unit,
 )
 
 private data class SessionsListCallbacks(
@@ -154,6 +168,7 @@ private data class RenameDialogUiState(
 )
 
 @Composable
+@Suppress("LongMethod")
 private fun SessionsScreen(
     state: SessionsUiState,
     transientStatusMessage: String?,
@@ -190,6 +205,8 @@ private fun SessionsScreen(
         StatusMessages(
             errorMessage = state.errorMessage,
             statusMessage = transientStatusMessage,
+            shareLink = state.shareLink,
+            onCopyLink = callbacks.onCopyLink,
         )
 
         SessionsContent(
@@ -204,6 +221,8 @@ private fun SessionsScreen(
                     onFork = callbacks.onFork,
                     onExport = callbacks.onExport,
                     onCompact = callbacks.onCompact,
+                    onShare = callbacks.onShare,
+                    onRevokeShare = callbacks.onRevokeShare,
                 ),
         )
     }
@@ -300,6 +319,8 @@ private fun SessionsHeader(
 private fun StatusMessages(
     errorMessage: String?,
     statusMessage: String?,
+    shareLink: String?,
+    onCopyLink: (String) -> Unit,
 ) {
     errorMessage?.let { message ->
         Text(
@@ -315,6 +336,13 @@ private fun StatusMessages(
             color = MaterialTheme.colorScheme.primary,
             style = MaterialTheme.typography.bodyMedium,
         )
+    }
+
+    shareLink?.let { link ->
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(link, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            TextButton(onClick = { onCopyLink(link) }) { Text("Copy link") }
+        }
     }
 }
 
@@ -533,6 +561,8 @@ private fun SessionCard(
                     onForkClick = actions.onFork,
                     onExportClick = actions.onExport,
                     onCompactClick = actions.onCompact,
+                    onShareClick = actions.onShare,
+                    onRevokeShareClick = actions.onRevokeShare,
                 )
             }
         }

@@ -26,3 +26,11 @@ Non-secret connection fields may be re-entered when editing. Existing tokens rem
 | Session unavailable | Session was moved, deleted, or cannot be read | Refresh Sessions and choose another session |
 
 Technical diagnostics may be copied for troubleshooting, but primary recovery text is typed and sanitized. Tokens, authorization headers, private prompts, and raw session contents must never be rendered or logged.
+
+## Sharing a session
+
+Set `BRIDGE_STATE_DIR` to an owner-only disposable/backup location and optionally set `BRIDGE_SHARE_ORIGIN` to a strict HTTP(S) origin with no path, query, fragment, or userinfo. Pair or authenticate the host, review the reported origin, then use **Share session link**. Repeated creation is stable until **Revoke shared link**; revocation is durable and the next share generates a different reference. Back up the state directory: state loss invalidates old links and must not silently regenerate equivalent references.
+
+A shared URI contains only the bridge authority, link version, and opaque reference. Opening it never sends a stored token to an endpoint that is not already configured and matched (or explicitly reviewed and saved). Setup-required and authentication states require user action. Missing, revoked, deleted, duplicate-ID, corrupt-state, unsupported-version, unreachable, resume-failure, and lock-conflict states are generic; lock conflict offers retry or return to Sessions and never takeover.
+
+The bridge indexes only the first bounded session header. A valid unique Pi header ID remains stable when its file moves; malformed/missing IDs are browseable but cannot be shared, and duplicate live IDs are never resolved arbitrarily.

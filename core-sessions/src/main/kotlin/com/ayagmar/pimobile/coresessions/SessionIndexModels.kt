@@ -12,7 +12,14 @@ data class SessionRecord(
     val firstUserMessagePreview: String? = null,
     val messageCount: Int? = null,
     val lastModel: String? = null,
-)
+    /** Documented Pi session-header identity. Null keeps old caches backward compatible. */
+    val sessionId: String? = null,
+    /** False for old caches, malformed IDs, and every member of a duplicate-ID set. */
+    val isSessionIdUnique: Boolean = false,
+) {
+    val hasStableIdentity: Boolean
+        get() = sessionId.isValidPiSessionId() && isSessionIdUnique
+}
 
 @Serializable
 data class SessionGroup(

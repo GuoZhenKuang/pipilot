@@ -102,8 +102,21 @@ If reconnecting with same `clientId`, `resumed` may be `true` and previous `cwd`
 | `bridge_set_cwd` | `bridge_cwd_set` | Sets active cwd context for client |
 | `bridge_acquire_control` | `bridge_control_acquired` | Acquires write lock for cwd/session |
 | `bridge_release_control` | `bridge_control_released` | Releases held lock |
+| `bridge_get_or_create_session_share` | `bridge_session_share` | Authenticated stable opaque reference for one unique indexed session |
+| `bridge_resolve_session_share` | `bridge_session_share_resolved` | Authenticated lookup; duplicate/deleted/revoked identities resolve generically unavailable |
+| `bridge_revoke_session_share` | `bridge_session_share_revoked` | Authenticated owner action; next create generates a new reference |
 
 The bridge also pushes `bridge_session_invalidated { reason }` to the controlling client after mutations observed through the active Pi process, session import/switch, or tree navigation. Clients should immediately run cursor synchronization.
+
+### Stable session sharing
+
+The bridge reads the first bounded Pi session header and uses its documented `id` as the internal identity. Valid duplicate IDs remain listed but are not shareable or resolvable. A moved file retains its mapping because references point to the ID, not a path.
+
+The three share operations above are metadata-only authenticated bridge operations and do not bypass cwd/control locks. Resolve returns exactly one current `SessionRecord`; resuming it uses the ordinary cwd setup, control lock, `switch_session`, cursor synchronization, and post-switch `get_state.sessionId` check.
+
+References are 16 random bytes encoded as unpadded base64url (22 characters). The versioned owner-only state is `${BRIDGE_STATE_DIR}/share-references.json`, written through a synced temporary file and atomic rename. It contains no tokens, paths, cwd values, titles, previews, or transcript data. Corrupt/unsupported state returns `share_state_unavailable` while normal listing and RPC remain available. Revoke is durable and explicit; deleting/resetting the state invalidates links and requires operator repair/recovery.
+
+When `BRIDGE_SHARE_ORIGIN` is configured as a strict HTTP(S) origin, landing pages are `/s/v1/<reference>` and contain only generic open-in-app instructions. They use no request `Host` header and return `no-store`, no-referrer, `nosniff`, frame protection, and restrictive CSP headers. The custom fallback is `pimobile://open/v1/<reference>?host=<authority>&port=<port>&tls=<0|1>`.
 
 ### `bridge_get_session_tree` filters
 

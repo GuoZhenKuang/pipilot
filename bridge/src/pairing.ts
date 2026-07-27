@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import type { BridgeConfig } from "./config.js";
 
 export const PAIRING_PAYLOAD_TYPE = "pi-mobile-host";
-export const PAIRING_PAYLOAD_VERSION = 1;
+export const PAIRING_PAYLOAD_VERSION = 2;
 
 export interface HostPairingPayload {
     type: typeof PAIRING_PAYLOAD_TYPE;
@@ -13,6 +13,7 @@ export interface HostPairingPayload {
     port: number;
     useTls: boolean;
     token: string;
+    shareOrigin?: string;
 }
 
 export function createHostPairingPayload(config: BridgeConfig, hostOverride?: string): HostPairingPayload {
@@ -27,6 +28,7 @@ export function createHostPairingPayload(config: BridgeConfig, hostOverride?: st
         port: config.port,
         useTls: false,
         token: config.authToken,
+        ...(config.shareOrigin ? { shareOrigin: config.shareOrigin } : {}),
     };
 }
 

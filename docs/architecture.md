@@ -10,6 +10,7 @@ flowchart LR
 
     subgraph Android["Android app"]
       Hosts["Hosts and tokens"]
+      ShareCoordinator["Application-scoped share-link coordinator"]
       Sessions["Sessions screen<br/>cache and filter"]
       Chat["Chat screen and ViewModel"]
       Net["PiRpcConnection<br/>WebSocketTransport"]
@@ -32,6 +33,7 @@ flowchart LR
     Hosts --> Sessions
     Sessions --> Net
     Chat --> Net
+    ShareCoordinator --> Net
 
     Net <-->|ws://.../ws<br/>channel payload envelope| WS
     WS --> Locks
@@ -122,5 +124,7 @@ stateDiagram-v2
 - **Resync after reconnect**: uses durable entry IDs as cursors and performs one explicit full rebuild when the cursor or local projection is invalid.
 - **Current tree paths**: active sessions use Pi `get_tree`; bridge-owned filesystem reads remain only for inactive-session browsing. The internal extension remains solely for navigation because Pi 0.80.6 has no navigation RPC command.
 - **Freshness monitoring**: bridge-observed mutations push `bridge_session_invalidated` for immediate entry resync. A 60-second foreground-only safety poll covers terminal and other external file edits.
+- **Stable identities**: authenticated local state uses `SessionKey(hostProfileId, sessionId)`; external links use only `SharedSessionLocator(authority, version, opaqueReference)`. Pi IDs, local profile IDs, paths, cwd values, tokens, and transcript data never enter external URIs or ordinary logs.
+- **Share delivery**: `PiMobileApplication` owns one coordinator across activity recreation. It accepts only `ACTION_VIEW`, consumes each intent once, cancels stale generations, matches only configured endpoint/verified alias authorities, and delegates resolve/resume to the existing controller and locks.
 - **Retained boundary**: [ADR-0004](adr/ADR-0004-retain-rpc-subprocess-boundary.md) records Android → authenticated bridge → one `pi --mode rpc` process per cwd.
 - Decision rationale is captured in [ADRs](adr/README.md).

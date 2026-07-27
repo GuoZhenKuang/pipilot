@@ -1,5 +1,6 @@
 package com.ayagmar.pimobile
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -12,19 +13,25 @@ import com.ayagmar.pimobile.ui.PiMobileApp
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-    private val appGraph: AppGraph by lazy {
-        AppGraph(applicationContext)
-    }
+    private val appGraph: AppGraph
+        get() = (application as PiMobileApplication).appGraph
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Record app start as early as possible
         recordAppStart()
 
         super.onCreate(savedInstanceState)
+        appGraph.shareNavigationCoordinator.submitExternalIntent(intent.action, intent.dataString)
         enableEdgeToEdge()
         setContent {
             PiMobileApp(appGraph = appGraph)
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        appGraph.shareNavigationCoordinator.submitExternalIntent(intent.action, intent.dataString)
     }
 
     override fun onResume() {

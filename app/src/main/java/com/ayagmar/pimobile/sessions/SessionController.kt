@@ -7,6 +7,7 @@ import com.ayagmar.pimobile.corerpc.ImagePayload
 import com.ayagmar.pimobile.corerpc.RpcIncomingMessage
 import com.ayagmar.pimobile.corerpc.RpcResponse
 import com.ayagmar.pimobile.corerpc.SessionStats
+import com.ayagmar.pimobile.coresessions.SessionKey
 import com.ayagmar.pimobile.coresessions.SessionRecord
 import com.ayagmar.pimobile.hosts.HostProfile
 import kotlinx.coroutines.flow.SharedFlow
@@ -160,6 +161,7 @@ data class ActiveSessionState(
     val sessionPath: String?,
     val generation: Long,
     val isSwitching: Boolean = false,
+    val sessionKey: SessionKey? = null,
 )
 
 data class SessionBootstrapSnapshot(

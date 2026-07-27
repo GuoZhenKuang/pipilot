@@ -17,16 +17,18 @@ describe("host pairing payload", () => {
             websocketMaxPayloadBytes: 16_777_216,
             importMaxBytes: 10_485_760,
             piCommand: "pi",
+            shareOrigin: "https://workstation.example.test",
         };
 
         expect(createHostPairingPayload(config, "workstation.example.ts.net")).toEqual({
             type: "pi-mobile-host",
-            version: 1,
+            version: 2,
             name: "workstation",
             host: "workstation.example.ts.net",
             port: 8787,
             useTls: false,
             token: "local-test-token",
+            shareOrigin: "https://workstation.example.test",
         });
     });
 });

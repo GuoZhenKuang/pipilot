@@ -6,11 +6,14 @@ data class HostProfile(
     val host: String,
     val port: Int,
     val useTls: Boolean,
+    /** Authenticated/pairing-reviewed public alias. Never sourced directly from an external link. */
+    val shareOrigin: String? = null,
 ) {
     val endpoint: String
         get() {
             val scheme = if (useTls) "wss" else "ws"
-            return "$scheme://$host:$port/ws"
+            val endpointHost = if (host.contains(':') && !host.startsWith('[')) "[$host]" else host
+            return "$scheme://$endpointHost:$port/ws"
         }
 }
 
@@ -34,6 +37,7 @@ data class HostDraft(
     val port: String = DEFAULT_PORT,
     val useTls: Boolean = false,
     val token: String = "",
+    val shareOrigin: String? = null,
 ) {
     fun validate(): HostValidationResult {
         val parsedPort = port.toIntOrNull()
@@ -58,6 +62,7 @@ data class HostDraft(
                     host = host.trim(),
                     port = requireNotNull(parsedPort),
                     useTls = useTls,
+                    shareOrigin = shareOrigin,
                 ),
         )
     }

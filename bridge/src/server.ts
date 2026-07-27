@@ -14,6 +14,17 @@ import { createPiProcessManager } from "./process-manager.js";
 import type { SessionIndexer, SessionTreeFilter } from "./session-indexer.js";
 import { createSessionIndexer } from "./session-indexer.js";
 import {
+    buildShareLandingPage,
+    buildWebShareUrl,
+    isValidShareReference,
+    SHARE_LANDING_HEADERS,
+} from "./share-links.js";
+import type { ShareReferenceStore } from "./share-reference-store.js";
+import {
+    createShareReferenceStore,
+    ShareStateUnavailableError,
+} from "./share-reference-store.js";
+import {
     createBridgeEnvelope,
     createBridgeErrorEnvelope,
     createRpcEnvelope,
@@ -34,6 +45,7 @@ export interface BridgeServer {
 interface BridgeServerDependencies {
     processManager?: PiProcessManager;
     sessionIndexer?: SessionIndexer;
+    shareReferenceStore?: ShareReferenceStore;
     probePiVersion?: (command: string) => Promise<string>;
 }
 
@@ -152,6 +164,10 @@ export function createBridgeServer(
             sessionsDirectory: config.sessionDirectory,
             logger: logger.child({ component: "session-indexer" }),
         });
+    const shareReferenceStore = dependencies.shareReferenceStore ??
+        createShareReferenceStore({
+            stateDirectory: config.stateDirectory ?? path.join(process.env.HOME ?? ".", ".pi-mobile"),
+        });
 
     const clientContexts = new Map<WebSocket, ClientConnectionContext>();
     const disconnectedClients = new Map<string, DisconnectedClientState>();
@@ -233,7 +249,14 @@ export function createBridgeServer(
             return;
         }
 
-        response.writeHead(404, { "content-type": "application/json" });
+        const landingReference = config.shareOrigin ? parseLandingReference(request.url) : undefined;
+        if (landingReference && config.shareOrigin) {
+            response.writeHead(200, SHARE_LANDING_HEADERS);
+            response.end(buildShareLandingPage(config.shareOrigin, landingReference));
+            return;
+        }
+
+        response.writeHead(404, { "content-type": "application/json", "cache-control": "no-store" });
         response.end(JSON.stringify({ error: "Not Found" }));
     });
 
@@ -331,6 +354,7 @@ export function createBridgeServer(
                     resumed: restored.resumed,
                     cwd: restored.context.cwd ?? null,
                     reconnectGraceMs: config.reconnectGraceMs,
+                    shareOrigin: config.shareOrigin ?? null,
                 }),
             ),
         );
@@ -344,6 +368,7 @@ export function createBridgeServer(
                     logger,
                     processManager,
                     sessionIndexer,
+                    shareReferenceStore,
                     restored.context,
                     config,
                     awaitRpcEvent,
@@ -445,6 +470,7 @@ async function handleClientMessage(
     logger: Logger,
     processManager: PiProcessManager,
     sessionIndexer: SessionIndexer,
+    shareReferenceStore: ShareReferenceStore,
     context: ClientConnectionContext,
     config: BridgeConfig,
     awaitRpcEvent: (
@@ -480,6 +506,7 @@ async function handleClientMessage(
             envelope.payload,
             processManager,
             sessionIndexer,
+            shareReferenceStore,
             logger,
             config,
             awaitRpcEvent,
@@ -497,6 +524,7 @@ async function handleBridgeControlMessage(
     payload: Record<string, unknown>,
     processManager: PiProcessManager,
     sessionIndexer: SessionIndexer,
+    shareReferenceStore: ShareReferenceStore,
     logger: Logger,
     config: BridgeConfig,
     awaitRpcEvent: (
@@ -516,6 +544,87 @@ async function handleBridgeControlMessage(
                 }),
             ),
         );
+        return;
+    }
+
+    if (messageType === "bridge_get_or_create_session_share") {
+        const sessionPath = normalizeOptionalString(payload.sessionPath);
+        if (!sessionPath) {
+            sendShareError(client, "session_not_shareable", "This session cannot be shared");
+            return;
+        }
+        try {
+            const sessions = (await sessionIndexer.listSessions()).flatMap((group) => group.sessions);
+            const matching = sessions.filter((session) => session.sessionPath === sessionPath);
+            const session = matching.length === 1 ? matching[0] : undefined;
+            if (!session?.sessionId || session.isSessionIdUnique !== true) {
+                sendShareError(
+                    client,
+                    session?.sessionId ? "session_identity_ambiguous" : "session_not_shareable",
+                    session?.sessionId ? "This session identity is ambiguous" : "This session cannot be shared",
+                );
+                return;
+            }
+            const shareReference = await shareReferenceStore.getOrCreate(session.sessionId);
+            client.send(JSON.stringify(createBridgeEnvelope({
+                type: "bridge_session_share",
+                shareReference,
+                webUrl: config.shareOrigin ? buildWebShareUrl(config.shareOrigin, shareReference) : null,
+            })));
+        } catch (error: unknown) {
+            handleShareFailure(client, error, "Could not create the session share");
+        }
+        return;
+    }
+
+    if (messageType === "bridge_resolve_session_share") {
+        const shareReference = payload.shareReference;
+        if (!isValidShareReference(shareReference)) {
+            sendShareError(client, "share_not_found", "Shared session is unavailable");
+            return;
+        }
+        try {
+            const sessionId = await shareReferenceStore.resolve(shareReference);
+            if (!sessionId) {
+                sendShareError(client, "share_not_found", "Shared session is unavailable");
+                return;
+            }
+            const sessions = (await sessionIndexer.listSessions()).flatMap((group) => group.sessions);
+            const matches = sessions.filter((session) =>
+                session.sessionId === sessionId && session.isSessionIdUnique === true);
+            if (matches.length !== 1) {
+                sendShareError(client, "share_not_found", "Shared session is unavailable");
+                return;
+            }
+            client.send(JSON.stringify(createBridgeEnvelope({
+                type: "bridge_session_share_resolved",
+                session: matches[0],
+            })));
+        } catch (error: unknown) {
+            handleShareFailure(client, error, "Could not resolve the session share");
+        }
+        return;
+    }
+
+    if (messageType === "bridge_revoke_session_share") {
+        const sessionPath = normalizeOptionalString(payload.sessionPath);
+        if (!sessionPath) {
+            sendShareError(client, "session_not_shareable", "This session cannot be shared");
+            return;
+        }
+        try {
+            const sessions = (await sessionIndexer.listSessions()).flatMap((group) => group.sessions);
+            const matching = sessions.filter((session) => session.sessionPath === sessionPath);
+            const session = matching.length === 1 ? matching[0] : undefined;
+            if (!session?.sessionId || session.isSessionIdUnique !== true) {
+                sendShareError(client, "session_not_shareable", "This session cannot be shared");
+                return;
+            }
+            await shareReferenceStore.revoke(session.sessionId);
+            client.send(JSON.stringify(createBridgeEnvelope({ type: "bridge_session_share_revoked" })));
+        } catch (error: unknown) {
+            handleShareFailure(client, error, "Could not revoke the session share");
+        }
         return;
     }
 
@@ -1408,9 +1517,7 @@ function asUtf8String(data: RawData): string {
 function parseRequestUrl(request: http.IncomingMessage): URL | undefined {
     if (!request.url) return undefined;
 
-    const base = `http://${request.headers.host || "localhost"}`;
-
-    return new URL(request.url, base);
+    return new URL(request.url, "http://localhost");
 }
 
 function extractToken(request: http.IncomingMessage): string | undefined {
@@ -1471,4 +1578,29 @@ function sanitizeClientId(clientIdRaw: string | undefined): string | undefined {
     if (trimmedClientId.length > 128) return undefined;
 
     return trimmedClientId;
+}
+
+function parseLandingReference(requestUrl: string | undefined): string | undefined {
+    if (!requestUrl || [...requestUrl].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) return undefined;
+    let parsed: URL;
+    try {
+        parsed = new URL(requestUrl, "http://localhost");
+    } catch {
+        return undefined;
+    }
+    if (parsed.search || parsed.hash) return undefined;
+    const match = /^\/s\/v1\/([A-Za-z0-9_-]{22})$/.exec(parsed.pathname);
+    return match?.[1];
+}
+
+function sendShareError(client: WebSocket, code: string, message: string): void {
+    client.send(JSON.stringify(createBridgeErrorEnvelope(code, message)));
+}
+
+function handleShareFailure(client: WebSocket, error: unknown, fallbackMessage: string): void {
+    if (error instanceof ShareStateUnavailableError) {
+        sendShareError(client, error.code, "Bridge share state is unavailable; ask the operator to restore or repair it");
+        return;
+    }
+    sendShareError(client, "share_operation_failed", fallbackMessage);
 }

@@ -17,6 +17,8 @@ describe("parseBridgeConfig", () => {
             processIdleTtlMs: 300_000,
             reconnectGraceMs: 30_000,
             sessionDirectory: path.join(os.homedir(), ".pi", "agent", "sessions"),
+            stateDirectory: path.join(os.homedir(), ".pi-mobile"),
+            shareOrigin: undefined,
             enableHealthEndpoint: true,
             websocketMaxPayloadBytes: 16 * 1024 * 1024,
             importMaxBytes: 10 * 1024 * 1024,
@@ -33,6 +35,8 @@ describe("parseBridgeConfig", () => {
             BRIDGE_PROCESS_IDLE_TTL_MS: "90000",
             BRIDGE_RECONNECT_GRACE_MS: "12000",
             BRIDGE_SESSION_DIR: "./tmp/custom-sessions",
+            BRIDGE_STATE_DIR: "./tmp/bridge-state",
+            BRIDGE_SHARE_ORIGIN: "https://bridge.example.test",
             BRIDGE_ENABLE_HEALTH_ENDPOINT: "false",
             BRIDGE_WEBSOCKET_MAX_PAYLOAD_BYTES: "2000000",
             BRIDGE_IMPORT_MAX_BYTES: "1000000",
@@ -46,10 +50,24 @@ describe("parseBridgeConfig", () => {
         expect(config.processIdleTtlMs).toBe(90_000);
         expect(config.reconnectGraceMs).toBe(12_000);
         expect(config.sessionDirectory).toBe(path.resolve("./tmp/custom-sessions"));
+        expect(config.stateDirectory).toBe(path.resolve("./tmp/bridge-state"));
+        expect(config.shareOrigin).toBe("https://bridge.example.test");
         expect(config.enableHealthEndpoint).toBe(false);
         expect(config.websocketMaxPayloadBytes).toBe(2_000_000);
         expect(config.importMaxBytes).toBe(1_000_000);
         expect(config.piCommand).toBe("/opt/pi/bin/pi");
+    });
+
+    it.each([
+        "ftp://bridge.example.test",
+        "https://user@bridge.example.test",
+        "https://bridge.example.test/prefix",
+        "https://bridge.example.test?query=1",
+    ])("fails on invalid share origin %s", (origin) => {
+        expect(() => parseBridgeConfig({
+            BRIDGE_AUTH_TOKEN: "test-token",
+            BRIDGE_SHARE_ORIGIN: origin,
+        })).toThrow("BRIDGE_SHARE_ORIGIN");
     });
 
     it("fails on invalid port", () => {

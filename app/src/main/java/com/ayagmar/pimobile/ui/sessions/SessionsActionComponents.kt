@@ -19,12 +19,15 @@ import com.ayagmar.pimobile.coresessions.SessionRecord
 import com.ayagmar.pimobile.sessions.ForkableMessage
 
 @Composable
+@Suppress("LongParameterList")
 fun SessionActionsRow(
     isBusy: Boolean,
     onRenameClick: () -> Unit,
     onForkClick: () -> Unit,
     onExportClick: () -> Unit,
     onCompactClick: () -> Unit,
+    onShareClick: () -> Unit = {},
+    onRevokeShareClick: () -> Unit = {},
 ) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
@@ -45,6 +48,16 @@ fun SessionActionsRow(
         item {
             TextButton(onClick = onCompactClick, enabled = !isBusy) {
                 Text("Compact")
+            }
+        }
+        item {
+            TextButton(onClick = onShareClick, enabled = !isBusy) {
+                Text("Share session link")
+            }
+        }
+        item {
+            TextButton(onClick = onRevokeShareClick, enabled = !isBusy) {
+                Text("Revoke shared link")
             }
         }
     }

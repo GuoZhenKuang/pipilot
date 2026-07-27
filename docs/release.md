@@ -8,6 +8,8 @@ Pi Mobile does not store signing credentials in the repository. The checked-in r
 (cd bridge && pnpm install --frozen-lockfile && pnpm run check && pnpm audit --prod)
 ```
 
+Plan 012 release notes: share references are durable bridge-owned state, not authorization. Back up `BRIDGE_STATE_DIR`; state reset invalidates references. `BRIDGE_SHARE_ORIGIN` is optional and must be reviewed as a strict configured origin. Verified Android App Links are not claimed; custom scheme plus self-hosted landing are the supported paths. Device evidence remains **PENDING — operator-owned**.
+
 Expected artifacts:
 
 - `app/build/outputs/apk/debug/app-debug.apk`

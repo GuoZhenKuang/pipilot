@@ -42,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,6 +58,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.ayagmar.pimobile.di.AppGraph
+import com.ayagmar.pimobile.sessions.ShareNavigationState
 import com.ayagmar.pimobile.ui.chat.ChatRoute
 import com.ayagmar.pimobile.ui.hosts.HostsRoute
 import com.ayagmar.pimobile.ui.sessions.SessionsRoute
@@ -66,6 +68,7 @@ import com.ayagmar.pimobile.ui.settings.SETTINGS_PREFS_NAME
 import com.ayagmar.pimobile.ui.settings.SettingsRoute
 import com.ayagmar.pimobile.ui.theme.PiMobileTheme
 import com.ayagmar.pimobile.ui.theme.ThemePreference
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 
 private data class AppDestination(
@@ -223,6 +226,8 @@ fun PiMobileApp(appGraph: AppGraph) {
 
     PiMobileTheme(themePreference = themePreference) {
         val navController = rememberNavController()
+        val shareCoordinator = appGraph.shareNavigationCoordinator
+        val shareNavigationState by shareCoordinator.state.collectAsStateWithLifecycle()
         val navBackStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = navBackStackEntry?.destination?.route
         val drawerState = androidx.compose.material3.rememberDrawerState(DrawerValue.Closed)
@@ -234,6 +239,15 @@ fun PiMobileApp(appGraph: AppGraph) {
                 restoreState = true
                 popUpTo(navController.graph.startDestinationId) {
                     saveState = true
+                }
+            }
+        }
+
+        LaunchedEffect(shareCoordinator) {
+            shareCoordinator.state.collect { state ->
+                if (state is ShareNavigationState.NavigateToChat) {
+                    navigateTo("chat")
+                    shareCoordinator.acknowledgeNavigation(state.generation)
                 }
             }
         }
@@ -345,6 +359,15 @@ fun PiMobileApp(appGraph: AppGraph) {
                             Box(
                                 modifier = Modifier.fillMaxSize().padding(paddingValues),
                             ) {
+                                if (shareNavigationState !is ShareNavigationState.Idle &&
+                                    shareNavigationState !is ShareNavigationState.NavigateToChat
+                                ) {
+                                    Text(
+                                        text = shareNavigationMessage(shareNavigationState),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(12.dp),
+                                    )
+                                }
                                 NavHost(
                                     navController = navController,
                                     startDestination = startDestination,
@@ -367,6 +390,7 @@ fun PiMobileApp(appGraph: AppGraph) {
                                             repository = appGraph.sessionIndexRepository,
                                             sessionController = appGraph.sessionController,
                                             cwdPreferenceStore = appGraph.sessionCwdPreferenceStore,
+                                            shareRemoteDataSource = appGraph.sessionShareRemoteDataSource,
                                             onNavigateToChat = {
                                                 navigateTo("chat")
                                             },
@@ -390,3 +414,13 @@ fun PiMobileApp(appGraph: AppGraph) {
         }
     }
 }
+
+private fun shareNavigationMessage(state: ShareNavigationState): String =
+    when (state) {
+        ShareNavigationState.Resolving -> "Resolving shared session…"
+        ShareNavigationState.SetupRequired -> "Review and save the host before opening this link."
+        ShareNavigationState.AuthenticationRequired -> "Enter a token for the configured host to continue."
+        ShareNavigationState.AmbiguousHost -> "More than one configured host matches this link. Review host settings."
+        is ShareNavigationState.Failed -> state.message
+        else -> ""
+    }

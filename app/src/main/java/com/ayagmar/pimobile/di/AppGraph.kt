@@ -9,12 +9,14 @@ import com.ayagmar.pimobile.hosts.HostTokenStore
 import com.ayagmar.pimobile.hosts.KeystoreHostTokenStore
 import com.ayagmar.pimobile.hosts.SharedPreferencesHostProfileStore
 import com.ayagmar.pimobile.sessions.BridgeSessionIndexRemoteDataSource
+import com.ayagmar.pimobile.sessions.BridgeSessionShareRemoteDataSource
 import com.ayagmar.pimobile.sessions.ClientIdentityStore
 import com.ayagmar.pimobile.sessions.RpcSessionController
 import com.ayagmar.pimobile.sessions.SessionController
 import com.ayagmar.pimobile.sessions.SessionCwdPreferenceStore
 import com.ayagmar.pimobile.sessions.SharedPreferencesClientIdentityStore
 import com.ayagmar.pimobile.sessions.SharedPreferencesSessionCwdPreferenceStore
+import com.ayagmar.pimobile.sessions.ShareNavigationCoordinator
 
 class AppGraph(
     context: Context,
@@ -49,4 +51,18 @@ class AppGraph(
     }
 
     val connectionDiagnostics: ConnectionDiagnostics by lazy { ConnectionDiagnostics() }
+
+    val sessionShareRemoteDataSource: BridgeSessionShareRemoteDataSource by lazy {
+        BridgeSessionShareRemoteDataSource(hostProfileStore, hostTokenStore)
+    }
+
+    /** One delivery owner for the entire application process. */
+    val shareNavigationCoordinator: ShareNavigationCoordinator by lazy {
+        ShareNavigationCoordinator(
+            profileStore = hostProfileStore,
+            tokenStore = hostTokenStore,
+            shareSource = sessionShareRemoteDataSource,
+            sessionController = sessionController,
+        )
+    }
 }

@@ -55,7 +55,8 @@ class SharedPreferencesHostProfileStore(
                     .put("name", profile.name)
                     .put("host", profile.host)
                     .put("port", profile.port)
-                    .put("useTls", profile.useTls),
+                    .put("useTls", profile.useTls)
+                    .put("shareOrigin", profile.shareOrigin),
             )
         }
         return array.toString()
@@ -89,6 +90,7 @@ class SharedPreferencesHostProfileStore(
             host = host,
             port = port,
             useTls = optBoolean("useTls", false),
+            shareOrigin = optString("shareOrigin").takeIf { it.isNotBlank() },
         )
     }
 

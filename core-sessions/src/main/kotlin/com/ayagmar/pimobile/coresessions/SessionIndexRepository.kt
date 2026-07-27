@@ -214,48 +214,65 @@ private fun mergeGroups(
     existing: List<SessionGroup>,
     incoming: List<SessionGroup>,
 ): List<SessionGroup> {
+    val normalizedIncoming = normalizeStableIdentities(incoming)
+    val existingSessions = existing.flatMap { group -> group.sessions }
+    val uniqueExistingById =
+        existingSessions
+            .filter { session -> session.hasStableIdentity }
+            .groupBy { session -> requireNotNull(session.sessionId) }
+            .filterValues { sessions -> sessions.size == 1 }
+            .mapValues { (_, sessions) -> sessions.single() }
+    val existingByPath = existingSessions.associateBy { session -> session.sessionPath }
     val existingByCwd = existing.associateBy { group -> group.cwd }
 
-    return incoming
+    return normalizedIncoming
         .sortedBy { group -> group.cwd }
         .map { incomingGroup ->
+            val mergedSessions =
+                incomingGroup.sessions
+                    .sortedByDescending { session -> session.updatedAt }
+                    .map { incomingSession ->
+                        val existingSession =
+                            if (incomingSession.hasStableIdentity) {
+                                uniqueExistingById[incomingSession.sessionId]
+                            } else {
+                                existingByPath[incomingSession.sessionPath]
+                                    ?.takeIf { cached -> !cached.sessionId.isValidPiSessionId() }
+                            }
+                        if (existingSession != null && existingSession == incomingSession) {
+                            existingSession
+                        } else {
+                            incomingSession
+                        }
+                    }
+
             val existingGroup = existingByCwd[incomingGroup.cwd]
-            if (existingGroup == null) {
-                SessionGroup(
-                    cwd = incomingGroup.cwd,
-                    sessions = incomingGroup.sessions.sortedByDescending { session -> session.updatedAt },
-                )
-            } else {
-                mergeGroup(existingGroup = existingGroup, incomingGroup = incomingGroup)
-            }
+            val unchanged =
+                existingGroup != null &&
+                    existingGroup.sessions.size == mergedSessions.size &&
+                    existingGroup.sessions.zip(mergedSessions).all { (left, right) -> left === right }
+            if (unchanged) existingGroup else SessionGroup(incomingGroup.cwd, mergedSessions)
         }
 }
 
-private fun mergeGroup(
-    existingGroup: SessionGroup,
-    incomingGroup: SessionGroup,
-): SessionGroup {
-    val existingSessionsByPath = existingGroup.sessions.associateBy { session -> session.sessionPath }
+private fun normalizeStableIdentities(groups: List<SessionGroup>): List<SessionGroup> {
+    val validIdCounts =
+        groups
+            .flatMap { group -> group.sessions }
+            .mapNotNull { session -> session.sessionId?.takeIf { it.isValidPiSessionId() } }
+            .groupingBy { it }
+            .eachCount()
 
-    val mergedSessions =
-        incomingGroup.sessions
-            .sortedByDescending { session -> session.updatedAt }
-            .map { incomingSession ->
-                val existingSession = existingSessionsByPath[incomingSession.sessionPath]
-                if (existingSession != null && existingSession == incomingSession) {
-                    existingSession
-                } else {
-                    incomingSession
-                }
-            }
-
-    val isUnchanged =
-        existingGroup.sessions.size == mergedSessions.size &&
-            existingGroup.sessions.zip(mergedSessions).all { (left, right) -> left === right }
-
-    return if (isUnchanged) {
-        existingGroup
-    } else {
-        SessionGroup(cwd = incomingGroup.cwd, sessions = mergedSessions)
+    return groups.map { group ->
+        group.copy(
+            sessions =
+                group.sessions.map { session ->
+                    val sessionId = session.sessionId?.takeIf { it.isValidPiSessionId() }
+                    session.copy(
+                        sessionId = sessionId,
+                        isSessionIdUnique = sessionId != null && validIdCounts[sessionId] == 1,
+                    )
+                },
+        )
     }
 }

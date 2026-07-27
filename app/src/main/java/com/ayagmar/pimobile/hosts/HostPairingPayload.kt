@@ -7,13 +7,21 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 private const val PAIRING_PAYLOAD_TYPE = "pi-mobile-host"
-private const val PAIRING_PAYLOAD_VERSION = 1
+private const val PAIRING_PAYLOAD_VERSION_1 = 1
+private const val PAIRING_PAYLOAD_VERSION_2 = 2
 
 fun parseHostPairingPayload(rawValue: String): Result<HostDraft> =
     runCatching {
         val payload = Json.parseToJsonElement(rawValue).jsonObject
         require(payload.string("type") == PAIRING_PAYLOAD_TYPE) { "This QR code is not for Pi Mobile" }
-        require(payload.int("version") == PAIRING_PAYLOAD_VERSION) { "This pairing QR version is not supported" }
+        val version = payload.int("version")
+        require(version == PAIRING_PAYLOAD_VERSION_1 || version == PAIRING_PAYLOAD_VERSION_2) {
+            "This pairing QR version is not supported"
+        }
+        val shareOrigin =
+            payload.string("shareOrigin")
+                ?.takeIf { origin -> origin.isNotBlank() }
+                ?.let(::normalizeShareOrigin)
 
         val draft =
             HostDraft(
@@ -22,6 +30,7 @@ fun parseHostPairingPayload(rawValue: String): Result<HostDraft> =
                 port = payload.int("port")?.toString().orEmpty(),
                 useTls = payload.boolean("useTls") ?: false,
                 token = payload.string("token").orEmpty(),
+                shareOrigin = shareOrigin,
             )
         require(draft.token.isNotBlank()) { "The pairing QR does not contain a token" }
 

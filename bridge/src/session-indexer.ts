@@ -15,6 +15,8 @@ export interface SessionIndexEntry {
     firstUserMessagePreview?: string;
     messageCount: number;
     lastModel?: string;
+    sessionId?: string;
+    isSessionIdUnique?: boolean;
 }
 
 export interface SessionIndexGroup {
@@ -161,8 +163,16 @@ export function createSessionIndexer(options: SessionIndexerOptions): SessionInd
                 if (entry) sessions.push(entry);
             }
 
+            const sessionIdCounts = new Map<string, number>();
+            for (const session of sessions) {
+                if (session.sessionId) {
+                    sessionIdCounts.set(session.sessionId, (sessionIdCounts.get(session.sessionId) ?? 0) + 1);
+                }
+            }
+
             const groups = new Map<string, SessionIndexEntry[]>();
             for (const session of sessions) {
+                session.isSessionIdUnique = !!session.sessionId && sessionIdCounts.get(session.sessionId) === 1;
                 const byCwd = groups.get(session.cwd) ?? [];
                 byCwd.push(session);
                 groups.set(session.cwd, byCwd);
@@ -483,13 +493,14 @@ async function parseSessionFile(
     if (!parsed || parsed.lines.length === 0) return undefined;
 
     const { lines } = parsed;
-    const header = tryParseJson(lines[0]);
-    if (!header || header.type !== "session" || typeof header.cwd !== "string") {
+    const header = tryParseBoundedSessionHeader(lines[0]);
+    if (!header || typeof header.cwd !== "string") {
         logger.warn("Skipping invalid session header");
         return undefined;
     }
 
     const createdAt = getValidIsoTimestamp(header.timestamp) ?? fileStats.birthtime.toISOString();
+    const sessionId = typeof header.id === "string" && isValidSessionId(header.id) ? header.id : undefined;
     let updatedAtEpoch = getTimestampEpoch(header.timestamp) ?? Number(fileStats.mtimeMs);
     let displayName: string | undefined;
     let firstUserMessagePreview: string | undefined;
@@ -533,6 +544,8 @@ async function parseSessionFile(
         firstUserMessagePreview,
         messageCount,
         lastModel,
+        sessionId,
+        isSessionIdUnique: false,
     };
 }
 
@@ -935,6 +948,12 @@ function computeLastEntriesHash(entryLines: string[]): string {
         .digest("hex");
 }
 
+function tryParseBoundedSessionHeader(value: string | undefined): Record<string, unknown> | undefined {
+    if (!value || Buffer.byteLength(value, "utf8") > MAX_SESSION_HEADER_BYTES) return undefined;
+    const parsed = tryParseJson(value);
+    return parsed?.type === "session" ? parsed : undefined;
+}
+
 function tryParseJson(value: string): Record<string, unknown> | undefined {
     let parsed: unknown;
 
@@ -1002,4 +1021,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+export function isValidSessionId(value: string): boolean {
+    return value.length >= 1 && value.length <= 128 && /^[!-~]+$/.test(value);
+}
+
 const FRESHNESS_HASH_LINE_WINDOW = 16;
+const MAX_SESSION_HEADER_BYTES = 64 * 1024;

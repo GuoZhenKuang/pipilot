@@ -162,4 +162,14 @@ Compile connected tests without launching an emulator/device:
 ./gradlew :app:compileDebugAndroidTestKotlin
 ```
 
-Device acceptance for Plans 006–011 is **PENDING — operator-owned**. Do not run an emulator, connected tests, `adb`, install an APK, benchmark, capture screenshots, or claim manual acceptance until the operator explicitly enables `debug mode`. Follow [`revival-acceptance.md`](revival-acceptance.md) and [`perf-baseline.md`](perf-baseline.md) when enabled.
+Device acceptance for Plans 006–011 is **PENDING — operator-owned**. Plan 012 device acceptance is also **PENDING — operator-owned**. Do not run an emulator, connected tests, `adb`, install an APK, benchmark, capture screenshots, or claim manual acceptance until the operator explicitly enables `debug mode`.
+
+Plan 012 device evidence to collect when enabled:
+
+- cold custom-scheme link with configured exact endpoint and verified share-origin alias;
+- warm/repeated intents, two rapid links, rotation/process recreation, cancellation, and stale-generation suppression;
+- unmatched and ambiguous authorities, missing/invalid token, authenticated hello alias change, revoked/missing/deleted session, corrupt state, and lock denial;
+- create/repeat/copy/share/revoke/regenerate from Sessions; configured-origin browser landing and generic metadata-free page;
+- record APK/build identity, bridge version/configuration without secrets, sanitized outcome, and timestamp. Do not capture or paste links containing private authorities into public reports.
+
+Follow [`revival-acceptance.md`](revival-acceptance.md) and [`perf-baseline.md`](perf-baseline.md) when enabled.

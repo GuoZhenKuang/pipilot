@@ -41,6 +41,7 @@ import com.ayagmar.pimobile.corerpc.SetSteeringModeCommand
 import com.ayagmar.pimobile.corerpc.SetThinkingLevelCommand
 import com.ayagmar.pimobile.corerpc.SteerCommand
 import com.ayagmar.pimobile.corerpc.SwitchSessionCommand
+import com.ayagmar.pimobile.coresessions.SessionKey
 import com.ayagmar.pimobile.coresessions.SessionRecord
 import com.ayagmar.pimobile.hosts.HostProfile
 import com.ayagmar.pimobile.perf.PerformanceMetrics
@@ -213,13 +214,24 @@ class RpcSessionController(
                     }
                 }
 
-                val newPath = refreshCurrentSessionPath(connection)
+                val state = connection.requestState().requireSuccess("Failed to verify resumed session")
+                val newPath = state.data.stringField("sessionFile")
+                val actualSessionId = state.data.stringField("sessionId")
+                if (session.hasStableIdentity) {
+                    check(actualSessionId == session.sessionId) {
+                        "Resumed session identity did not match the selected session"
+                    }
+                }
                 resetSessionProjection()
                 _activeSession.value =
                     ActiveSessionState(
                         sessionPath = newPath,
                         generation = nextGeneration,
                         isSwitching = false,
+                        sessionKey =
+                            session.sessionId
+                                ?.takeIf { session.hasStableIdentity }
+                                ?.let { id -> SessionKey(hostProfileId = hostProfile.id, sessionId = id) },
                     )
                 _sessionChanged.emit(newPath)
                 Result.success(newPath)

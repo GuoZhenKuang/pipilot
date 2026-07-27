@@ -9,6 +9,9 @@ import com.ayagmar.pimobile.coresessions.SessionRecord
 import com.ayagmar.pimobile.hosts.HostProfile
 import com.ayagmar.pimobile.hosts.HostProfileStore
 import com.ayagmar.pimobile.hosts.HostTokenStore
+import com.ayagmar.pimobile.hosts.endpointShareAuthority
+import com.ayagmar.pimobile.coresessions.SharedSessionLocator
+import com.ayagmar.pimobile.coresessions.SharedSessionLocatorCodec
 import com.ayagmar.pimobile.perf.PerformanceMetrics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -35,6 +38,7 @@ class SessionsViewModel(
     private val repository: SessionIndexRepository,
     private val sessionController: SessionController,
     private val cwdPreferenceStore: SessionCwdPreferenceStore,
+    private val shareRemoteDataSource: BridgeSessionShareRemoteDataSource? = null,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SessionsUiState(isLoading = true))
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 16)
@@ -314,6 +318,51 @@ class SessionsViewModel(
                     )
                 }
             }
+        }
+    }
+
+    @Suppress("ReturnCount")
+    fun shareActiveSession() {
+        val hostId = _uiState.value.selectedHostId ?: return
+        val host = _uiState.value.hosts.firstOrNull { it.id == hostId } ?: return
+        val session = findActiveSession(_uiState.value) ?: run {
+            emitError("Resume a session before sharing")
+            return
+        }
+        val source = shareRemoteDataSource ?: run {
+            emitError("Sharing is unavailable")
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(isPerformingAction = true, errorMessage = null) }
+            runCatching {
+                val share = source.getOrCreate(hostId, session)
+                val link = share.webUrl ?: SharedSessionLocatorCodec.encode(
+                    SharedSessionLocator(host.endpointShareAuthority(), share.shareReference),
+                )
+                _uiState.update { it.copy(isPerformingAction = false, shareLink = link) }
+                emitMessage("Share link ready")
+            }.onFailure { error ->
+                _uiState.update { it.copy(isPerformingAction = false, errorMessage = error.message ?: "Sharing is unavailable") }
+            }
+        }
+    }
+
+    @Suppress("ReturnCount")
+    fun revokeActiveSessionShare() {
+        val hostId = _uiState.value.selectedHostId ?: return
+        val session = findActiveSession(_uiState.value) ?: return
+        val source = shareRemoteDataSource ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(isPerformingAction = true, errorMessage = null) }
+            runCatching { source.revoke(hostId, session) }
+                .onSuccess {
+                    _uiState.update { it.copy(isPerformingAction = false, shareLink = null) }
+                    emitMessage("Shared link revoked")
+                }
+                .onFailure { error ->
+                    _uiState.update { it.copy(isPerformingAction = false, errorMessage = error.message ?: "Could not revoke shared link") }
+                }
         }
     }
 
@@ -712,6 +761,11 @@ internal fun resolveConnectionCwd(
         ?: defaultCwd
 }
 
+private fun findActiveSession(state: SessionsUiState): SessionRecord? =
+    state.groups.asSequence()
+        .flatMap { group -> group.sessions.asSequence() }
+        .firstOrNull { session -> session.sessionPath == state.activeSessionPath }
+
 private fun mapGroups(groups: List<SessionGroup>): List<CwdSessionGroupUiState> {
     return groups.map { group ->
         CwdSessionGroupUiState(
@@ -752,6 +806,7 @@ data class SessionsUiState(
     val isForkPickerVisible: Boolean = false,
     val forkCandidates: List<ForkableMessage> = emptyList(),
     val activeSessionPath: String? = null,
+    val shareLink: String? = null,
     val errorMessage: String? = null,
     val isFlatView: Boolean = true,
 )
@@ -767,6 +822,7 @@ class SessionsViewModelFactory(
     private val repository: SessionIndexRepository,
     private val sessionController: SessionController,
     private val cwdPreferenceStore: SessionCwdPreferenceStore,
+    private val shareRemoteDataSource: BridgeSessionShareRemoteDataSource? = null,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         check(modelClass == SessionsViewModel::class.java) {
@@ -780,6 +836,7 @@ class SessionsViewModelFactory(
             repository = repository,
             sessionController = sessionController,
             cwdPreferenceStore = cwdPreferenceStore,
+            shareRemoteDataSource = shareRemoteDataSource,
         ) as T
     }
 }

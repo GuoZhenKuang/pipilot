@@ -9,6 +9,7 @@ const DEFAULT_LOG_LEVEL: LevelWithSilent = "info";
 const DEFAULT_PROCESS_IDLE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_RECONNECT_GRACE_MS = 30 * 1000;
 const DEFAULT_SESSION_DIRECTORY = path.join(os.homedir(), ".pi", "agent", "sessions");
+const DEFAULT_STATE_DIRECTORY = path.join(os.homedir(), ".pi-mobile");
 const DEFAULT_WEBSOCKET_MAX_PAYLOAD_BYTES = 16 * 1024 * 1024;
 const DEFAULT_IMPORT_MAX_BYTES = 10 * 1024 * 1024;
 const DEFAULT_PI_COMMAND = "pi";
@@ -21,6 +22,8 @@ export interface BridgeConfig {
     processIdleTtlMs: number;
     reconnectGraceMs: number;
     sessionDirectory: string;
+    stateDirectory?: string;
+    shareOrigin?: string;
     enableHealthEndpoint: boolean;
     websocketMaxPayloadBytes: number;
     importMaxBytes: number;
@@ -35,6 +38,8 @@ export function parseBridgeConfig(env: NodeJS.ProcessEnv = process.env): BridgeC
     const processIdleTtlMs = parseProcessIdleTtlMs(env.BRIDGE_PROCESS_IDLE_TTL_MS);
     const reconnectGraceMs = parseReconnectGraceMs(env.BRIDGE_RECONNECT_GRACE_MS);
     const sessionDirectory = parseSessionDirectory(env.BRIDGE_SESSION_DIR);
+    const stateDirectory = parseStateDirectory(env.BRIDGE_STATE_DIR);
+    const shareOrigin = parseConfiguredShareOrigin(env.BRIDGE_SHARE_ORIGIN);
     const enableHealthEndpoint = parseEnableHealthEndpoint(env.BRIDGE_ENABLE_HEALTH_ENDPOINT);
     const websocketMaxPayloadBytes = parsePositiveInteger(
         "BRIDGE_WEBSOCKET_MAX_PAYLOAD_BYTES",
@@ -56,6 +61,8 @@ export function parseBridgeConfig(env: NodeJS.ProcessEnv = process.env): BridgeC
         processIdleTtlMs,
         reconnectGraceMs,
         sessionDirectory,
+        stateDirectory,
+        shareOrigin,
         enableHealthEndpoint,
         websocketMaxPayloadBytes,
         importMaxBytes,
@@ -153,4 +160,26 @@ function parseSessionDirectory(sessionDirectoryRaw: string | undefined): string 
     if (!fromEnv) return DEFAULT_SESSION_DIRECTORY;
 
     return path.resolve(fromEnv);
+}
+
+function parseStateDirectory(stateDirectoryRaw: string | undefined): string {
+    const fromEnv = stateDirectoryRaw?.trim();
+    return fromEnv ? path.resolve(fromEnv) : DEFAULT_STATE_DIRECTORY;
+}
+
+function parseConfiguredShareOrigin(raw: string | undefined): string | undefined {
+    const value = raw?.trim();
+    if (!value) return undefined;
+    let parsed: URL;
+    try {
+        parsed = new URL(value);
+    } catch {
+        throw new Error("Invalid BRIDGE_SHARE_ORIGIN");
+    }
+    if ((parsed.protocol !== "http:" && parsed.protocol !== "https:") || !parsed.hostname ||
+        parsed.username || parsed.password || parsed.search || parsed.hash ||
+        (parsed.pathname !== "/" && parsed.pathname !== "")) {
+        throw new Error("BRIDGE_SHARE_ORIGIN must be an http(s) origin without path, userinfo, query, or fragment");
+    }
+    return parsed.origin;
 }

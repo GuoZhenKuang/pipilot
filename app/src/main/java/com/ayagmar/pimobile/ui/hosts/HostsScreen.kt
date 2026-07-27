@@ -158,6 +158,7 @@ private fun HostProfileItem.toDraft(): HostDraft =
         host = profile.host,
         port = profile.port.toString(),
         useTls = profile.useTls,
+        shareOrigin = profile.shareOrigin,
     )
 
 private data class HostsScreenActions(

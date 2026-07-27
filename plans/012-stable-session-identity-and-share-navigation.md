@@ -4,7 +4,7 @@
 
 ## Status
 
-- State: TODO
+- State: IN PROGRESS
 - Priority: P0
 - Effort: L–XL (approximately 10–15 focused engineering days; device acceptance is separate and operator-owned)
 - Depends on: Plan 011 non-device gates; device acceptance from Plans 008–011 is not a prerequisite
