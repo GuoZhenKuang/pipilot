@@ -53,6 +53,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -68,7 +69,6 @@ import com.ayagmar.pimobile.ui.settings.SETTINGS_PREFS_NAME
 import com.ayagmar.pimobile.ui.settings.SettingsRoute
 import com.ayagmar.pimobile.ui.theme.PiMobileTheme
 import com.ayagmar.pimobile.ui.theme.ThemePreference
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 
 private data class AppDestination(

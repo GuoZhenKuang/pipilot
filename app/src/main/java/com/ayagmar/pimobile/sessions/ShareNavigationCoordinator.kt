@@ -72,21 +72,22 @@ class ShareNavigationCoordinator(
         data: String?,
     ) {
         if (action != ACTION_VIEW || data == null) return
-        val locator = SharedSessionLocatorCodec.decode(data).getOrElse { error ->
-            generation += 1
-            activeJob?.cancel()
-            _state.value =
-                ShareNavigationState.Failed(
-                    kind =
-                        if (error.message?.contains("version", ignoreCase = true) == true) {
-                            ShareNavigationFailure.UNSUPPORTED_VERSION
-                        } else {
-                            ShareNavigationFailure.INVALID_LINK
-                        },
-                    message = "This Pi Mobile link is invalid or unsupported",
-                )
-            return
-        }
+        val locator =
+            SharedSessionLocatorCodec.decode(data).getOrElse { error ->
+                generation += 1
+                activeJob?.cancel()
+                _state.value =
+                    ShareNavigationState.Failed(
+                        kind =
+                            if (error.message?.contains("version", ignoreCase = true) == true) {
+                                ShareNavigationFailure.UNSUPPORTED_VERSION
+                            } else {
+                                ShareNavigationFailure.INVALID_LINK
+                            },
+                        message = "This Pi Mobile link is invalid or unsupported",
+                    )
+                return
+            }
         submit(locator)
     }
 
@@ -118,9 +119,10 @@ class ShareNavigationCoordinator(
         activeJob?.cancel()
         lastLocator = locator
         _state.value = ShareNavigationState.Resolving
-        activeJob = scope.launch {
-            resolve(requestGeneration, locator)
-        }
+        activeJob =
+            scope.launch {
+                resolve(requestGeneration, locator)
+            }
     }
 
     @Suppress("LongMethod", "CyclomaticComplexMethod", "ReturnCount")

@@ -54,9 +54,10 @@ class BridgeSessionShareRemoteDataSource(
         session: SessionRecord,
     ): SessionShare {
         check(session.hasStableIdentity) { "This session does not have a unique stable identity" }
-        val payload = request(hostId, "bridge_get_or_create_session_share") {
-            put("sessionPath", session.sessionPath)
-        }
+        val payload =
+            request(hostId, "bridge_get_or_create_session_share") {
+                put("sessionPath", session.sessionPath)
+            }
         val response = json.decodeFromJsonElement(SharePayload.serializer(), payload)
         return SessionShare(response.shareReference, response.webUrl)
     }
@@ -65,9 +66,10 @@ class BridgeSessionShareRemoteDataSource(
         hostId: String,
         shareReference: String,
     ): SessionRecord {
-        val payload = request(hostId, "bridge_resolve_session_share") {
-            put("shareReference", shareReference)
-        }
+        val payload =
+            request(hostId, "bridge_resolve_session_share") {
+                put("shareReference", shareReference)
+            }
         return json.decodeFromJsonElement(ResolvedPayload.serializer(), payload).session
     }
 
@@ -99,9 +101,10 @@ class BridgeSessionShareRemoteDataSource(
             try {
                 coroutineScope {
                     val incoming = Channel<JsonObject>(Channel.UNLIMITED)
-                    val collector = launch {
-                        transport.inboundMessages.mapNotNull(::parseBridgePayload).collect(incoming::send)
-                    }
+                    val collector =
+                        launch {
+                            transport.inboundMessages.mapNotNull(::parseBridgePayload).collect(incoming::send)
+                        }
                     try {
                         if (transport.connectionState.value != ConnectionState.CONNECTED) {
                             transport.connect(
@@ -125,10 +128,13 @@ class BridgeSessionShareRemoteDataSource(
                                 JsonObject.serializer(),
                                 buildJsonObject {
                                     put("channel", BRIDGE_CHANNEL)
-                                    put("payload", buildJsonObject {
-                                        put("type", type)
-                                        body()
-                                    })
+                                    put(
+                                        "payload",
+                                        buildJsonObject {
+                                            put("type", type)
+                                            body()
+                                        },
+                                    )
                                 },
                             ),
                         )

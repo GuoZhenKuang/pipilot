@@ -14,9 +14,9 @@ import com.ayagmar.pimobile.sessions.ClientIdentityStore
 import com.ayagmar.pimobile.sessions.RpcSessionController
 import com.ayagmar.pimobile.sessions.SessionController
 import com.ayagmar.pimobile.sessions.SessionCwdPreferenceStore
+import com.ayagmar.pimobile.sessions.ShareNavigationCoordinator
 import com.ayagmar.pimobile.sessions.SharedPreferencesClientIdentityStore
 import com.ayagmar.pimobile.sessions.SharedPreferencesSessionCwdPreferenceStore
-import com.ayagmar.pimobile.sessions.ShareNavigationCoordinator
 
 class AppGraph(
     context: Context,

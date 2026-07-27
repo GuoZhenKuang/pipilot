@@ -8,10 +8,11 @@ import kotlin.test.assertTrue
 class SessionIdentityTest {
     @Test
     fun `locator round trips authority and opaque reference without local identity`() {
-        val locator = SharedSessionLocator(
-            authority = ShareAuthority("example.com", 8787, tls = true),
-            shareReference = "AbCdEfGhIjKlMnOpQrStUv",
-        )
+        val locator =
+            SharedSessionLocator(
+                authority = ShareAuthority("example.com", 8787, tls = true),
+                shareReference = "AbCdEfGhIjKlMnOpQrStUv",
+            )
         val encoded = SharedSessionLocatorCodec.encode(locator)
         val decoded = SharedSessionLocatorCodec.decode(encoded).getOrThrow()
 

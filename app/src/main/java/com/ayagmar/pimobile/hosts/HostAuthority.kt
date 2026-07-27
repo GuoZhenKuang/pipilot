@@ -7,9 +7,15 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 private const val HTTP_DEFAULT_PORT = 80
 private const val HTTPS_DEFAULT_PORT = 443
+private const val ASCII_CONTROL_CHARACTER_LIMIT = 32
+private const val ASCII_DELETE_CHARACTER = 127
 
 fun normalizeShareOrigin(raw: String): String {
-    require(raw.none { character -> character.code < 32 || character.code == 127 }) { "Invalid share origin" }
+    require(
+        raw.none { character ->
+            character.code < ASCII_CONTROL_CHARACTER_LIMIT || character.code == ASCII_DELETE_CHARACTER
+        },
+    ) { "Invalid share origin" }
     val url = raw.toHttpUrlOrNull() ?: error("Invalid share origin")
     require(url.scheme == "http" || url.scheme == "https") { "Invalid share origin scheme" }
     require(url.username.isEmpty() && url.password.isEmpty()) { "Share origin user information is not supported" }

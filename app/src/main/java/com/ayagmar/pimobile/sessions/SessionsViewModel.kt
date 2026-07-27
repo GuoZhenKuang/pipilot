@@ -6,12 +6,12 @@ import androidx.lifecycle.viewModelScope
 import com.ayagmar.pimobile.coresessions.SessionGroup
 import com.ayagmar.pimobile.coresessions.SessionIndexRepository
 import com.ayagmar.pimobile.coresessions.SessionRecord
+import com.ayagmar.pimobile.coresessions.SharedSessionLocator
+import com.ayagmar.pimobile.coresessions.SharedSessionLocatorCodec
 import com.ayagmar.pimobile.hosts.HostProfile
 import com.ayagmar.pimobile.hosts.HostProfileStore
 import com.ayagmar.pimobile.hosts.HostTokenStore
 import com.ayagmar.pimobile.hosts.endpointShareAuthority
-import com.ayagmar.pimobile.coresessions.SharedSessionLocator
-import com.ayagmar.pimobile.coresessions.SharedSessionLocatorCodec
 import com.ayagmar.pimobile.perf.PerformanceMetrics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -325,25 +325,33 @@ class SessionsViewModel(
     fun shareActiveSession() {
         val hostId = _uiState.value.selectedHostId ?: return
         val host = _uiState.value.hosts.firstOrNull { it.id == hostId } ?: return
-        val session = findActiveSession(_uiState.value) ?: run {
-            emitError("Resume a session before sharing")
-            return
-        }
-        val source = shareRemoteDataSource ?: run {
-            emitError("Sharing is unavailable")
-            return
-        }
+        val session =
+            findActiveSession(_uiState.value) ?: run {
+                emitError("Resume a session before sharing")
+                return
+            }
+        val source =
+            shareRemoteDataSource ?: run {
+                emitError("Sharing is unavailable")
+                return
+            }
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(isPerformingAction = true, errorMessage = null) }
             runCatching {
                 val share = source.getOrCreate(hostId, session)
-                val link = share.webUrl ?: SharedSessionLocatorCodec.encode(
-                    SharedSessionLocator(host.endpointShareAuthority(), share.shareReference),
-                )
+                val link =
+                    share.webUrl ?: SharedSessionLocatorCodec.encode(
+                        SharedSessionLocator(host.endpointShareAuthority(), share.shareReference),
+                    )
                 _uiState.update { it.copy(isPerformingAction = false, shareLink = link) }
                 emitMessage("Share link ready")
             }.onFailure { error ->
-                _uiState.update { it.copy(isPerformingAction = false, errorMessage = error.message ?: "Sharing is unavailable") }
+                _uiState.update {
+                    it.copy(
+                        isPerformingAction = false,
+                        errorMessage = error.message ?: "Sharing is unavailable",
+                    )
+                }
             }
         }
     }
@@ -361,7 +369,12 @@ class SessionsViewModel(
                     emitMessage("Shared link revoked")
                 }
                 .onFailure { error ->
-                    _uiState.update { it.copy(isPerformingAction = false, errorMessage = error.message ?: "Could not revoke shared link") }
+                    _uiState.update {
+                        it.copy(
+                            isPerformingAction = false,
+                            errorMessage = error.message ?: "Could not revoke shared link",
+                        )
+                    }
                 }
         }
     }

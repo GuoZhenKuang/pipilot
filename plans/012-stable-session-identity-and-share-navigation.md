@@ -4,7 +4,7 @@
 
 ## Status
 
-- State: IN PROGRESS
+- State: BLOCKED — the clean full non-device gate failed twice; the second run stopped on six Detekt `MagicNumber` findings in `core-sessions/.../SessionIdentity.kt`
 - Priority: P0
 - Effort: L–XL (approximately 10–15 focused engineering days; device acceptance is separate and operator-owned)
 - Depends on: Plan 011 non-device gates; device acceptance from Plans 008–011 is not a prerequisite
@@ -236,6 +236,15 @@ git diff --check
 ```
 
 Expected: every command exits 0, audit reports no known production vulnerability, both APKs assemble, no device command runs, and diff check emits no output.
+
+### Execution evidence — 2026-07-27
+
+- `./gradlew :core-sessions:test :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:lintDebug`: PASS.
+- `(cd bridge && pnpm install --frozen-lockfile && pnpm run check && pnpm audit --prod)`: PASS; 87 tests passed and no known production vulnerability was reported.
+- `./gradlew clean ktlintCheck detekt test :benchmark:compileBenchmarkKotlin :app:lintDebug :app:assembleDebug :app:assembleRelease`, attempt 1: FAIL on two inherited Plan 012 ktlint findings in `SessionIdentity.kt` and `SessionIdentityTest.kt`; both were formatter-corrected without behavior changes.
+- The same clean full gate, attempt 2: FAIL on six Detekt `MagicNumber` findings in `SessionIdentity.kt` at lines 31, 76, 110, 111 (two findings), and 115. Plan STOP condition applied, so no third full-gate attempt or later standalone gate was run.
+- `git diff --check`: PASS.
+- Device validation: PENDING — operator-owned.
 
 ## Done criteria
 

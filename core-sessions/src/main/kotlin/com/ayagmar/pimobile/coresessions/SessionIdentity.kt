@@ -103,8 +103,7 @@ object SharedSessionLocatorCodec {
         return values
     }
 
-    private fun decodeParameter(value: String): String =
-        URLDecoder.decode(value, StandardCharsets.UTF_8)
+    private fun decodeParameter(value: String): String = URLDecoder.decode(value, StandardCharsets.UTF_8)
 }
 
 fun String?.isValidPiSessionId(): Boolean {
