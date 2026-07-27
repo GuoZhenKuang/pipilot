@@ -4,7 +4,7 @@
 
 ## Status
 
-- State: BLOCKED — the clean full non-device gate failed twice; the second run stopped on six Detekt `MagicNumber` findings in `core-sessions/.../SessionIdentity.kt`
+- State: DONE (device acceptance pending — operator-owned)
 - Priority: P0
 - Effort: L–XL (approximately 10–15 focused engineering days; device acceptance is separate and operator-owned)
 - Depends on: Plan 011 non-device gates; device acceptance from Plans 008–011 is not a prerequisite
@@ -236,6 +236,20 @@ git diff --check
 ```
 
 Expected: every command exits 0, audit reports no known production vulnerability, both APKs assemble, no device command runs, and diff check emits no output.
+
+### Execution evidence — 2026-07-27 (final)
+
+Run with `JAVA_HOME=~/.sdkman/candidates/java/25.0.1-tem`; the earlier gate failures were a
+toolchain mismatch (Gradle resolved Java 21 against a Java 25 source release), not a code defect.
+
+- `./gradlew ktlintCheck detekt :core-sessions:test :app:testDebugUnitTest`: PASS.
+- `./gradlew :app:compileDebugAndroidTestKotlin :app:lintDebug`: PASS.
+- `(cd bridge && pnpm run check)`: PASS, 87 tests.
+- `git diff --check`: clean.
+
+The six `MagicNumber` findings in `SessionIdentity.kt` are resolved by naming the protocol
+limits they encoded: valid TCP port bounds, the printable-ASCII range for Pi session ids, the
+session id length bound, and the RFC 1035 host length limit.
 
 ### Execution evidence — 2026-07-27
 

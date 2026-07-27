@@ -9,6 +9,20 @@ import java.nio.charset.StandardCharsets
 private val SHARE_REFERENCE_REGEX = Regex("^[A-Za-z0-9_-]{22}$")
 private val CONTROL_CHARACTER_REGEX = Regex("[\\u0000-\\u001f\\u007f]")
 
+/** Valid TCP ports, excluding 0, which cannot be dialled. */
+private const val MIN_PORT = 1
+private const val MAX_PORT = 65_535
+private val VALID_PORTS = MIN_PORT..MAX_PORT
+
+/** Pi session ids are printable ASCII; the bound keeps a hostile id out of storage and logs. */
+private const val MAX_PI_SESSION_ID_LENGTH = 128
+private const val FIRST_PRINTABLE_ASCII = 0x21
+private const val LAST_PRINTABLE_ASCII = 0x7e
+private val PRINTABLE_ASCII = FIRST_PRINTABLE_ASCII..LAST_PRINTABLE_ASCII
+
+/** Maximum length of a DNS name, per RFC 1035. */
+private const val MAX_HOST_LENGTH = 253
+
 /** Authenticated, device-local identity. It must never be encoded into an external link. */
 data class SessionKey(
     val hostProfileId: String,
@@ -28,7 +42,7 @@ data class ShareAuthority(
 ) {
     init {
         require(host == normalizeShareHost(host)) { "Authority host is not canonical" }
-        require(port in 1..65_535) { "Authority port is invalid" }
+        require(port in VALID_PORTS) { "Authority port is invalid" }
     }
 }
 
@@ -73,7 +87,7 @@ object SharedSessionLocatorCodec {
             require(parameters.keys == setOf("host", "port", "tls")) { "Unsupported link parameters" }
             val host = normalizeShareHost(requireNotNull(parameters["host"]))
             val port = requireNotNull(parameters["port"]).toIntOrNull()
-            require(port != null && port in 1..65_535) { "Invalid link port" }
+            require(port != null && port in VALID_PORTS) { "Invalid link port" }
             val tls =
                 when (parameters["tls"]) {
                     "0" -> false
@@ -107,12 +121,12 @@ object SharedSessionLocatorCodec {
 }
 
 fun String?.isValidPiSessionId(): Boolean {
-    if (this == null || length !in 1..128) return false
-    return all { character -> character.code in 0x21..0x7e }
+    if (this == null || length !in 1..MAX_PI_SESSION_ID_LENGTH) return false
+    return all { character -> character.code in PRINTABLE_ASCII }
 }
 
 fun normalizeShareHost(raw: String): String {
-    require(raw.isNotBlank() && raw.length <= 253) { "Invalid authority host" }
+    require(raw.isNotBlank() && raw.length <= MAX_HOST_LENGTH) { "Invalid authority host" }
     require(!CONTROL_CHARACTER_REGEX.containsMatchIn(raw)) { "Invalid authority host" }
     require(!raw.contains('@') && !raw.contains('/') && !raw.contains('\\')) { "Invalid authority host" }
 
