@@ -8,10 +8,12 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -75,6 +77,69 @@ class SessionIndexRepositoryTest {
             assertEquals("modernized", changedRef.firstUserMessagePreview)
 
             assertFilteredPaymentState(repository = repository, hostId = hostId)
+        }
+
+    @Test
+    fun `all host initialization serves every cache before bounded refresh and isolates failure`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val cache = InMemorySessionIndexCache()
+            (1..4).forEach { index ->
+                cache.write(
+                    CachedSessionIndex(
+                        hostId = "host-$index",
+                        cachedAtEpochMs = index.toLong(),
+                        groups = listOf(SessionGroup("/private/$index", listOf(buildUnchangedSession()))),
+                    ),
+                )
+            }
+            val remote =
+                FakeSessionRemoteDataSource().apply {
+                    fetchDelayMs = 100
+                    failingHosts += "host-4"
+                }
+            val repository = createRepository(remote, cache, dispatcher)
+            val initialize = async { repository.initializeAll((1..4).map { "host-$it" }, maxConcurrentRefreshes = 2) }
+
+            runCurrent()
+            val cached = repository.observeAll((1..4).map { "host-$it" }).first()
+            assertTrue(cached.all { it.source == SessionIndexSource.CACHE })
+            assertTrue(remote.maximumConcurrentFetches <= 2)
+
+            advanceUntilIdle()
+            initialize.await()
+            val completed = repository.observeAll((1..4).map { "host-$it" }).first()
+            assertEquals("sanitized failure", completed.first { it.hostId == "host-4" }.errorMessage)
+            assertTrue(completed.first { it.hostId == "host-4" }.groups.isNotEmpty())
+            assertEquals(SessionIndexSource.REMOTE, completed.first { it.hostId == "host-1" }.source)
+            assertEquals(2, remote.maximumConcurrentFetches)
+        }
+
+    @Test
+    fun `privacy safe repository query never matches path or cwd`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val remote =
+                FakeSessionRemoteDataSource().apply {
+                    groupsByHost["host-a"] =
+                        listOf(
+                            SessionGroup(
+                                "/private/payment-workspace",
+                                listOf(
+                                    buildUnchangedSession().copy(
+                                        sessionPath = "/private/path-only.jsonl",
+                                        firstUserMessagePreview = "hello",
+                                    ),
+                                ),
+                            ),
+                        )
+                }
+            val repository = createRepository(remote, InMemorySessionIndexCache(), dispatcher)
+            repository.refresh("host-a")
+
+            assertTrue(repository.observe("host-a", "/private/path-only").first().groups.isEmpty())
+            assertTrue(repository.observe("host-a", "payment-workspace").first().groups.isEmpty())
+            assertFalse(repository.observe("host-a", "hello").first().groups.isEmpty())
         }
 
     @Test
@@ -233,12 +298,20 @@ class SessionIndexRepositoryTest {
         val failingHosts = mutableSetOf<String>()
         var fetchCount: Int = 0
         var fetchDelayMs: Long = 0
+        var concurrentFetches: Int = 0
+        var maximumConcurrentFetches: Int = 0
 
         override suspend fun fetch(hostId: String): List<SessionGroup> {
             fetchCount += 1
-            if (fetchDelayMs > 0) delay(fetchDelayMs)
-            if (hostId in failingHosts) error("sanitized failure")
-            return groupsByHost[hostId] ?: emptyList()
+            concurrentFetches += 1
+            maximumConcurrentFetches = maxOf(maximumConcurrentFetches, concurrentFetches)
+            return try {
+                if (fetchDelayMs > 0) delay(fetchDelayMs)
+                if (hostId in failingHosts) error("sanitized failure")
+                groupsByHost[hostId] ?: emptyList()
+            } finally {
+                concurrentFetches -= 1
+            }
         }
     }
 }

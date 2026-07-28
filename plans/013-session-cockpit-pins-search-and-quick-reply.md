@@ -4,7 +4,8 @@
 
 ## Status
 
-- State: TODO
+- State: DONE (device acceptance pending — operator-owned)
+- Execution baseline: `8b1361b5aa18314b2ccc57a04d3cd645cb3064ad`
 - Priority: P1
 - Effort: XL (approximately 2–4 focused engineering weeks)
 - Depends on: Plan 012
@@ -190,14 +191,25 @@ git diff --check
 
 Expected: every command exits 0, both APKs assemble, Android-test sources compile, no device command runs and diff check emits no output.
 
+### Execution evidence — 2026-07-28
+
+- Baseline/drift check recorded literal baseline `8b1361b5aa18314b2ccc57a04d3cd645cb3064ad`; Plan 012 identity split was present and its status was DONE.
+- `./gradlew :core-sessions:test :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:lintDebug`: PASS.
+- `./gradlew ktlintCheck detekt`: PASS.
+- `./gradlew clean ktlintCheck detekt test :benchmark:compileBenchmarkKotlin :app:lintDebug :app:assembleDebug :app:assembleRelease`: PASS; debug and unsigned release APKs produced.
+- `./gradlew :app:compileDebugAndroidTestKotlin`: PASS.
+- `git diff --check`: PASS.
+- Bridge/core-net/core-rpc diff check: no protocol or transport changes.
+- Device/emulator/ADB/connected/manual acceptance: not run; PENDING — operator-owned.
+
 ## Done criteria
 
-- [ ] Store tests prove pins/hidden use local profile ID + unique `sessionId`, persist no path/cwd/transcript, and always provide Hidden recovery.
-- [ ] UI/search tests prove normal cards/semantics/query results expose no absolute path/full cwd.
-- [ ] Multi-host tests prove cache-first results, bounded refresh, deterministic ordering and partial-host failure isolation.
-- [ ] Quick-reply tests prove all active/idle/cancel/error branches, exactly-once dispatch and no automatic lock takeover/navigation.
-- [ ] Compact/expanded/accessibility source tests compile and lint passes.
-- [ ] Complete non-device commands above exit 0; status shows only in-scope changes.
+- [x] Store tests prove pins/hidden use local profile ID + unique `sessionId`, persist no path/cwd/transcript, and always provide Hidden recovery.
+- [x] UI/search tests prove normal cards/semantics/query results expose no absolute path/full cwd.
+- [x] Multi-host tests prove cache-first results, bounded refresh, deterministic ordering and partial-host failure isolation.
+- [x] Quick-reply tests prove all active/idle/cancel/error branches, exactly-once dispatch and no automatic lock takeover/navigation.
+- [x] Compact/expanded/accessibility source tests compile and lint passes.
+- [x] Complete non-device commands above exit 0; status shows only in-scope changes.
 
 ## STOP conditions
 

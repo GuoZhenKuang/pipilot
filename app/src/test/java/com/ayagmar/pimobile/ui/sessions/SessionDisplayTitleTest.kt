@@ -23,7 +23,7 @@ class SessionDisplayTitleTest {
     }
 
     @Test
-    fun displaySubtitleFallsBackToFileNameWhenNamedSessionHasNoPreview() {
+    fun displaySubtitleDoesNotExposeFileNameWhenNamedSessionHasNoPreview() {
         val session =
             SessionRecord(
                 sessionPath = "/tmp/session-2.jsonl",
@@ -34,11 +34,11 @@ class SessionDisplayTitleTest {
             )
 
         assertEquals("Named session", session.displayTitle)
-        assertEquals("session-2.jsonl", session.displaySubtitle)
+        assertNull(session.displaySubtitle)
     }
 
     @Test
-    fun displaySubtitleStaysHiddenForUnnamedSessions() {
+    fun previewOnlySessionUsesSafePreviewAsTitle() {
         val session =
             SessionRecord(
                 sessionPath = "/tmp/session-3.jsonl",

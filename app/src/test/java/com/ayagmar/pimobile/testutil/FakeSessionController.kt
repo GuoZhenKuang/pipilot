@@ -7,6 +7,7 @@ import com.ayagmar.pimobile.corerpc.ImagePayload
 import com.ayagmar.pimobile.corerpc.RpcIncomingMessage
 import com.ayagmar.pimobile.corerpc.RpcResponse
 import com.ayagmar.pimobile.corerpc.SessionStats
+import com.ayagmar.pimobile.coresessions.SessionKey
 import com.ayagmar.pimobile.coresessions.SessionRecord
 import com.ayagmar.pimobile.hosts.HostProfile
 import com.ayagmar.pimobile.sessions.ActiveSessionState
@@ -31,6 +32,7 @@ import kotlinx.serialization.json.JsonObject
 class FakeSessionController : SessionController {
     private val events = MutableSharedFlow<RpcIncomingMessage>(extraBufferCapacity = 16)
     private val streamingState = MutableStateFlow(false)
+    private val retryingState = MutableStateFlow(false)
     private val connectionStateFlow = MutableStateFlow(ConnectionState.DISCONNECTED)
     private val _sessionChanged = MutableSharedFlow<String?>(extraBufferCapacity = 16)
     private val _activeSession = MutableStateFlow<ActiveSessionState?>(null)
@@ -42,6 +44,9 @@ class FakeSessionController : SessionController {
     var getLastAssistantTextCallCount: Int = 0
     var importSessionJsonlCallCount: Int = 0
     var sendPromptCallCount: Int = 0
+    var steerCallCount: Int = 0
+    var followUpCallCount: Int = 0
+    var resumeCallCount: Int = 0
     var bootstrapCallCount: Int = 0
     var getMessagesCallCount: Int = 0
     var getStateCallCount: Int = 0
@@ -64,6 +69,9 @@ class FakeSessionController : SessionController {
     var steerResult: Result<Unit> = Result.success(Unit)
     var followUpResult: Result<Unit> = Result.success(Unit)
     var sendPromptDelayMs: Long = 0L
+    var resumeDelayMs: Long = 0L
+    var resumeResult: Result<String?> = Result.success(null)
+    var publishActiveKeyOnResume: Boolean = true
     var bootstrapMessagesDelayMs: Long = 0L
     var abortResult: Result<Unit> = Result.success(Unit)
     var abortRetryResult: Result<Unit> = Result.success(Unit)
@@ -108,6 +116,7 @@ class FakeSessionController : SessionController {
     override val rpcEvents: SharedFlow<RpcIncomingMessage> = events
     override val connectionState: StateFlow<ConnectionState> = connectionStateFlow
     override val isStreaming: StateFlow<Boolean> = streamingState
+    override val isRetrying: StateFlow<Boolean> = retryingState
     override val sessionChanged: SharedFlow<String?> = _sessionChanged
     override val activeSession: StateFlow<ActiveSessionState?> = _activeSession
     override val timelineInvalidated: SharedFlow<Unit> = _timelineInvalidated
@@ -122,6 +131,18 @@ class FakeSessionController : SessionController {
         _sessionChanged.emit(sessionPath)
     }
 
+    fun setActiveSession(
+        key: SessionKey?,
+        sessionPath: String? = null,
+    ) {
+        _activeSession.value =
+            ActiveSessionState(
+                sessionPath = sessionPath,
+                generation = (_activeSession.value?.generation ?: 0L) + 1L,
+                sessionKey = key,
+            )
+    }
+
     fun beginSessionSwitch(sessionPath: String?) {
         _activeSession.value = ActiveSessionState(sessionPath, (_activeSession.value?.generation ?: 0L) + 1L, true)
     }
@@ -132,6 +153,10 @@ class FakeSessionController : SessionController {
 
     fun setStreaming(isStreaming: Boolean) {
         streamingState.value = isStreaming
+    }
+
+    fun setRetrying(isRetrying: Boolean) {
+        retryingState.value = isRetrying
     }
 
     fun setConnectionState(state: ConnectionState) {
@@ -168,7 +193,14 @@ class FakeSessionController : SessionController {
         hostProfile: HostProfile,
         token: String,
         session: SessionRecord,
-    ): Result<String?> = Result.success(null)
+    ): Result<String?> {
+        resumeCallCount += 1
+        if (resumeDelayMs > 0) delay(resumeDelayMs)
+        if (resumeResult.isSuccess && publishActiveKeyOnResume && session.hasStableIdentity) {
+            setActiveSession(SessionKey(hostProfile.id, requireNotNull(session.sessionId)), session.sessionPath)
+        }
+        return resumeResult
+    }
 
     override suspend fun bootstrap(onStateAvailable: (RpcResponse) -> Unit): Result<SessionBootstrapSnapshot> {
         bootstrapCallCount += 1
@@ -224,9 +256,15 @@ class FakeSessionController : SessionController {
         return abortResult
     }
 
-    override suspend fun steer(message: String): Result<Unit> = steerResult
+    override suspend fun steer(message: String): Result<Unit> {
+        steerCallCount += 1
+        return steerResult
+    }
 
-    override suspend fun followUp(message: String): Result<Unit> = followUpResult
+    override suspend fun followUp(message: String): Result<Unit> {
+        followUpCallCount += 1
+        return followUpResult
+    }
 
     override suspend fun renameSession(name: String): Result<String?> {
         renameSessionCallCount += 1

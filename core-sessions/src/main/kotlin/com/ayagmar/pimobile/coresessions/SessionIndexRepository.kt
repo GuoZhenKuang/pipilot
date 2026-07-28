@@ -1,18 +1,24 @@
 package com.ayagmar.pimobile.coresessions
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 
 class SessionIndexRepository(
     private val remoteDataSource: SessionIndexRemoteDataSource,
@@ -27,24 +33,36 @@ class SessionIndexRepository(
     private val inFlightRefreshes = linkedMapOf<String, CompletableDeferred<SessionIndexState>>()
     private val lastRefreshAttemptByHost = linkedMapOf<String, Long>()
     private val refreshFailuresByHost = linkedMapOf<String, Int>()
+    private val crossHostRefreshSemaphore = Semaphore(DEFAULT_MAX_CONCURRENT_REFRESHES)
 
     suspend fun initialize(hostId: String) {
-        val state = stateForHost(hostId)
-        val cachedIndex = cache.read(hostId)
-
-        if (cachedIndex != null) {
-            state.value =
-                SessionIndexState(
-                    hostId = hostId,
-                    groups = cachedIndex.groups,
-                    isRefreshing = false,
-                    source = SessionIndexSource.CACHE,
-                    lastUpdatedEpochMs = cachedIndex.cachedAtEpochMs,
-                    errorMessage = null,
-                )
-        }
-
+        loadCache(hostId)
         refreshInBackground(hostId)
+    }
+
+    /** Loads every cache before starting network work, then refreshes with a strict host bound. */
+    suspend fun initializeAll(
+        hostIds: List<String>,
+        maxConcurrentRefreshes: Int = DEFAULT_MAX_CONCURRENT_REFRESHES,
+    ) {
+        require(maxConcurrentRefreshes > 0) { "Refresh concurrency must be positive" }
+        hostIds.distinct().forEach { hostId -> loadCache(hostId) }
+        refreshAll(hostIds, maxConcurrentRefreshes)
+    }
+
+    suspend fun refreshAll(
+        hostIds: List<String>,
+        maxConcurrentRefreshes: Int = DEFAULT_MAX_CONCURRENT_REFRESHES,
+    ) {
+        require(maxConcurrentRefreshes > 0) { "Refresh concurrency must be positive" }
+        val semaphore = Semaphore(maxConcurrentRefreshes)
+        coroutineScope {
+            hostIds.distinct().forEach { hostId ->
+                launch {
+                    semaphore.withPermit { refresh(hostId) }
+                }
+            }
+        }
     }
 
     fun observe(
@@ -57,8 +75,32 @@ class SessionIndexRepository(
         }
     }
 
+    fun observeAll(hostIds: List<String>): Flow<List<SessionIndexState>> {
+        val distinctHostIds = hostIds.distinct()
+        if (distinctHostIds.isEmpty()) return flowOf(emptyList())
+        return combine(distinctHostIds.map { hostId -> stateForHost(hostId).asStateFlow() }) { states ->
+            states.toList()
+        }
+    }
+
+    private suspend fun loadCache(hostId: String) {
+        val cachedIndex = cache.read(hostId) ?: return
+        stateForHost(hostId).value =
+            SessionIndexState(
+                hostId = hostId,
+                groups = cachedIndex.groups,
+                isRefreshing = false,
+                source = SessionIndexSource.CACHE,
+                lastUpdatedEpochMs = cachedIndex.cachedAtEpochMs,
+                errorMessage = null,
+            )
+    }
+
+    suspend fun refresh(hostId: String): SessionIndexState =
+        crossHostRefreshSemaphore.withPermit { refreshWithinHostBound(hostId) }
+
     @Suppress("TooGenericExceptionCaught", "ReturnCount")
-    suspend fun refresh(hostId: String): SessionIndexState {
+    private suspend fun refreshWithinHostBound(hostId: String): SessionIndexState {
         val state = stateForHost(hostId)
         val existingRefresh = synchronized(inFlightRefreshes) { inFlightRefreshes[hostId] }
         if (existingRefresh != null) return existingRefresh.await()
@@ -139,6 +181,7 @@ class SessionIndexRepository(
                 state.value = updatedState
                 updatedState
             }.getOrElse { throwable ->
+                if (throwable is CancellationException) throw throwable
                 val failedState =
                     state.value.copy(
                         isRefreshing = false,
@@ -174,6 +217,7 @@ class SessionIndexRepository(
 }
 
 private const val MAX_BACKOFF_SHIFT = 6
+private const val DEFAULT_MAX_CONCURRENT_REFRESHES = 2
 
 private fun SessionIndexState.filter(query: String): SessionIndexState {
     if (query.isBlank()) return this
@@ -182,30 +226,15 @@ private fun SessionIndexState.filter(query: String): SessionIndexState {
 
     val filteredGroups =
         groups.mapNotNull { group ->
-            val groupMatches = group.cwd.lowercase().contains(normalizedQuery)
-            if (groupMatches) {
-                group
-            } else {
-                val filteredSessions =
-                    group.sessions.filter { session ->
-                        session.matches(normalizedQuery)
-                    }
-
-                if (filteredSessions.isEmpty()) {
-                    null
-                } else {
-                    SessionGroup(cwd = group.cwd, sessions = filteredSessions)
-                }
-            }
+            val filteredSessions = group.sessions.filter { session -> session.matches(normalizedQuery) }
+            if (filteredSessions.isEmpty()) null else SessionGroup(cwd = group.cwd, sessions = filteredSessions)
         }
 
     return copy(groups = filteredGroups)
 }
 
 private fun SessionRecord.matches(query: String): Boolean {
-    return sessionPath.lowercase().contains(query) ||
-        cwd.lowercase().contains(query) ||
-        (displayName?.lowercase()?.contains(query) == true) ||
+    return (displayName?.lowercase()?.contains(query) == true) ||
         (firstUserMessagePreview?.lowercase()?.contains(query) == true) ||
         (lastModel?.lowercase()?.contains(query) == true)
 }

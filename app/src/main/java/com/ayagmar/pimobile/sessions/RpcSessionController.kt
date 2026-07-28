@@ -10,6 +10,8 @@ import com.ayagmar.pimobile.corerpc.AbortCommand
 import com.ayagmar.pimobile.corerpc.AbortRetryCommand
 import com.ayagmar.pimobile.corerpc.AgentSettledEvent
 import com.ayagmar.pimobile.corerpc.AgentStartEvent
+import com.ayagmar.pimobile.corerpc.AutoRetryEndEvent
+import com.ayagmar.pimobile.corerpc.AutoRetryStartEvent
 import com.ayagmar.pimobile.corerpc.AvailableModel
 import com.ayagmar.pimobile.corerpc.BashCommand
 import com.ayagmar.pimobile.corerpc.BashResult
@@ -86,6 +88,7 @@ class RpcSessionController(
     private val _rpcEvents = MutableSharedFlow<RpcIncomingMessage>(extraBufferCapacity = EVENT_BUFFER_CAPACITY)
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     private val _isStreaming = MutableStateFlow(false)
+    private val _isRetrying = MutableStateFlow(false)
     private val _sessionChanged = MutableSharedFlow<String?>(extraBufferCapacity = 16)
     private val _activeSession = MutableStateFlow<ActiveSessionState?>(null)
     private val _timelineInvalidated = MutableSharedFlow<Unit>(extraBufferCapacity = 16)
@@ -107,6 +110,7 @@ class RpcSessionController(
     override val rpcEvents: SharedFlow<RpcIncomingMessage> = _rpcEvents
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
     override val isStreaming: StateFlow<Boolean> = _isStreaming.asStateFlow()
+    override val isRetrying: StateFlow<Boolean> = _isRetrying.asStateFlow()
     override val sessionChanged: SharedFlow<String?> = _sessionChanged
     override val activeSession: StateFlow<ActiveSessionState?> = _activeSession.asStateFlow()
     override val timelineInvalidated: SharedFlow<Unit> = _timelineInvalidated
@@ -1058,6 +1062,7 @@ class RpcSessionController(
         }
         _connectionState.value = ConnectionState.DISCONNECTED
         _isStreaming.value = false
+        _isRetrying.value = false
     }
 
     private fun observeConnection(connection: PiRpcConnection) {
@@ -1110,7 +1115,12 @@ class RpcSessionController(
                 connection.rpcEvents.collect { event ->
                     when (event) {
                         is AgentStartEvent -> _isStreaming.value = true
-                        is AgentSettledEvent -> _isStreaming.value = false
+                        is AgentSettledEvent -> {
+                            _isStreaming.value = false
+                            _isRetrying.value = false
+                        }
+                        is AutoRetryStartEvent -> _isRetrying.value = true
+                        is AutoRetryEndEvent -> _isRetrying.value = false
 
                         else -> Unit
                     }

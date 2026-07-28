@@ -164,6 +164,8 @@ Compile connected tests without launching an emulator/device:
 
 Device acceptance for Plans 006–011 is **PENDING — operator-owned**. Plan 012 device acceptance is also **PENDING — operator-owned**. Do not run an emulator, connected tests, `adb`, install an APK, benchmark, capture screenshots, or claim manual acceptance until the operator explicitly enables `debug mode`.
 
+Plan 013's non-device tests cover key-only pin/hidden persistence, corruption and host lifecycle; privacy-safe projection/search; cache-first two-host-bounded refresh with partial failures; deterministic ordering; and all quick-reply active/idle/error/cancellation/duplicate branches. Device acceptance remains operator-owned. When enabled, verify compact/expanded layout, large fonts, TalkBack labels/focus, keyboard/IME quick reply, hidden recovery, host add/delete, one unreachable host, and lock conflicts without takeover or automatic navigation.
+
 Plan 012 device evidence to collect when enabled:
 
 - cold custom-scheme link with configured exact endpoint and verified share-origin alias;

@@ -21,6 +21,7 @@ interface SessionController {
     val rpcEvents: SharedFlow<RpcIncomingMessage>
     val connectionState: StateFlow<ConnectionState>
     val isStreaming: StateFlow<Boolean>
+    val isRetrying: StateFlow<Boolean>
 
     /**
      * Emits the new session path whenever the session changes (switch, new, fork).

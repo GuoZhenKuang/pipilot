@@ -20,7 +20,7 @@ These plans deliberately retain the current architecture: Android connects to a 
 | [010](010-performance-resume-and-session-navigation.md) | Performance overhaul for resume, trees, and session navigation | P1 | XL | 008, 009 | DONE (device performance acceptance pending — operator-owned) |
 | [011](011-agp9-api37-java25-modernization-and-quality.md) | Migrate to AGP 9/API 37/JDK 25 and modernize platform quality | P1 | XL | 009, 010 | DONE (device acceptance pending — operator-owned; detekt uses isolated JDK 21) |
 | [012](012-stable-session-identity-and-share-navigation.md) | Add stable session identity and authenticated share navigation | P0 | L–XL | 011 | DONE (device acceptance pending — operator-owned) |
-| [013](013-session-cockpit-pins-search-and-quick-reply.md) | Build a session-first cockpit with pins, search and quick reply | P1 | XL | 012 | TODO |
+| [013](013-session-cockpit-pins-search-and-quick-reply.md) | Build a session-first cockpit with pins, search and quick reply | P1 | XL | 012 | DONE (device acceptance pending — operator-owned) |
 | [014](014-background-turn-continuity-and-widget.md) | Add privacy-preserving background turn continuity and an active-session widget | P1 | XL | 012, 013 | TODO |
 | [015](015-session-lineage-and-project-organization.md) | Add fork lineage and workspace-oriented session organization | P2 | M–L | 012–013; 014 settled | TODO |
 | [016](016-mobile-dictation-and-composer-accessibility.md) | Add opt-in mobile dictation and composer accessibility polish | P2 | M–L | 012, 013, 015; 014 settled | TODO |

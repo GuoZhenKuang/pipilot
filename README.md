@@ -119,7 +119,9 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 ### Sessions
 
-Sessions are grouped by working directory (cwd). Each session is a JSONL file in `~/.pi/agent/sessions/--path--/`. The bridge reads these files directly since pi's RPC doesn't have a list-sessions command.
+Sessions is a cache-first cockpit across configured hosts. It organizes active, pinned, recent, and explicitly recoverable hidden sessions; searches only privacy-safe labels/previews/model metadata; and never shows full cwd or session-file paths on normal cards. Pins and hidden state persist only local `SessionKey(hostProfileId, sessionId)` values and presentation density. Cross-host refresh is limited to two hosts at a time, and one host failure does not hide another host's cached results.
+
+Text-only quick reply reuses the authenticated session controller and existing control locks. Idle targets resume before dispatch; an active target requires Follow up or Steer; a different active run is never switched away from silently.
 
 ### Process Management
 

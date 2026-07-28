@@ -390,6 +390,7 @@ fun PiMobileApp(appGraph: AppGraph) {
                                             repository = appGraph.sessionIndexRepository,
                                             sessionController = appGraph.sessionController,
                                             cwdPreferenceStore = appGraph.sessionCwdPreferenceStore,
+                                            savedStateStore = appGraph.sessionSavedStateStore,
                                             shareRemoteDataSource = appGraph.sessionShareRemoteDataSource,
                                             onNavigateToChat = {
                                                 navigateTo("chat")

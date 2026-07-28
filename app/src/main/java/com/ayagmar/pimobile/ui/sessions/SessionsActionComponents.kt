@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.ayagmar.pimobile.coresessions.SessionRecord
 import com.ayagmar.pimobile.sessions.ForkableMessage
+import com.ayagmar.pimobile.sessions.privacySafeText
 
 @Composable
 @Suppress("LongParameterList")
@@ -138,7 +139,7 @@ fun ForkPickerDialog(
                                 onClick = { onSelect(candidate.entryId) },
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
-                                Text(candidate.preview)
+                                Text(privacySafeText(candidate.preview) ?: "User message")
                             }
                         }
                     }
@@ -155,15 +156,9 @@ fun ForkPickerDialog(
 }
 
 val SessionRecord.displayTitle: String
-    get() {
-        return displayName ?: firstUserMessagePreview ?: sessionPath.substringAfterLast('/')
-    }
+    get() = privacySafeText(displayName ?: firstUserMessagePreview) ?: "Untitled session"
 
 val SessionRecord.displaySubtitle: String?
-    get() {
-        return when {
-            !displayName.isNullOrBlank() && !firstUserMessagePreview.isNullOrBlank() -> firstUserMessagePreview
-            !displayName.isNullOrBlank() -> sessionPath.substringAfterLast('/')
-            else -> null
-        }
-    }
+    get() =
+        privacySafeText(firstUserMessagePreview)
+            ?.takeIf { !displayName.isNullOrBlank() && it != displayTitle }
