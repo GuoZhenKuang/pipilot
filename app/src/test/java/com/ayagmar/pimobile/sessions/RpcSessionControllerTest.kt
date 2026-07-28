@@ -4,6 +4,8 @@ import com.ayagmar.pimobile.corerpc.AvailableModel
 import com.ayagmar.pimobile.corerpc.BashResult
 import com.ayagmar.pimobile.corerpc.RpcResponse
 import com.ayagmar.pimobile.corerpc.SessionStats
+import com.ayagmar.pimobile.coresessions.SessionKey
+import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
@@ -11,10 +13,32 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.lang.reflect.InvocationTargetException
 
 class RpcSessionControllerTest {
+    @Test
+    fun expectedSessionGuardsRejectDispatchBeforeUsingAnUnconfirmedConnection() =
+        runTest {
+            val controller = RpcSessionController(clientId = "test-client")
+            val key = SessionKey("host-a", "session-a")
+
+            val results =
+                listOf(
+                    controller.sendPrompt("prompt", expectedSessionKey = key),
+                    controller.steer("steer", expectedSessionKey = key),
+                    controller.followUp("follow up", expectedSessionKey = key),
+                )
+
+            assertTrue(results.all { it.isFailure })
+            assertTrue(
+                results.all { result ->
+                    result.exceptionOrNull()?.message?.contains("active session changed", ignoreCase = true) == true
+                },
+            )
+        }
+
     @Test
     fun parseSessionStatsMapsCurrentAndLegacyFields() {
         val current =

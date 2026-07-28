@@ -115,50 +115,19 @@ class QuickReplyCoordinator(
         if (_state.value.canOpenChat) onOpenChat()
     }
 
-    @Suppress("ReturnCount")
     private suspend fun dispatch(
         requestGeneration: Long,
         key: SessionKey,
         draft: String,
         openAfterSend: Boolean,
     ) {
-        val activeKey = controller.activeSession.value?.sessionKey
+        val activeSession = controller.activeSession.value
         val runActive = controller.isStreaming.value || controller.isRetrying.value
-        if (runActive && activeKey != key) {
-            publish(
-                requestGeneration,
-                QuickReplyPhase.CONFLICT,
-                "Another session is running. Open the current session or cancel.",
-                canOpenChat = activeKey != null,
-            )
-            return
-        }
+        if (rejectUnavailableDispatchContext(requestGeneration, key, activeSession, runActive)) return
 
-        val mode = _state.value.deliveryMode
         val result =
             if (runActive) {
-                if (mode == null) {
-                    publish(
-                        requestGeneration,
-                        QuickReplyPhase.EDITING,
-                        "Choose Follow up or Steer for the active run.",
-                        canOpenChat = true,
-                    )
-                    return
-                }
-                if (controller.isRetrying.value && mode == QuickReplyDeliveryMode.STEER) {
-                    publish(
-                        requestGeneration,
-                        QuickReplyPhase.ERROR,
-                        "Steer is unavailable while Pi is retrying. Choose Follow up.",
-                        canOpenChat = true,
-                    )
-                    return
-                }
-                when (mode) {
-                    QuickReplyDeliveryMode.FOLLOW_UP -> controller.followUp(draft)
-                    QuickReplyDeliveryMode.STEER -> controller.steer(draft)
-                }
+                dispatchToActiveTarget(requestGeneration, key, draft) ?: return
             } else {
                 dispatchIdleTarget(requestGeneration, key, draft) ?: return
             }
@@ -178,6 +147,64 @@ class QuickReplyCoordinator(
                 )
             },
         )
+    }
+
+    private fun rejectUnavailableDispatchContext(
+        requestGeneration: Long,
+        key: SessionKey,
+        activeSession: ActiveSessionState?,
+        runActive: Boolean,
+    ): Boolean {
+        val activeKey = activeSession?.sessionKey
+        if (activeSession?.isSwitching == true) {
+            publish(
+                requestGeneration,
+                QuickReplyPhase.ERROR,
+                "A session switch is already in progress. Wait and retry.",
+                canOpenChat = activeKey != null,
+            )
+            return true
+        }
+        if (runActive && activeKey != key) {
+            publish(
+                requestGeneration,
+                QuickReplyPhase.CONFLICT,
+                "Another session is running. Open the current session or cancel.",
+                canOpenChat = activeKey != null,
+            )
+            return true
+        }
+        return false
+    }
+
+    private suspend fun dispatchToActiveTarget(
+        requestGeneration: Long,
+        key: SessionKey,
+        draft: String,
+    ): Result<Unit>? {
+        val mode = _state.value.deliveryMode
+        if (mode == null) {
+            publish(
+                requestGeneration,
+                QuickReplyPhase.EDITING,
+                "Choose Follow up or Steer for the active run.",
+                canOpenChat = true,
+            )
+            return null
+        }
+        if (controller.isRetrying.value && mode == QuickReplyDeliveryMode.STEER) {
+            publish(
+                requestGeneration,
+                QuickReplyPhase.ERROR,
+                "Steer is unavailable while Pi is retrying. Choose Follow up.",
+                canOpenChat = true,
+            )
+            return null
+        }
+        return when (mode) {
+            QuickReplyDeliveryMode.FOLLOW_UP -> controller.followUp(draft, expectedSessionKey = key)
+            QuickReplyDeliveryMode.STEER -> controller.steer(draft, expectedSessionKey = key)
+        }
     }
 
     private suspend fun dispatchIdleTarget(
@@ -211,13 +238,13 @@ class QuickReplyCoordinator(
             )
             return null
         }
-        val resolvedActiveKey = controller.activeSession.value?.sessionKey
-        if (resolvedActiveKey != null && resolvedActiveKey != key) {
-            publish(requestGeneration, QuickReplyPhase.ERROR, "Resumed session identity did not match the target")
+        val resolvedActiveSession = controller.activeSession.value
+        if (resolvedActiveSession?.isSwitching == true || resolvedActiveSession?.sessionKey != key) {
+            publish(requestGeneration, QuickReplyPhase.ERROR, "Could not confirm the resumed quick-reply target")
             return null
         }
         if (!isCurrent(requestGeneration)) return null
-        return controller.sendPrompt(draft)
+        return controller.sendPrompt(draft, expectedSessionKey = key)
     }
 
     @Synchronized

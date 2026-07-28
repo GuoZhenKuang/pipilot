@@ -46,6 +46,7 @@ class FakeSessionController : SessionController {
     var sendPromptCallCount: Int = 0
     var steerCallCount: Int = 0
     var followUpCallCount: Int = 0
+    var ensureConnectedCallCount: Int = 0
     var resumeCallCount: Int = 0
     var bootstrapCallCount: Int = 0
     var getMessagesCallCount: Int = 0
@@ -62,6 +63,7 @@ class FakeSessionController : SessionController {
         )
     var reloadActiveSessionResult: Result<String?> = Result.success(null)
     var lastPromptMessage: String? = null
+    var beforeSendPrompt: (() -> Unit)? = null
     var lastFreshnessSessionPath: String? = null
     var lastImportedSessionFileName: String? = null
     var lastImportedSessionJsonlContent: String? = null
@@ -69,9 +71,13 @@ class FakeSessionController : SessionController {
     var steerResult: Result<Unit> = Result.success(Unit)
     var followUpResult: Result<Unit> = Result.success(Unit)
     var sendPromptDelayMs: Long = 0L
+    var ensureConnectedResult: Result<Unit> = Result.success(Unit)
+    var ensureConnectedDelayMs: Long = 0L
     var resumeDelayMs: Long = 0L
     var resumeResult: Result<String?> = Result.success(null)
     var publishActiveKeyOnResume: Boolean = true
+    var lastEnsuredHostId: String? = null
+    var lastEnsuredCwd: String? = null
     var bootstrapMessagesDelayMs: Long = 0L
     var abortResult: Result<Unit> = Result.success(Unit)
     var abortRetryResult: Result<Unit> = Result.success(Unit)
@@ -185,7 +191,13 @@ class FakeSessionController : SessionController {
         hostProfile: HostProfile,
         token: String,
         cwd: String,
-    ): Result<Unit> = Result.success(Unit)
+    ): Result<Unit> {
+        ensureConnectedCallCount += 1
+        lastEnsuredHostId = hostProfile.id
+        lastEnsuredCwd = cwd
+        if (ensureConnectedDelayMs > 0) delay(ensureConnectedDelayMs)
+        return ensureConnectedResult
+    }
 
     override suspend fun disconnect(): Result<Unit> = Result.success(Unit)
 
@@ -242,7 +254,10 @@ class FakeSessionController : SessionController {
     override suspend fun sendPrompt(
         message: String,
         images: List<ImagePayload>,
+        expectedSessionKey: SessionKey?,
     ): Result<Unit> {
+        beforeSendPrompt?.invoke()
+        if (!matchesExpectedActiveSession(expectedSessionKey)) return activeSessionChangedFailure()
         sendPromptCallCount += 1
         lastPromptMessage = message
         if (sendPromptDelayMs > 0) {
@@ -256,12 +271,20 @@ class FakeSessionController : SessionController {
         return abortResult
     }
 
-    override suspend fun steer(message: String): Result<Unit> {
+    override suspend fun steer(
+        message: String,
+        expectedSessionKey: SessionKey?,
+    ): Result<Unit> {
+        if (!matchesExpectedActiveSession(expectedSessionKey)) return activeSessionChangedFailure()
         steerCallCount += 1
         return steerResult
     }
 
-    override suspend fun followUp(message: String): Result<Unit> {
+    override suspend fun followUp(
+        message: String,
+        expectedSessionKey: SessionKey?,
+    ): Result<Unit> {
+        if (!matchesExpectedActiveSession(expectedSessionKey)) return activeSessionChangedFailure()
         followUpCallCount += 1
         return followUpResult
     }
@@ -406,4 +429,13 @@ class FakeSessionController : SessionController {
         lastFollowUpMode = mode
         return followUpModeResult
     }
+
+    private fun matchesExpectedActiveSession(expectedSessionKey: SessionKey?): Boolean {
+        if (expectedSessionKey == null) return true
+        val active = _activeSession.value
+        return active?.sessionKey == expectedSessionKey && !active.isSwitching
+    }
+
+    private fun activeSessionChangedFailure(): Result<Unit> =
+        Result.failure(IllegalStateException("The active session changed before dispatch"))
 }

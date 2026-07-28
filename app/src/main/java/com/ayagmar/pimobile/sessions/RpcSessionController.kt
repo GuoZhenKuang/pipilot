@@ -517,9 +517,11 @@ class RpcSessionController(
     override suspend fun sendPrompt(
         message: String,
         images: List<ImagePayload>,
+        expectedSessionKey: SessionKey?,
     ): Result<Unit> {
         return mutex.withLock {
             runCatching {
+                requireExpectedActiveSession(expectedSessionKey)
                 val connection = ensureActiveConnection()
                 val isCurrentlyStreaming = _isStreaming.value
                 val command =
@@ -567,9 +569,13 @@ class RpcSessionController(
         }
     }
 
-    override suspend fun steer(message: String): Result<Unit> {
+    override suspend fun steer(
+        message: String,
+        expectedSessionKey: SessionKey?,
+    ): Result<Unit> {
         return mutex.withLock {
             runCatching {
+                requireExpectedActiveSession(expectedSessionKey)
                 val connection = ensureActiveConnection()
                 sendAndAwaitResponse(
                     connection = connection,
@@ -586,9 +592,13 @@ class RpcSessionController(
         }
     }
 
-    override suspend fun followUp(message: String): Result<Unit> {
+    override suspend fun followUp(
+        message: String,
+        expectedSessionKey: SessionKey?,
+    ): Result<Unit> {
         return mutex.withLock {
             runCatching {
+                requireExpectedActiveSession(expectedSessionKey)
                 val connection = ensureActiveConnection()
                 sendAndAwaitResponse(
                     connection = connection,
@@ -1237,6 +1247,14 @@ class RpcSessionController(
     private fun cancelReconnectRecovery() {
         reconnectRecoveryJob?.cancel()
         reconnectRecoveryJob = null
+    }
+
+    private fun requireExpectedActiveSession(expectedSessionKey: SessionKey?) {
+        if (expectedSessionKey == null) return
+        val active = _activeSession.value
+        check(active?.sessionKey == expectedSessionKey && !active.isSwitching) {
+            "The active session changed before quick reply could be dispatched"
+        }
     }
 
     private fun ensureActiveConnection(): PiRpcConnection {

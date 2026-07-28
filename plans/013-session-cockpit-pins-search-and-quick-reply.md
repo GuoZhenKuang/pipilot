@@ -5,7 +5,7 @@
 ## Status
 
 - State: DONE (device acceptance pending — operator-owned)
-- Execution baseline: `8b1361b5aa18314b2ccc57a04d3cd645cb3064ad`
+- Execution baseline: `f8cb6b6ac8bf269d59a82a84f108ca8f644ffca7`
 - Priority: P1
 - Effort: XL (approximately 2–4 focused engineering weeks)
 - Depends on: Plan 012
@@ -191,15 +191,17 @@ git diff --check
 
 Expected: every command exits 0, both APKs assemble, Android-test sources compile, no device command runs and diff check emits no output.
 
-### Execution evidence — 2026-07-28
+### Execution evidence — 2026-07-28 remediation
 
-- Baseline/drift check recorded literal baseline `8b1361b5aa18314b2ccc57a04d3cd645cb3064ad`; Plan 012 identity split was present and its status was DONE.
+- Baseline/drift check recorded literal baseline `f8cb6b6ac8bf269d59a82a84f108ca8f644ffca7`; Plan 012 identity split was present and its status was DONE.
+- Host-scoped `selectedCwdByHost`, selected-host groups, profile lifecycle, all-host filter and cross-host resume regressions are covered by `SessionsViewModelTest`.
+- Saved-key, privacy/search, deterministic ordering and composed cockpit filter/freshness behavior are covered by unit tests; `SessionsCockpitScreenTest` covers no-host, hidden empty, filters, stale status and path-free default card semantics.
+- Quick-reply tests cover idle resume/send, active Follow up, successful Steer, competing streaming/retry/null-key conflicts, stale/missing targets, missing token, lock denial, send failure, cancellation/retarget, duplicate taps and concurrent switch guards. Controller-level expected-key guards are also tested.
 - `./gradlew :core-sessions:test :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:lintDebug`: PASS.
-- `./gradlew ktlintCheck detekt`: PASS.
 - `./gradlew clean ktlintCheck detekt test :benchmark:compileBenchmarkKotlin :app:lintDebug :app:assembleDebug :app:assembleRelease`: PASS; debug and unsigned release APKs produced.
 - `./gradlew :app:compileDebugAndroidTestKotlin`: PASS.
+- `(cd bridge && pnpm install --frozen-lockfile && pnpm run check && pnpm audit --prod)`: PASS; 87 tests passed and no known production vulnerability was reported.
 - `git diff --check`: PASS.
-- Bridge/core-net/core-rpc diff check: no protocol or transport changes.
 - Device/emulator/ADB/connected/manual acceptance: not run; PENDING — operator-owned.
 
 ## Done criteria

@@ -17,6 +17,7 @@ import com.ayagmar.pimobile.hosts.HostProfileStore
 import com.ayagmar.pimobile.hosts.HostTokenStore
 import com.ayagmar.pimobile.hosts.endpointShareAuthority
 import com.ayagmar.pimobile.perf.PerformanceMetrics
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -40,6 +41,8 @@ class SessionsViewModel(
     private val cwdPreferenceStore: SessionCwdPreferenceStore,
     private val savedStateStore: SessionSavedStateStore,
     private val shareRemoteDataSource: BridgeSessionShareRemoteDataSource? = null,
+    private val backgroundDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val onResumeStarted: () -> Unit = PerformanceMetrics::recordResumeStart,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SessionsUiState(isLoading = true))
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 16)
@@ -50,6 +53,7 @@ class SessionsViewModel(
 
     private var observedStates: List<SessionIndexState> = emptyList()
     private var savedState = SavedSessionsState()
+    private var loadHostsJob: Job? = null
     private var observeJob: Job? = null
     private var initializeJob: Job? = null
     private var refreshJob: Job? = null
@@ -106,11 +110,19 @@ class SessionsViewModel(
 
     fun onHostSelected(hostId: String) {
         val host = _uiState.value.hosts.firstOrNull { it.id == hostId } ?: return
-        _uiState.update {
-            it.copy(
+        _uiState.update { state ->
+            val groups = groupsForHost(host.id)
+            val selectedCwd =
+                resolveHostCwdSelection(
+                    currentSelection = state.selectedCwdByHost[host.id] ?: readPreferredCwd(host.id),
+                    groups = groups,
+                )
+            state.copy(
                 selectedHostId = host.id,
-                selectedCwd = readPreferredCwd(host.id),
-                filter = it.filter.copy(hostId = host.id),
+                selectedCwd = selectedCwd,
+                selectedCwdByHost = state.selectedCwdByHost.withSelection(host.id, selectedCwd),
+                groups = groups,
+                filter = state.filter.copy(hostId = host.id),
             )
         }
         rebuildProjection()
@@ -127,13 +139,7 @@ class SessionsViewModel(
     }
 
     fun onWorkspaceFilterChanged(label: String?) {
-        _uiState.update { state ->
-            val selectedCwd =
-                label?.let { target ->
-                    state.items.firstOrNull { it.workspaceLabel == target && it.record != null }?.record?.cwd
-                } ?: state.selectedCwd
-            state.copy(filter = state.filter.copy(workspaceLabel = label), selectedCwd = selectedCwd)
-        }
+        _uiState.update { state -> state.copy(filter = state.filter.copy(workspaceLabel = label)) }
         rebuildProjection()
     }
 
@@ -171,8 +177,15 @@ class SessionsViewModel(
     }
 
     fun onCwdSelected(cwd: String) {
-        _uiState.update { it.copy(selectedCwd = cwd) }
-        _uiState.value.selectedHostId?.let { cwdPreferenceStore.setPreferredCwd(it, cwd) }
+        val normalizedCwd = cwd.trim().takeIf(String::isNotBlank) ?: return
+        val hostId = _uiState.value.selectedHostId ?: return
+        _uiState.update { state ->
+            state.copy(
+                selectedCwd = normalizedCwd,
+                selectedCwdByHost = state.selectedCwdByHost.withSelection(hostId, normalizedCwd),
+            )
+        }
+        cwdPreferenceStore.setPreferredCwd(hostId, normalizedCwd)
     }
 
     fun toggleFlatView() = toggleDensity()
@@ -180,14 +193,14 @@ class SessionsViewModel(
     fun refreshSessions() {
         refreshJob?.cancel()
         refreshJob =
-            viewModelScope.launch(Dispatchers.IO) {
+            viewModelScope.launch(backgroundDispatcher) {
                 repository.refreshAll(_uiState.value.hosts.map(HostProfile::id), MAX_CONCURRENT_HOST_REFRESHES)
             }
     }
 
     fun newSession() {
         val host = selectedHost() ?: return
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(backgroundDispatcher) {
             val token = tokenStore.getToken(host.id)
             if (token.isNullOrBlank()) {
                 emitError("No token configured for host ${host.name}")
@@ -223,14 +236,15 @@ class SessionsViewModel(
                 return
             }
         val host = _uiState.value.hosts.firstOrNull { it.id == item.hostId } ?: return
-        PerformanceMetrics.recordResumeStart()
-        viewModelScope.launch(Dispatchers.IO) {
+        selectHostWorkspace(host.id, session.cwd)
+        onResumeStarted()
+        viewModelScope.launch(backgroundDispatcher) {
             val token = tokenStore.getToken(host.id)
             if (token.isNullOrBlank()) {
                 emitError("No token configured for host ${host.name}")
                 return@launch
             }
-            _uiState.update { it.copy(isResuming = true, errorMessage = null, selectedHostId = host.id) }
+            _uiState.update { it.copy(isResuming = true, errorMessage = null) }
             val result = sessionController.resume(host, token, session)
             if (result.isSuccess) {
                 markConnectionWarm(host.id, session.cwd)
@@ -265,7 +279,7 @@ class SessionsViewModel(
     }
 
     fun retrySavedItem(item: SessionCockpitItem) {
-        viewModelScope.launch(Dispatchers.IO) { repository.refresh(item.hostId) }
+        viewModelScope.launch(backgroundDispatcher) { repository.refresh(item.hostId) }
     }
 
     fun openQuickReply(item: SessionCockpitItem) {
@@ -292,7 +306,7 @@ class SessionsViewModel(
         val session = item.record ?: return
         val host = _uiState.value.hosts.firstOrNull { it.id == item.hostId } ?: return
         if (requireStableKey(item) == null) return
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(backgroundDispatcher) {
             _uiState.update { it.copy(isPerformingAction = true, errorMessage = null) }
             runCatching {
                 val share = source.getOrCreate(host.id, session)
@@ -316,7 +330,7 @@ class SessionsViewModel(
     fun revokeSessionShare(item: SessionCockpitItem) {
         val source = shareRemoteDataSource ?: return
         val session = item.record ?: return
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(backgroundDispatcher) {
             _uiState.update { it.copy(isPerformingAction = true, errorMessage = null) }
             runCatching { source.revoke(item.hostId, session) }
                 .onSuccess {
@@ -334,7 +348,7 @@ class SessionsViewModel(
 
     fun runSessionAction(action: SessionAction) {
         val hostId = _uiState.value.activeSessionKey?.hostProfileId ?: return emitError("Resume a session first")
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(backgroundDispatcher) {
             _uiState.update { it.copy(isPerformingAction = true, errorMessage = null) }
             val result = action.execute(sessionController)
             if (result.isSuccess) repository.refresh(hostId)
@@ -350,7 +364,7 @@ class SessionsViewModel(
 
     fun requestForkMessages() {
         if (_uiState.value.activeSessionKey == null) return emitError("Resume a session before forking")
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(backgroundDispatcher) {
             _uiState.update { it.copy(isLoadingForkMessages = true, isForkPickerVisible = true) }
             val result = sessionController.getForkMessages()
             _uiState.update {
@@ -374,43 +388,79 @@ class SessionsViewModel(
     }
 
     private fun loadHosts() {
+        loadHostsJob?.cancel()
         initializeJob?.cancel()
         observeJob?.cancel()
-        viewModelScope.launch(Dispatchers.IO) {
-            val hosts = profileStore.list().sortedBy { it.name.lowercase() }
-            val ids = hosts.map(HostProfile::id)
-            savedState = savedStateStore.reconcileConfiguredHosts(ids.toSet())
-            val selectedHostId = _uiState.value.selectedHostId?.takeIf(ids::contains) ?: ids.firstOrNull()
-            _uiState.update {
-                it.copy(
-                    hosts = hosts,
-                    selectedHostId = selectedHostId,
-                    selectedCwd = selectedHostId?.let(::readPreferredCwd),
-                    isLoading = hosts.isNotEmpty(),
-                    errorMessage = if (hosts.isEmpty()) "Add a host to browse sessions." else null,
-                    filter = it.filter.copy(hostId = it.filter.hostId?.takeIf(ids::contains)),
-                    density = savedState.density,
-                )
-            }
-            observeJob =
-                viewModelScope.launch {
-                    repository.observeAll(ids).collect { states ->
-                        observedStates = states
-                        _uiState.update { state ->
-                            val selectedGroups = states.firstOrNull { it.hostId == state.selectedHostId }?.groups.orEmpty()
-                            state.copy(
-                                isLoading = states.all { it.groups.isEmpty() && it.errorMessage == null },
-                                groups = selectedGroups.map(::mapGroup),
-                                isRefreshing = states.any(SessionIndexState::isRefreshing),
-                            )
+        loadHostsJob =
+            viewModelScope.launch(backgroundDispatcher) {
+                val hosts = profileStore.list().sortedBy { it.name.lowercase() }
+                val ids = hosts.map(HostProfile::id)
+                applyConfiguredHosts(hosts, ids)
+                observeJob =
+                    launch {
+                        repository.observeAll(ids).collect { states ->
+                            applyObservedStates(states)
+                            rebuildProjection()
                         }
-                        rebuildProjection()
                     }
+                initializeJob =
+                    launch(backgroundDispatcher) {
+                        repository.initializeAll(ids, MAX_CONCURRENT_HOST_REFRESHES)
+                    }
+            }
+    }
+
+    private fun applyConfiguredHosts(
+        hosts: List<HostProfile>,
+        ids: List<String>,
+    ) {
+        val hostIds = ids.toSet()
+        savedState = savedStateStore.reconcileConfiguredHosts(hostIds)
+        observedStates = observedStates.filter { it.hostId in hostIds }
+        val selectedHostId = _uiState.value.selectedHostId?.takeIf(ids::contains) ?: ids.firstOrNull()
+        _uiState.update { state ->
+            var selections = state.selectedCwdByHost.filterKeys(hostIds::contains).toMutableMap()
+            ids.forEach { hostId ->
+                if (hostId !in selections) readPreferredCwd(hostId)?.let { selections[hostId] = it }
+            }
+            val groups = groupsForHost(selectedHostId)
+            val selectedCwd =
+                selectedHostId?.let { hostId -> resolveHostCwdSelection(selections[hostId], groups) }
+            if (selectedHostId != null) selections = selections.withSelection(selectedHostId, selectedCwd).toMutableMap()
+            state.copy(
+                hosts = hosts,
+                selectedHostId = selectedHostId,
+                selectedCwd = selectedCwd,
+                selectedCwdByHost = selections,
+                groups = groups,
+                isLoading = hosts.isNotEmpty(),
+                errorMessage = if (hosts.isEmpty()) "Add a host to browse sessions." else null,
+                filter = state.filter.copy(hostId = state.filter.hostId?.takeIf(ids::contains)),
+                density = savedState.density,
+            )
+        }
+    }
+
+    private fun applyObservedStates(states: List<SessionIndexState>) {
+        observedStates = states
+        _uiState.update { state ->
+            val groups = groupsForHost(state.selectedHostId, states)
+            val selectedCwd =
+                state.selectedHostId?.let { hostId ->
+                    resolveHostCwdSelection(state.selectedCwdByHost[hostId], groups)
                 }
-            initializeJob =
-                viewModelScope.launch(Dispatchers.IO) {
-                    repository.initializeAll(ids, MAX_CONCURRENT_HOST_REFRESHES)
-                }
+            state.copy(
+                isLoading =
+                    states.isNotEmpty() &&
+                        states.all { it.groups.isEmpty() && it.errorMessage == null },
+                selectedCwd = selectedCwd,
+                selectedCwdByHost =
+                    state.selectedHostId?.let { hostId ->
+                        state.selectedCwdByHost.withSelection(hostId, selectedCwd)
+                    } ?: state.selectedCwdByHost,
+                groups = groups,
+                isRefreshing = states.any(SessionIndexState::isRefreshing),
+            )
         }
     }
 
@@ -460,16 +510,38 @@ class SessionsViewModel(
 
     private fun selectedHost(): HostProfile? =
         _uiState.value.hosts.firstOrNull { it.id == _uiState.value.selectedHostId }
-            ?: _uiState.value.hosts.firstOrNull()
 
-    private fun resolveConnectionCwdForHost(hostId: String): String =
-        resolveConnectionCwd(
+    private fun selectHostWorkspace(
+        hostId: String,
+        cwd: String,
+    ) {
+        val normalizedCwd = cwd.trim().takeIf(String::isNotBlank) ?: return
+        _uiState.update { state ->
+            state.copy(
+                selectedHostId = hostId,
+                selectedCwd = normalizedCwd,
+                selectedCwdByHost = state.selectedCwdByHost.withSelection(hostId, normalizedCwd),
+                groups = groupsForHost(hostId),
+            )
+        }
+        cwdPreferenceStore.setPreferredCwd(hostId, normalizedCwd)
+    }
+
+    private fun groupsForHost(
+        hostId: String?,
+        states: List<SessionIndexState> = observedStates,
+    ): List<CwdSessionGroupUiState> = states.firstOrNull { it.hostId == hostId }?.groups.orEmpty().map(::mapGroup)
+
+    private fun resolveConnectionCwdForHost(hostId: String): String {
+        val state = _uiState.value
+        return resolveConnectionCwd(
             hostId = hostId,
-            selectedCwd = _uiState.value.selectedCwd,
+            selectedCwd = state.selectedCwdByHost[hostId],
             warmConnectionHostId = warmConnectionHostId,
             warmConnectionCwd = warmConnectionCwd,
-            groups = _uiState.value.groups,
+            groups = groupsForHost(hostId),
         )
+    }
 
     private fun markConnectionWarm(
         hostId: String,
@@ -487,6 +559,7 @@ class SessionsViewModel(
     }
 
     override fun onCleared() {
+        loadHostsJob?.cancel()
         observeJob?.cancel()
         initializeJob?.cancel()
         refreshJob?.cancel()
@@ -551,6 +624,16 @@ internal fun resolveSelectedCwd(
     currentSelection?.takeIf { selected -> groups.any { it.cwd == selected } }
         ?: groups.firstOrNull()?.cwd
 
+private fun resolveHostCwdSelection(
+    currentSelection: String?,
+    groups: List<CwdSessionGroupUiState>,
+): String? = if (groups.isEmpty()) currentSelection else resolveSelectedCwd(currentSelection, groups)
+
+private fun Map<String, String>.withSelection(
+    hostId: String,
+    cwd: String?,
+): Map<String, String> = if (cwd == null) this - hostId else this + (hostId to cwd)
+
 private fun mapGroup(group: SessionGroup) = CwdSessionGroupUiState(group.cwd, group.sessions)
 
 @Suppress("LongParameterList")
@@ -559,6 +642,7 @@ data class SessionsUiState(
     val hosts: List<HostProfile> = emptyList(),
     val selectedHostId: String? = null,
     val selectedCwd: String? = null,
+    val selectedCwdByHost: Map<String, String> = emptyMap(),
     val query: String = "",
     val groups: List<CwdSessionGroupUiState> = emptyList(),
     val items: List<SessionCockpitItem> = emptyList(),

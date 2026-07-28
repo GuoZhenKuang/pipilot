@@ -91,6 +91,46 @@ class SessionCockpitTest {
     }
 
     @Test
+    fun `host workspace saved active freshness and query filters compose deterministically`() {
+        val alphaRecord = stableRecord("alpha", "/alpha", "/work/alpha-space", "Alpha task")
+        val betaRecord = stableRecord("beta", "/beta", "/work/beta-space", "Beta task")
+        val saved = SavedSessionsState(pinned = setOf(SessionKey(beta.id, "beta")))
+        val states =
+            listOf(
+                state(alpha, alphaRecord, source = SessionIndexSource.CACHE),
+                state(beta, betaRecord, source = SessionIndexSource.REMOTE),
+            )
+
+        assertEquals(
+            listOf("Beta task"),
+            project(
+                listOf(alpha, beta),
+                states,
+                saved,
+                filter = SessionCockpitFilter(hostId = beta.id, pinnedOnly = true),
+            ).items.map { it.title },
+        )
+        assertEquals(
+            listOf("Alpha task"),
+            project(
+                listOf(alpha, beta),
+                states,
+                activeKey = SessionKey(alpha.id, "alpha"),
+                filter = SessionCockpitFilter(workspaceLabel = "alpha-space", activeOnly = true),
+            ).items.map { it.title },
+        )
+        assertEquals(
+            listOf("Alpha task"),
+            project(
+                listOf(alpha, beta),
+                states,
+                query = "alpha host",
+                filter = SessionCockpitFilter(freshness = SessionFreshnessFilter.STALE),
+            ).items.map { it.title },
+        )
+    }
+
+    @Test
     fun `one host failure keeps cached results from another host`() {
         val cached = state(alpha, stableRecord("cached", "/a", "/work/a", "Cached"), source = SessionIndexSource.CACHE)
         val failed = SessionIndexState(beta.id, errorMessage = "authentication failed")

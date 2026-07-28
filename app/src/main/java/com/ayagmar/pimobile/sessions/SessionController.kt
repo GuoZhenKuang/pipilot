@@ -70,13 +70,20 @@ interface SessionController {
     suspend fun sendPrompt(
         message: String,
         images: List<ImagePayload> = emptyList(),
+        expectedSessionKey: SessionKey? = null,
     ): Result<Unit>
 
     suspend fun abort(): Result<Unit>
 
-    suspend fun steer(message: String): Result<Unit>
+    suspend fun steer(
+        message: String,
+        expectedSessionKey: SessionKey? = null,
+    ): Result<Unit>
 
-    suspend fun followUp(message: String): Result<Unit>
+    suspend fun followUp(
+        message: String,
+        expectedSessionKey: SessionKey? = null,
+    ): Result<Unit>
 
     suspend fun renameSession(name: String): Result<String?>
 

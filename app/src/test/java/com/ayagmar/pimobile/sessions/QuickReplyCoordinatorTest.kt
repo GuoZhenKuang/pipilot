@@ -77,6 +77,28 @@ class QuickReplyCoordinatorTest {
         }
 
     @Test
+    fun `successful steer dispatches once without resume`() =
+        runTest {
+            val controller =
+                FakeSessionController().apply {
+                    setActiveSession(key)
+                    setStreaming(true)
+                }
+            val coordinator = coordinator(controller)
+            coordinator.open(key, "Target")
+            coordinator.updateDraft("redirect")
+            coordinator.selectDeliveryMode(QuickReplyDeliveryMode.STEER)
+
+            coordinator.send()
+            coordinator.send()
+            advanceUntilIdle()
+
+            assertEquals(1, controller.steerCallCount)
+            assertEquals(0, controller.resumeCallCount)
+            assertEquals(QuickReplyPhase.SENT, coordinator.state.value.phase)
+        }
+
+    @Test
     fun `different active run never switches and offers current chat`() =
         runTest {
             val controller =
@@ -136,6 +158,15 @@ class QuickReplyCoordinatorTest {
             assertEquals("keep me", noToken.state.value.draft)
             assertEquals(0, opened)
 
+            val stale = coordinator(controller, targetRecord = null)
+            stale.open(key, "Stale target")
+            stale.updateDraft("stale draft")
+            stale.send()
+            advanceUntilIdle()
+            assertEquals(QuickReplyPhase.ERROR, stale.state.value.phase)
+            assertEquals("stale draft", stale.state.value.draft)
+            assertEquals(0, controller.resumeCallCount)
+
             controller.resumeResult = Result.failure(IllegalStateException("Control lock denied"))
             val denied = coordinator(controller)
             denied.open(key, "Target")
@@ -155,6 +186,84 @@ class QuickReplyCoordinatorTest {
             assertEquals(QuickReplyPhase.ERROR, failed.state.value.phase)
             assertEquals("send draft", failed.state.value.draft)
             assertTrue(failed.state.value.canOpenChat)
+        }
+
+    @Test
+    fun `null active key after resume cannot dispatch and running null identity cannot switch`() =
+        runTest {
+            val idleController = FakeSessionController().apply { publishActiveKeyOnResume = false }
+            val idle = coordinator(idleController)
+            idle.open(key, "Target")
+            idle.updateDraft("verify target")
+            idle.send()
+            advanceUntilIdle()
+
+            assertEquals(1, idleController.resumeCallCount)
+            assertEquals(0, idleController.sendPromptCallCount)
+            assertEquals(QuickReplyPhase.ERROR, idle.state.value.phase)
+
+            val runningController =
+                FakeSessionController().apply {
+                    setStreaming(true)
+                    setActiveSession(null)
+                }
+            val running = coordinator(runningController)
+            running.open(key, "Target")
+            running.updateDraft("do not switch")
+            running.send()
+            advanceUntilIdle()
+
+            assertEquals(QuickReplyPhase.CONFLICT, running.state.value.phase)
+            assertFalse(running.state.value.canOpenChat)
+            assertEquals(0, runningController.resumeCallCount)
+            assertEquals(0, runningController.sendPromptCallCount)
+        }
+
+    @Test
+    fun `existing and concurrent session switches prevent late prompt dispatch`() =
+        runTest {
+            val alreadySwitching = FakeSessionController().apply { beginSessionSwitch("/switching") }
+            val blocked = coordinator(alreadySwitching)
+            blocked.open(key, "Target")
+            blocked.updateDraft("wait")
+            blocked.send()
+            advanceUntilIdle()
+
+            assertEquals(QuickReplyPhase.ERROR, blocked.state.value.phase)
+            assertEquals(0, alreadySwitching.resumeCallCount)
+            assertEquals(0, alreadySwitching.sendPromptCallCount)
+
+            val concurrent =
+                FakeSessionController().apply {
+                    publishActiveKeyOnResume = false
+                    resumeDelayMs = 1_000
+                }
+            val raced = coordinator(concurrent)
+            raced.open(key, "Target")
+            raced.updateDraft("do not race")
+            raced.send()
+            advanceTimeBy(100)
+            concurrent.setActiveSession(SessionKey(host.id, "other-session"))
+            advanceUntilIdle()
+
+            assertEquals(1, concurrent.resumeCallCount)
+            assertEquals(0, concurrent.sendPromptCallCount)
+            assertEquals(QuickReplyPhase.ERROR, raced.state.value.phase)
+            assertEquals("do not race", raced.state.value.draft)
+
+            val switchedBeforeDispatch =
+                FakeSessionController().apply {
+                    beforeSendPrompt = { setActiveSession(SessionKey(host.id, "other-session")) }
+                }
+            val guarded = coordinator(switchedBeforeDispatch)
+            guarded.open(key, "Target")
+            guarded.updateDraft("guard dispatch")
+            guarded.send()
+            advanceUntilIdle()
+
+            assertEquals(1, switchedBeforeDispatch.resumeCallCount)
+            assertEquals(0, switchedBeforeDispatch.sendPromptCallCount)
+            assertEquals(QuickReplyPhase.ERROR, guarded.state.value.phase)
         }
 
     @Test
@@ -180,6 +289,7 @@ class QuickReplyCoordinatorTest {
     private fun kotlinx.coroutines.test.TestScope.coordinator(
         controller: FakeSessionController,
         token: String? = "token",
+        targetRecord: SessionRecord? = record,
         onOpen: () -> Unit = {},
     ): QuickReplyCoordinator {
         val tokens = FakeTokenStore(token)
@@ -187,7 +297,7 @@ class QuickReplyCoordinatorTest {
             controller = controller,
             tokenStore = tokens,
             hostById = { if (it == host.id) host else null },
-            recordByKey = { if (it == key) record else null },
+            recordByKey = { if (it == key) targetRecord else null },
             scope = this,
             onOpenChat = onOpen,
         )
