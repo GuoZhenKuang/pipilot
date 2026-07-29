@@ -4,7 +4,7 @@
 
 ## Status
 
-- State: DONE (device acceptance pending — operator-owned)
+- State: IN PROGRESS (reviewer remediation)
 - Execution baseline: `f8cb6b6ac8bf269d59a82a84f108ca8f644ffca7`
 - Priority: P1
 - Effort: XL (approximately 2–4 focused engineering weeks)
@@ -191,7 +191,9 @@ git diff --check
 
 Expected: every command exits 0, both APKs assemble, Android-test sources compile, no device command runs and diff check emits no output.
 
-### Execution evidence — 2026-07-28 remediation
+### Prior execution evidence — 2026-07-28 (superseded/incomplete)
+
+The historical command results below remain truthful, but the prior completion claim is superseded by reviewer findings. Remediation remains open for: quick-reply run race; empty/loading and cancellation lifecycle; endpoint/token transport reuse; path/error privacy; and invisible New target. These gaps must be resolved and the affected evidence reverified before this plan can return to DONE.
 
 - Baseline/drift check recorded literal baseline `f8cb6b6ac8bf269d59a82a84f108ca8f644ffca7`; Plan 012 identity split was present and its status was DONE.
 - Host-scoped `selectedCwdByHost`, selected-host groups, profile lifecycle, all-host filter and cross-host resume regressions are covered by `SessionsViewModelTest`.
@@ -206,12 +208,14 @@ Expected: every command exits 0, both APKs assemble, Android-test sources compil
 
 ## Done criteria
 
-- [x] Store tests prove pins/hidden use local profile ID + unique `sessionId`, persist no path/cwd/transcript, and always provide Hidden recovery.
-- [x] UI/search tests prove normal cards/semantics/query results expose no absolute path/full cwd.
-- [x] Multi-host tests prove cache-first results, bounded refresh, deterministic ordering and partial-host failure isolation.
-- [x] Quick-reply tests prove all active/idle/cancel/error branches, exactly-once dispatch and no automatic lock takeover/navigation.
-- [x] Compact/expanded/accessibility source tests compile and lint passes.
-- [x] Complete non-device commands above exit 0; status shows only in-scope changes.
+The prior checked completion claims are superseded and incomplete pending reviewer remediation and fresh verification.
+
+- [ ] Store tests prove pins/hidden use local profile ID + unique `sessionId`, persist no path/cwd/transcript, and always provide Hidden recovery.
+- [ ] UI/search tests prove normal cards/semantics/query results expose no absolute path/full cwd.
+- [ ] Multi-host tests prove cache-first results, bounded refresh, deterministic ordering and partial-host failure isolation.
+- [ ] Quick-reply tests prove all active/idle/cancel/error branches, exactly-once dispatch and no automatic lock takeover/navigation.
+- [ ] Compact/expanded/accessibility source tests compile and lint passes.
+- [ ] Complete non-device commands above exit 0; status shows only in-scope changes.
 
 ## STOP conditions
 
