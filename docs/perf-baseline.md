@@ -75,7 +75,7 @@ Do not run this section without explicit operator `debug mode`. Use a disposable
 
 ```bash
 ./gradlew :benchmark:connectedBenchmarkAndroidTest \
-  -Pandroid.testInstrumentationRunnerArguments.class=com.ayagmar.pimobile.benchmark.StartupBenchmark
+  -Pandroid.testInstrumentationRunnerArguments.class=top.guozk.pipilot.benchmark.StartupBenchmark
 ```
 
 The benchmark source compares no compilation with a required baseline profile. The baseline-profile case is expected to remain pending until a profile is generated and deliberately adopted for the distribution model.
@@ -86,7 +86,7 @@ The repository contains `BaselineProfileGenerator`, but profile generation/adopt
 
 ```bash
 ./gradlew :benchmark:connectedBenchmarkAndroidTest \
-  -Pandroid.testInstrumentationRunnerArguments.class=com.ayagmar.pimobile.benchmark.BaselineProfileGenerator
+  -Pandroid.testInstrumentationRunnerArguments.class=top.guozk.pipilot.benchmark.BaselineProfileGenerator
 ```
 
 Review generated artifacts before copying any profile into `app/src/main`; do not claim profile benefit without an A/B startup benchmark.
@@ -120,8 +120,8 @@ The synchronization counters are exposed as `SessionSyncMetrics`: `fullRebuilds`
 Reproduce payload counts without a device:
 
 ```bash
-./gradlew :core-net:test --tests com.ayagmar.pimobile.corenet.PiRpcConnectionTest
-./gradlew :app:testDebugUnitTest --tests com.ayagmar.pimobile.sessions.SessionEntryProjectionTest
+./gradlew :core-net:test --tests top.guozk.pipilot.corenet.PiRpcConnectionTest
+./gradlew :app:testDebugUnitTest --tests top.guozk.pipilot.sessions.SessionEntryProjectionTest
 ```
 
 For a session with 10,000 existing entries followed by 10 new entries:

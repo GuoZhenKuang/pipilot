@@ -46,7 +46,7 @@ Or build + install in one go:
 
 The app should appear in the app drawer. Or launch via adb:
 ```bash
-adb shell am start -n com.ayagmar.pimobile/.MainActivity
+adb shell am start -n top.guozk.pipilot/.MainActivity
 ```
 
 ### 4. View Logs
@@ -153,7 +153,7 @@ Complete non-device gate:
 Focused Chat Experience v2 unit tests:
 
 ```bash
-./gradlew :app:testDebugUnitTest --tests 'com.ayagmar.pimobile.chat.*' --tests 'com.ayagmar.pimobile.ui.chat.*'
+./gradlew :app:testDebugUnitTest --tests 'top.guozk.pipilot.chat.*' --tests 'top.guozk.pipilot.ui.chat.*'
 ```
 
 Compile connected tests without launching an emulator/device:

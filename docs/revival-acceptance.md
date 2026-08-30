@@ -29,9 +29,9 @@ Date/operator:
 
 ## Installation and onboarding
 
-1. `adb uninstall com.ayagmar.pimobile || true`
+1. `adb uninstall top.guozk.pipilot || true`
 2. `adb install app/build/outputs/apk/debug/app-debug.apk`
-3. Launch: `adb shell am start -n com.ayagmar.pimobile/.MainActivity`
+3. Launch: `adb shell am start -n top.guozk.pipilot/.MainActivity`
 4. Confirm first launch shows **Connect your computer**, not an empty CRUD list.
 5. Try an unreachable host; expect actionable network recovery.
 6. Try a bad token; expect authentication recovery and no token text on screen/logcat.

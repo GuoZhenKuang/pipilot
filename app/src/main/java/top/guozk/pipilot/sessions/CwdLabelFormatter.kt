@@ -1,0 +1,14 @@
+package top.guozk.pipilot.sessions
+
+internal fun formatCwdTail(
+    cwd: String,
+    maxSegments: Int = 2,
+): String {
+    val segments = cwd.trim().trimEnd('/').split('/').filter { it.isNotBlank() }
+
+    return when {
+        cwd.isBlank() -> "（未知）"
+        segments.isEmpty() -> "/"
+        else -> segments.takeLast(maxSegments).joinToString("/")
+    }
+}

@@ -115,7 +115,7 @@ A fingerprint mismatch is evidence that the file changed, not proof of a conflic
 
 | Purpose | Command | Expected result |
 |---|---|---|
-| Focused chat tests | `./gradlew :app:testDebugUnitTest --tests 'com.ayagmar.pimobile.chat.*' --tests 'com.ayagmar.pimobile.ui.chat.*'` | exit 0 |
+| Focused chat tests | `./gradlew :app:testDebugUnitTest --tests 'top.guozk.pipilot.chat.*' --tests 'top.guozk.pipilot.ui.chat.*'` | exit 0 |
 | App formatting | `./gradlew :app:ktlintMainSourceSetCheck :app:ktlintTestSourceSetCheck` | exit 0 |
 | Static analysis | `./gradlew :app:detekt` | exit 0 |
 | Debug lint | `./gradlew :app:lintDebug` | exit 0 |
@@ -279,7 +279,7 @@ Refactor `ChatTimeline.kt` around the turn projection.
 **Verify**:
 
 ```bash
-./gradlew :app:testDebugUnitTest --tests 'com.ayagmar.pimobile.ui.chat.*'
+./gradlew :app:testDebugUnitTest --tests 'top.guozk.pipilot.ui.chat.*'
 ./gradlew :app:ktlintMainSourceSetCheck :app:ktlintTestSourceSetCheck :app:detekt :app:lintDebug
 ./gradlew :app:compileDebugAndroidTestKotlin
 ```
@@ -307,7 +307,7 @@ Commit: `feat(chat): compact assistant and tool activity`
 **Verify**:
 
 ```bash
-./gradlew :app:testDebugUnitTest --tests '*Handoff*' --tests 'com.ayagmar.pimobile.ui.chat.*'
+./gradlew :app:testDebugUnitTest --tests '*Handoff*' --tests 'top.guozk.pipilot.ui.chat.*'
 ./gradlew :app:ktlintMainSourceSetCheck :app:ktlintTestSourceSetCheck :app:detekt :app:lintDebug
 ```
 

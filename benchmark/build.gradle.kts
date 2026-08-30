@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.ayagmar.pimobile.benchmark"
+    namespace = "top.guozk.pipilot.benchmark"
     compileSdk = 37
     buildToolsVersion = "37.0.0"
 

@@ -105,7 +105,7 @@ In scope: chat UI/state/tests, Android dependency declarations and deprecated AP
 Focused:
 
 ```bash
-./gradlew :app:testDebugUnitTest --tests 'com.ayagmar.pimobile.chat.*' --tests 'com.ayagmar.pimobile.ui.chat.*'
+./gradlew :app:testDebugUnitTest --tests 'top.guozk.pipilot.chat.*' --tests 'top.guozk.pipilot.ui.chat.*'
 ./gradlew :app:ktlintCheck :app:detekt :app:lintDebug :app:compileDebugAndroidTestKotlin
 (cd bridge && pnpm run check)
 ```

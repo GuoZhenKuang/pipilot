@@ -1,0 +1,35 @@
+package top.guozk.pipilot.benchmark
+
+import androidx.benchmark.macro.junit4.BaselineProfileRule
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.filters.LargeTest
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+
+/**
+ * Generates a baseline profile for the app.
+ *
+ * Run only in operator-owned debug mode via connectedBenchmarkAndroidTest with this class filter.
+ */
+@RunWith(AndroidJUnit4::class)
+@LargeTest
+class BaselineProfileGenerator {
+    @get:Rule
+    val baselineProfileRule = BaselineProfileRule()
+
+    @Test
+    fun generate() {
+        baselineProfileRule.collect(
+            packageName = "top.guozk.pipilot",
+            // See: https://d.android.com/topic/performance/baselineprofiles/dex-layout-optimizations
+            includeInStartupProfile = true,
+        ) {
+            // Start the app
+            startActivityAndWait()
+
+            // Wait for content to load
+            device.waitForIdle()
+        }
+    }
+}

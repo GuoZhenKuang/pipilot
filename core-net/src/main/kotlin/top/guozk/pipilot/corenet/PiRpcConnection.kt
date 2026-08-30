@@ -1,0 +1,603 @@
+package top.guozk.pipilot.corenet
+
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import top.guozk.pipilot.corerpc.GetEntriesCommand
+import top.guozk.pipilot.corerpc.GetMessagesCommand
+import top.guozk.pipilot.corerpc.GetStateCommand
+import top.guozk.pipilot.corerpc.GetTreeCommand
+import top.guozk.pipilot.corerpc.RpcCommand
+import top.guozk.pipilot.corerpc.RpcIncomingMessage
+import top.guozk.pipilot.corerpc.RpcMessageParser
+import top.guozk.pipilot.corerpc.RpcResponse
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+
+@Suppress("TooManyFunctions")
+class PiRpcConnection(
+    private val transport: SocketTransport = WebSocketTransport(),
+    private val parser: RpcMessageParser = RpcMessageParser(),
+    private val json: Json = defaultJson,
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    private val requestIdFactory: () -> String = { UUID.randomUUID().toString() },
+) {
+    private val lifecycleMutex = Mutex()
+    private val reconnectSyncMutex = Mutex()
+    private val entrySyncMutex = Mutex()
+    private val pendingResponses = ConcurrentHashMap<String, CompletableDeferred<RpcResponse>>()
+    private val bridgeChannels = ConcurrentHashMap<String, Channel<BridgeMessage>>()
+
+    private val _rpcEvents = MutableSharedFlow<RpcIncomingMessage>(extraBufferCapacity = RPC_EVENT_BUFFER_CAPACITY)
+    private val _bridgeEvents = MutableSharedFlow<BridgeMessage>(extraBufferCapacity = BRIDGE_EVENT_BUFFER_CAPACITY)
+    private val _resyncEvents = MutableSharedFlow<RpcResyncSnapshot>(replay = 1, extraBufferCapacity = 1)
+
+    private var inboundJob: Job? = null
+    private var connectionMonitorJob: Job? = null
+    private var activeConfig: PiRpcConnectionConfig? = null
+    private var entriesCursor: String? = null
+    private var cursorSessionPath: String? = null
+
+    @Volatile
+    private var lifecycleEpoch: Long = 0
+
+    val rpcEvents: SharedFlow<RpcIncomingMessage> = _rpcEvents
+    val bridgeEvents: SharedFlow<BridgeMessage> = _bridgeEvents
+    val resyncEvents: SharedFlow<RpcResyncSnapshot> = _resyncEvents
+    val connectionState: StateFlow<ConnectionState> = transport.connectionState
+
+    suspend fun connect(config: PiRpcConnectionConfig) {
+        val resolvedConfig = config.resolveClientId()
+        val connectionEpoch =
+            lifecycleMutex.withLock {
+                if (activeConfig?.sessionPath != resolvedConfig.sessionPath) {
+                    entriesCursor = null
+                    cursorSessionPath = resolvedConfig.sessionPath
+                }
+                activeConfig = resolvedConfig
+                lifecycleEpoch += 1
+                startBackgroundJobs()
+                lifecycleEpoch
+            }
+
+        val helloChannel = bridgeChannel(bridgeChannels, BRIDGE_HELLO_TYPE)
+
+        transport.connect(resolvedConfig.targetWithClientId())
+        withTimeout(resolvedConfig.connectTimeoutMs) {
+            connectionState.first { state -> state == ConnectionState.CONNECTED }
+        }
+
+        withTimeout(resolvedConfig.requestTimeoutMs) {
+            helloChannel.receive()
+        }
+
+        ensureBridgeControl(
+            transport = transport,
+            json = json,
+            channels = bridgeChannels,
+            config = resolvedConfig,
+        )
+
+        resyncIfActive(connectionEpoch)
+    }
+
+    suspend fun reconnect() {
+        val (reconnectConfig, reconnectEpoch) =
+            lifecycleMutex.withLock {
+                val config = activeConfig ?: error("Connection is not active")
+                lifecycleEpoch += 1
+                startBackgroundJobs()
+                config to lifecycleEpoch
+            }
+
+        val helloChannel = bridgeChannel(bridgeChannels, BRIDGE_HELLO_TYPE)
+
+        transport.reconnect()
+        withTimeout(reconnectConfig.connectTimeoutMs) {
+            connectionState.first { state -> state == ConnectionState.CONNECTED }
+        }
+
+        withTimeout(reconnectConfig.requestTimeoutMs) {
+            helloChannel.receive()
+        }
+
+        ensureBridgeControl(
+            transport = transport,
+            json = json,
+            channels = bridgeChannels,
+            config = reconnectConfig,
+        )
+
+        resyncIfActive(reconnectEpoch)
+    }
+
+    suspend fun disconnect() {
+        val configToRelease =
+            lifecycleMutex.withLock {
+                val currentConfig = activeConfig
+                activeConfig = null
+                entriesCursor = null
+                cursorSessionPath = null
+                lifecycleEpoch += 1
+                inboundJob?.cancel()
+                connectionMonitorJob?.cancel()
+                inboundJob = null
+                connectionMonitorJob = null
+                currentConfig
+            }
+
+        sendBridgeReleaseControlBestEffort(configToRelease)
+        cancelPendingResponses()
+
+        bridgeChannels.values.forEach { channel ->
+            channel.close()
+        }
+        bridgeChannels.clear()
+
+        transport.disconnect()
+    }
+
+    suspend fun sendCommand(command: RpcCommand) {
+        val payload = encodeRpcCommand(json = json, command = command)
+        val envelope = encodeEnvelope(json = json, channel = RPC_CHANNEL, payload = payload)
+        transport.send(envelope)
+    }
+
+    suspend fun requestBridge(
+        payload: JsonObject,
+        expectedType: String,
+    ): BridgeMessage {
+        val config = activeConfig ?: error("Connection is not active")
+
+        val expectedChannel = bridgeChannel(bridgeChannels, expectedType)
+        val errorChannel = bridgeChannel(bridgeChannels, BRIDGE_ERROR_TYPE)
+
+        transport.send(
+            encodeEnvelope(
+                json = json,
+                channel = BRIDGE_CHANNEL,
+                payload = payload,
+            ),
+        )
+
+        return withTimeout(config.requestTimeoutMs) {
+            select {
+                expectedChannel.onReceive { message ->
+                    message
+                }
+                errorChannel.onReceive { message ->
+                    throw IllegalStateException(parseBridgeErrorMessage(message))
+                }
+            }
+        }
+    }
+
+    suspend fun requestState(): RpcResponse {
+        return requestResponse(GetStateCommand(id = requestIdFactory()))
+    }
+
+    suspend fun requestMessages(): RpcResponse {
+        return requestResponse(GetMessagesCommand(id = requestIdFactory()))
+    }
+
+    suspend fun requestEntries(since: String? = null): RpcResponse {
+        return requestResponse(GetEntriesCommand(id = requestIdFactory(), since = since))
+    }
+
+    suspend fun requestTree(timeoutMs: Long? = null): RpcResponse {
+        return requestResponse(GetTreeCommand(id = requestIdFactory()), timeoutMs)
+    }
+
+    suspend fun resync(): RpcResyncSnapshot {
+        val snapshot = buildResyncSnapshot()
+        _resyncEvents.emit(snapshot)
+        return snapshot
+    }
+
+    private suspend fun startBackgroundJobs() {
+        if (inboundJob == null) {
+            inboundJob =
+                scope.launch {
+                    transport.inboundMessages.collect { raw ->
+                        routeInboundEnvelope(raw)
+                    }
+                }
+        }
+
+        if (connectionMonitorJob == null) {
+            connectionMonitorJob =
+                scope.launch {
+                    var previousState = connectionState.value
+                    connectionState.collect { currentState ->
+                        if (
+                            currentState == ConnectionState.RECONNECTING ||
+                            currentState == ConnectionState.DISCONNECTED
+                        ) {
+                            cancelPendingResponses()
+                        }
+
+                        if (
+                            previousState == ConnectionState.RECONNECTING &&
+                            currentState == ConnectionState.CONNECTED
+                        ) {
+                            val reconnectEpoch = lifecycleEpoch
+                            runCatching {
+                                synchronizeAfterReconnect(reconnectEpoch)
+                            }
+                        }
+                        previousState = currentState
+                    }
+                }
+        }
+    }
+
+    private suspend fun routeInboundEnvelope(raw: String) {
+        val envelope = parseEnvelope(raw = raw, json = json) ?: return
+
+        when (envelope.channel) {
+            RPC_CHANNEL -> {
+                val rpcMessage =
+                    runCatching {
+                        parser.parse(envelope.payload.toString())
+                    }.getOrNull()
+                        ?: return
+
+                if (rpcMessage is RpcResponse) {
+                    val responseId = rpcMessage.id
+                    if (responseId != null) {
+                        pendingResponses.remove(responseId)?.complete(rpcMessage)
+                    }
+                }
+
+                _rpcEvents.emit(rpcMessage)
+            }
+
+            BRIDGE_CHANNEL -> {
+                val bridgeMessage =
+                    BridgeMessage(
+                        type = envelope.payload.stringField("type") ?: UNKNOWN_BRIDGE_TYPE,
+                        payload = envelope.payload,
+                    )
+                bridgeChannels[bridgeMessage.type]?.trySend(bridgeMessage)
+                _bridgeEvents.emit(bridgeMessage)
+            }
+        }
+    }
+
+    private suspend fun synchronizeAfterReconnect(expectedEpoch: Long) {
+        reconnectSyncMutex.withLock {
+            val config =
+                if (isEpochActive(expectedEpoch)) {
+                    activeConfig
+                } else {
+                    null
+                }
+
+            if (config != null) {
+                val helloChannel = bridgeChannel(bridgeChannels, BRIDGE_HELLO_TYPE)
+                withTimeout(config.requestTimeoutMs) {
+                    helloChannel.receive()
+                }
+
+                if (isEpochActive(expectedEpoch)) {
+                    ensureBridgeControl(
+                        transport = transport,
+                        json = json,
+                        channels = bridgeChannels,
+                        config = config,
+                    )
+
+                    resyncIfActive(expectedEpoch)
+                }
+            }
+        }
+    }
+
+    private suspend fun buildResyncSnapshot(): RpcResyncSnapshot =
+        entrySyncMutex.withLock {
+            buildResyncSnapshotLocked()
+        }
+
+    private suspend fun buildResyncSnapshotLocked(): RpcResyncSnapshot {
+        val stateResponse = requestState()
+        val sessionPath = stateResponse.data?.stringField("sessionFile")
+        if (cursorSessionPath != sessionPath) {
+            entriesCursor = null
+            cursorSessionPath = sessionPath
+        }
+
+        val requestedCursor = entriesCursor
+        var entriesResponse = requestEntries(requestedCursor)
+        var fullRebuild = requestedCursor == null
+        if (!entriesResponse.success && requestedCursor != null) {
+            entriesCursor = null
+            entriesResponse = requestEntries()
+            fullRebuild = true
+        }
+        entriesResponse.requireSuccessfulEntriesResponse()
+        entriesCursor = entriesResponse.lastEntryId() ?: entriesCursor
+
+        return RpcResyncSnapshot(
+            stateResponse = stateResponse,
+            entriesResponse = entriesResponse,
+            fullRebuild = fullRebuild,
+        )
+    }
+
+    private suspend fun resyncIfActive(expectedEpoch: Long): RpcResyncSnapshot? {
+        if (isEpochActive(expectedEpoch)) {
+            val snapshot = buildResyncSnapshot()
+            if (isEpochActive(expectedEpoch)) {
+                _resyncEvents.emit(snapshot)
+                return snapshot
+            }
+        }
+
+        return null
+    }
+
+    private fun isEpochActive(expectedEpoch: Long): Boolean {
+        return lifecycleEpoch == expectedEpoch && activeConfig != null
+    }
+
+    private fun cancelPendingResponses() {
+        pendingResponses.values.forEach { deferred ->
+            deferred.cancel()
+        }
+        pendingResponses.clear()
+    }
+
+    private suspend fun requestResponse(
+        command: RpcCommand,
+        timeoutOverrideMs: Long? = null,
+    ): RpcResponse {
+        val commandId = requireNotNull(command.id) { "RPC command id is required for request/response operations" }
+        val responseDeferred = CompletableDeferred<RpcResponse>()
+        pendingResponses[commandId] = responseDeferred
+
+        return try {
+            sendCommand(command)
+
+            val timeoutMs = timeoutOverrideMs ?: activeConfig?.requestTimeoutMs ?: DEFAULT_REQUEST_TIMEOUT_MS
+            withTimeout(timeoutMs) {
+                responseDeferred.await()
+            }
+        } finally {
+            pendingResponses.remove(commandId)
+        }
+    }
+
+    private suspend fun sendBridgeReleaseControlBestEffort(config: PiRpcConnectionConfig?) {
+        val activeConfig = config ?: return
+
+        if (connectionState.value == ConnectionState.DISCONNECTED) {
+            return
+        }
+
+        runCatching {
+            transport.send(
+                encodeEnvelope(
+                    json = json,
+                    channel = BRIDGE_CHANNEL,
+                    payload =
+                        buildJsonObject {
+                            put("type", "bridge_release_control")
+                            put("cwd", activeConfig.cwd)
+                            activeConfig.sessionPath?.let { path ->
+                                put("sessionPath", path)
+                            }
+                        },
+                ),
+            )
+        }
+    }
+
+    companion object {
+        private const val BRIDGE_CHANNEL = "bridge"
+        private const val RPC_CHANNEL = "rpc"
+        private const val UNKNOWN_BRIDGE_TYPE = "unknown"
+        private const val BRIDGE_HELLO_TYPE = "bridge_hello"
+        private const val RPC_EVENT_BUFFER_CAPACITY = 256
+        private const val BRIDGE_EVENT_BUFFER_CAPACITY = 128
+        private const val DEFAULT_REQUEST_TIMEOUT_MS = 10_000L
+
+        val defaultJson: Json =
+            Json {
+                ignoreUnknownKeys = true
+            }
+    }
+}
+
+data class PiRpcConnectionConfig(
+    val target: WebSocketTarget,
+    val cwd: String,
+    val sessionPath: String? = null,
+    val clientId: String? = null,
+    val connectTimeoutMs: Long = 10_000,
+    val requestTimeoutMs: Long = 10_000,
+) {
+    fun resolveClientId(): PiRpcConnectionConfig {
+        if (!clientId.isNullOrBlank()) return this
+        return copy(clientId = UUID.randomUUID().toString())
+    }
+
+    fun targetWithClientId(): WebSocketTarget {
+        val currentClientId = requireNotNull(clientId) { "clientId must be resolved before building target URL" }
+        return target.copy(url = appendClientId(target.url, currentClientId))
+    }
+}
+
+data class BridgeMessage(
+    val type: String,
+    val payload: JsonObject,
+)
+
+data class RpcResyncSnapshot(
+    val stateResponse: RpcResponse,
+    val entriesResponse: RpcResponse,
+    val fullRebuild: Boolean,
+)
+
+private suspend fun ensureBridgeControl(
+    transport: SocketTransport,
+    json: Json,
+    channels: ConcurrentHashMap<String, Channel<BridgeMessage>>,
+    config: PiRpcConnectionConfig,
+) {
+    val errorChannel = bridgeChannel(channels, BRIDGE_ERROR_TYPE)
+    val cwdSetChannel = bridgeChannel(channels, BRIDGE_CWD_SET_TYPE)
+    val controlAcquiredChannel = bridgeChannel(channels, BRIDGE_CONTROL_ACQUIRED_TYPE)
+
+    transport.send(
+        encodeEnvelope(
+            json = json,
+            channel = BRIDGE_CHANNEL,
+            payload =
+                buildJsonObject {
+                    put("type", "bridge_set_cwd")
+                    put("cwd", config.cwd)
+                },
+        ),
+    )
+
+    withTimeout(config.requestTimeoutMs) {
+        select<Unit> {
+            cwdSetChannel.onReceive { }
+            errorChannel.onReceive { message ->
+                throw IllegalStateException(parseBridgeErrorMessage(message))
+            }
+        }
+    }
+
+    transport.send(
+        encodeEnvelope(
+            json = json,
+            channel = BRIDGE_CHANNEL,
+            payload =
+                buildJsonObject {
+                    put("type", "bridge_acquire_control")
+                    put("cwd", config.cwd)
+                    config.sessionPath?.let { path ->
+                        put("sessionPath", path)
+                    }
+                },
+        ),
+    )
+
+    withTimeout(config.requestTimeoutMs) {
+        select<Unit> {
+            controlAcquiredChannel.onReceive { }
+            errorChannel.onReceive { message ->
+                throw IllegalStateException(parseBridgeErrorMessage(message))
+            }
+        }
+    }
+}
+
+private fun parseBridgeErrorMessage(message: BridgeMessage): String {
+    val details = message.payload.stringField("message") ?: "Bridge operation failed"
+    val code = message.payload.stringField("code")
+    return if (code == null) details else "$code: $details"
+}
+
+private fun parseEnvelope(
+    raw: String,
+    json: Json,
+): EnvelopeMessage? {
+    val objectElement = runCatching { json.parseToJsonElement(raw).jsonObject }.getOrNull()
+    if (objectElement != null) {
+        val channel = objectElement.stringField("channel")
+        val payload = objectElement["payload"]?.jsonObject
+        if (channel != null && payload != null) {
+            return EnvelopeMessage(
+                channel = channel,
+                payload = payload,
+            )
+        }
+    }
+
+    return null
+}
+
+private fun encodeEnvelope(
+    json: Json,
+    channel: String,
+    payload: JsonObject,
+): String {
+    val envelope =
+        buildJsonObject {
+            put("channel", channel)
+            put("payload", payload)
+        }
+
+    return json.encodeToString(envelope)
+}
+
+private fun appendClientId(
+    url: String,
+    clientId: String,
+): String {
+    if ("clientId=" in url) {
+        return url
+    }
+
+    val separator = if ("?" in url) "&" else "?"
+    return "$url${separator}clientId=$clientId"
+}
+
+private fun JsonObject.stringField(name: String): String? {
+    val primitive = this[name]?.jsonPrimitive ?: return null
+    return primitive.contentOrNull
+}
+
+private fun RpcResponse.requireSuccessfulEntriesResponse() {
+    check(success) { error ?: "Failed to synchronize session entries" }
+    check(command == "get_entries") { "Expected get_entries response, received $command" }
+}
+
+private fun RpcResponse.lastEntryId(): String? {
+    val entries = runCatching { data?.get("entries")?.jsonArray }.getOrNull() ?: return null
+    return entries.lastOrNull()?.jsonObject?.stringField("id")
+}
+
+private fun bridgeChannel(
+    channels: ConcurrentHashMap<String, Channel<BridgeMessage>>,
+    type: String,
+): Channel<BridgeMessage> {
+    return channels.computeIfAbsent(type) {
+        Channel(BRIDGE_CHANNEL_BUFFER_CAPACITY)
+    }
+}
+
+private data class EnvelopeMessage(
+    val channel: String,
+    val payload: JsonObject,
+)
+
+private const val BRIDGE_CHANNEL = "bridge"
+private const val BRIDGE_ERROR_TYPE = "bridge_error"
+private const val BRIDGE_CWD_SET_TYPE = "bridge_cwd_set"
+private const val BRIDGE_CONTROL_ACQUIRED_TYPE = "bridge_control_acquired"
+private const val BRIDGE_CHANNEL_BUFFER_CAPACITY = 16

@@ -9,12 +9,12 @@ plugins {
 }
 
 android {
-    namespace = "com.ayagmar.pimobile"
+    namespace = "top.guozk.pipilot"
     compileSdk = 37
     buildToolsVersion = "37.0.0"
 
     defaultConfig {
-        applicationId = "com.ayagmar.pimobile"
+        applicationId = "top.guozk.pipilot"
         minSdk = 26
         targetSdk = 37
         versionCode = 1
