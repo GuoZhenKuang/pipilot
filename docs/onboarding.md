@@ -1,36 +1,36 @@
-# Onboarding and recovery
+# 引导与故障恢复
 
-## First successful connection
+## 首次成功连接
 
-1. **Prepare the computer** — install Pi 0.80.6 or newer, start the authenticated bridge, and connect the phone and computer to the same Tailnet.
-2. **Print pairing QR** — from `bridge/`, run `pnpm pair`. The command reads the existing `.env`, discovers the computer's Tailscale MagicDNS name, and prints a QR containing the host, port, TLS setting, and existing bridge token. If Tailscale discovery is unavailable, run `pnpm pair -- --host <reachable-hostname>`.
-3. **Scan and save** — in Pi Mobile, open **Hosts**, tap **Scan QR**, scan the terminal code, review the populated connection, and save it. Manual entry remains available as a fallback. Keep the terminal QR private because it contains the bridge token.
-4. **Validate readiness** — connection diagnostics distinguish reachability, authentication, and Pi RPC readiness. Use **Test** to verify all stages.
-5. **Choose work** — the app opens Sessions after the first connection is saved. Choose a recent project/session or create a session.
-6. **Chat** — an active session makes Chat primary. Back returns to Sessions.
+1. **准备电脑** — 安装 Pi 0.80.6 或更高版本，启动经过认证的 Bridge，并让手机和电脑加入同一个 Tailnet（Tailscale 或自建 Headscale）。可以使用 `scripts/start-bridge.ps1` 一键完成自检与启动。
+2. **打印配对二维码** — 在 `bridge/` 目录运行 `pnpm pair`。该命令读取既有 `.env`，自动发现电脑的 Tailscale MagicDNS 主机名，并打印包含主机、端口、TLS 设置与既有 Bridge 令牌的二维码。若自动发现不可用，运行 `pnpm pair -- --host <可达主机名>`。
+3. **扫码并保存** — 在 PiPilot 中打开 **主机**，点击 **扫码配对**，扫描终端上的二维码，核对自动填充的连接信息并保存。手动填写始终可用作兜底。终端二维码包含 Bridge 令牌，请妥善保管。
+4. **校验就绪状态** — 连接诊断可区分网络可达、认证与 Pi RPC 就绪三类问题，用 **测试** 按阶段验证。
+5. **选择工作内容** — 首个连接保存后应用会打开会话页，可从最近的项目/会话中选择或新建会话。
+6. **开始对话** — 有活动会话后聊天页即为主入口，返回键回到会话页。
 
-**Hosts** remains available in the navigation drawer after setup so a broken connection can always be edited, tested, deleted, or replaced.
+配置完成后 **主机** 仍保留在导航栏中，连接出问题时随时可以编辑、测试、删除或替换。
 
-Non-secret connection fields may be re-entered when editing. Existing tokens remain encrypted unless the user explicitly types a replacement.
+编辑主机时可以重新输入非机密的连接字段；已保存的令牌保持加密状态，除非你主动输入新的令牌。
 
-## Recovery map
+## 故障恢复对照
 
-| State | Explanation | Primary action |
+| 状态 | 说明 | 主要操作 |
 |---|---|---|
-| No network / bridge unreachable | Tailscale, address, port, or bridge process is unavailable | Check connectivity, then **Try again** |
-| Authentication rejected | The supplied bridge token does not match | **Update token** |
-| Bridge incompatible | Required authenticated RPC behavior is unavailable | Upgrade/restart the bridge |
-| Pi missing or RPC unavailable | The bridge cannot start or query Pi | Install Pi 0.80.6+, then **Test Pi again** |
-| No model credentials | Pi starts but cannot use a configured model | Configure provider credentials on the computer |
-| Control lock held | Another client controls the cwd/session | Return to Sessions or release the other client |
-| Session unavailable | Session was moved, deleted, or cannot be read | Refresh Sessions and choose another session |
+| 无网络 / Bridge 不可达 | Tailscale、地址、端口或 Bridge 进程不可用 | 检查连通性后 **重试** |
+| 认证被拒绝 | 提供的 Bridge 令牌不匹配 | **更新令牌** |
+| Bridge 不兼容 | 必需的认证 RPC 行为不可用 | 升级或重启 Bridge |
+| Pi 缺失或 RPC 不可用 | Bridge 无法启动或查询 Pi | 安装 Pi 0.80.6+ 后 **重新测试 Pi** |
+| 无模型凭据 | Pi 已启动但无法使用已配置的模型 | 在电脑上配置模型凭据 |
+| 控制锁被占用 | 另一个客户端控制着 cwd/会话 | 回到会话页或释放另一客户端 |
+| 会话不可用 | 会话被移动、删除或无法读取 | 刷新会话页并选择其他会话 |
 
-Technical diagnostics may be copied for troubleshooting, but primary recovery text is typed and sanitized. Tokens, authorization headers, private prompts, and raw session contents must never be rendered or logged.
+技术诊断信息可以复制用于排查，但主要恢复文案是固定类型且经过脱敏。令牌、认证头、私人提示词与原始会话内容绝不会被渲染或记录。
 
-## Sharing a session
+## 共享会话
 
-Set `BRIDGE_STATE_DIR` to an owner-only disposable/backup location and optionally set `BRIDGE_SHARE_ORIGIN` to a strict HTTP(S) origin with no path, query, fragment, or userinfo. Pair or authenticate the host, review the reported origin, then use **Share session link**. Repeated creation is stable until **Revoke shared link**; revocation is durable and the next share generates a different reference. Back up the state directory: state loss invalidates old links and must not silently regenerate equivalent references.
+把 `BRIDGE_STATE_DIR` 设为仅所有者可读的一次性/备份目录，并可选地把 `BRIDGE_SHARE_ORIGIN` 设为不带路径、查询、片段与用户信息的严格 HTTP(S) 源。配对或完成主机认证后，核对上报的源地址，再使用 **共享会话链接**。重复生成是稳定的，直到 **撤销共享链接**；撤销是持久的，之后再次共享会生成不同的引用。请备份状态目录：状态丢失会使旧链接失效，且不会静默重建等价引用。
 
-A shared URI contains only the bridge authority, link version, and opaque reference. Opening it never sends a stored token to an endpoint that is not already configured and matched (or explicitly reviewed and saved). Setup-required and authentication states require user action. Missing, revoked, deleted, duplicate-ID, corrupt-state, unsupported-version, unreachable, resume-failure, and lock-conflict states are generic; lock conflict offers retry or return to Sessions and never takeover.
+共享 URI 只包含 Bridge 主机、链接版本与不透明引用。打开链接绝不会向未配置且未匹配（或未经人工检查保存）的端点发送已存令牌。「需要配置」与「需要认证」状态需要用户介入；缺失、已撤销、已删除、重复 ID、状态损坏、版本不支持、不可达、恢复失败与锁冲突等状态均显示通用文案——锁冲突只提供重试或返回会话页，绝不接管。
 
-The bridge indexes only the first bounded session header. A valid unique Pi header ID remains stable when its file moves; malformed/missing IDs are browseable but cannot be shared, and duplicate live IDs are never resolved arbitrarily.
+Bridge 只索引有界长度的会话头部。拥有唯一 Pi 头部 ID 的会话在文件移动后身份保持稳定；格式错误或缺失 ID 的会话可以浏览但不能共享；重复的活动 ID 绝不会被随意解析。

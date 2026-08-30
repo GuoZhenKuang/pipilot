@@ -1,46 +1,46 @@
-# Bridge Protocol Reference
+# Bridge 协议参考
 
-This document describes the WebSocket protocol between the Android client and the Pi Mobile bridge.
+本文描述 Android 客户端与 PiPilot Bridge 之间的 WebSocket 协议。
 
-## Table of Contents
+## 目录
 
-- [Transport and Endpoint](#transport-and-endpoint)
-- [Authentication](#authentication)
-- [Envelope Format](#envelope-format)
-- [Connection Handshake](#connection-handshake)
-- [Bridge Channel Messages](#bridge-channel-messages)
-- [RPC Channel Messages](#rpc-channel-messages)
-- [Errors](#errors)
-- [Health Endpoint](#health-endpoint)
-- [Practical Message Sequence](#practical-message-sequence)
-- [Reference Files](#reference-files)
+- [传输与端点](#传输与端点)
+- [认证](#认证)
+- [信封格式](#信封格式)
+- [连接握手](#连接握手)
+- [Bridge 通道消息](#bridge-通道消息)
+- [RPC 通道消息](#rpc-通道消息)
+- [错误](#错误)
+- [健康端点](#健康端点)
+- [典型消息时序](#典型消息时序)
+- [参考文件](#参考文件)
 
-## Transport and Endpoint
+## 传输与端点
 
-- Protocol: WebSocket
-- Endpoint: `ws://<host>:<port>/ws`
-- Optional reconnect identity: `?clientId=<uuid>`
+- 协议：WebSocket
+- 端点：`ws://<host>:<port>/ws`
+- 可选的重连身份：`?clientId=<uuid>`
 
-All messages are JSON envelopes with one of two channels:
+所有消息都是 JSON 信封，通道为以下二者之一：
 
-- `bridge` (control plane)
-- `rpc` (pi RPC payloads)
+- `bridge`（控制面）
+- `rpc`（pi RPC 载荷）
 
-## Authentication
+## 认证
 
-A valid bridge token is required.
+必须携带有效的 Bridge 令牌。
 
-Supported headers:
+支持的请求头：
 
 - `Authorization: Bearer <token>`
 - `x-bridge-token: <token>`
 
-Notes:
+注意：
 
-- token in query string is not accepted
-- invalid token -> HTTP 401 on websocket upgrade
+- 不接受查询字符串中的令牌
+- 令牌无效 → WebSocket 升级时返回 HTTP 401
 
-## Envelope Format
+## 信封格式
 
 ```json
 {
@@ -61,15 +61,15 @@ Notes:
 }
 ```
 
-Validation rules:
+校验规则：
 
-- envelope must be JSON object
-- `channel` must be `bridge` or `rpc`
-- `payload` must be JSON object
+- 信封必须是 JSON 对象
+- `channel` 必须是 `bridge` 或 `rpc`
+- `payload` 必须是 JSON 对象
 
-## Connection Handshake
+## 连接握手
 
-After WebSocket connect, bridge sends:
+WebSocket 连接后，Bridge 发送：
 
 ```json
 {
@@ -85,42 +85,42 @@ After WebSocket connect, bridge sends:
 }
 ```
 
-If reconnecting with same `clientId`, `resumed` may be `true` and previous `cwd` is restored.
+以相同 `clientId` 重连时 `resumed` 可能为 `true`，并恢复上次的 `cwd`。
 
-## Bridge Channel Messages
+## Bridge 通道消息
 
-### Request → Response map
+### 请求 → 响应对照
 
-| Request `payload.type` | Response `payload.type` | Notes |
+| 请求 `payload.type` | 响应 `payload.type` | 说明 |
 |---|---|---|
-| `bridge_ping` | `bridge_pong` | Liveness check |
-| `bridge_list_sessions` | `bridge_sessions` | Returns grouped session metadata |
-| `bridge_get_session_tree` | `bridge_session_tree` | Requires `sessionPath`; supports filter |
-| `bridge_get_session_freshness` | `bridge_session_freshness` | Returns freshness fingerprint + lock owner metadata |
-| `bridge_import_session_jsonl` | `bridge_session_imported` | Requires control lock; uploads a JSONL session into the active runtime session dir and switches to it |
-| `bridge_navigate_tree` | `bridge_tree_navigation_result` | Requires control lock; uses internal extension command |
-| `bridge_set_cwd` | `bridge_cwd_set` | Sets active cwd context for client |
-| `bridge_acquire_control` | `bridge_control_acquired` | Acquires write lock for cwd/session |
-| `bridge_release_control` | `bridge_control_released` | Releases held lock |
-| `bridge_get_or_create_session_share` | `bridge_session_share` | Authenticated stable opaque reference for one unique indexed session |
-| `bridge_resolve_session_share` | `bridge_session_share_resolved` | Authenticated lookup; duplicate/deleted/revoked identities resolve generically unavailable |
-| `bridge_revoke_session_share` | `bridge_session_share_revoked` | Authenticated owner action; next create generates a new reference |
+| `bridge_ping` | `bridge_pong` | 存活检查 |
+| `bridge_list_sessions` | `bridge_sessions` | 返回分组的会话元数据 |
+| `bridge_get_session_tree` | `bridge_session_tree` | 需要 `sessionPath`；支持筛选 |
+| `bridge_get_session_freshness` | `bridge_session_freshness` | 返回新鲜度指纹 + 锁占用元数据 |
+| `bridge_import_session_jsonl` | `bridge_session_imported` | 需要控制锁；把 JSONL 会话写入活动运行时会话目录并切换过去 |
+| `bridge_navigate_tree` | `bridge_tree_navigation_result` | 需要控制锁；使用内部扩展命令 |
+| `bridge_set_cwd` | `bridge_cwd_set` | 为客户端设置活动 cwd 上下文 |
+| `bridge_acquire_control` | `bridge_control_acquired` | 获取 cwd/会话的写锁 |
+| `bridge_release_control` | `bridge_control_released` | 释放已持有的锁 |
+| `bridge_get_or_create_session_share` | `bridge_session_share` | 为一个唯一已索引会话生成认证的稳定不透明引用 |
+| `bridge_resolve_session_share` | `bridge_session_share_resolved` | 认证查询；重复/已删除/已撤销身份统一解析为不可用 |
+| `bridge_revoke_session_share` | `bridge_session_share_revoked` | 认证的所有者操作；下次创建会生成新引用 |
 
-The bridge also pushes `bridge_session_invalidated { reason }` to the controlling client after mutations observed through the active Pi process, session import/switch, or tree navigation. Clients should immediately run cursor synchronization.
+当通过活动 pi 进程观察到变更、发生会话导入/切换或树导航时，Bridge 还会向控制客户端推送 `bridge_session_invalidated { reason }`。客户端应立即执行游标同步。
 
-### Stable session sharing
+### 稳定会话共享
 
-The bridge reads the first bounded Pi session header and uses its documented `id` as the internal identity. Valid duplicate IDs remain listed but are not shareable or resolvable. A moved file retains its mapping because references point to the ID, not a path.
+Bridge 读取第一个有界长度的 Pi 会话头部，以其有文档记载的 `id` 作为内部身份。有效的重复 ID 仍会列出，但不可共享、不可解析。文件移动后映射保持不变，因为引用指向 ID 而非路径。
 
-The three share operations above are metadata-only authenticated bridge operations and do not bypass cwd/control locks. Resolve returns exactly one current `SessionRecord`; resuming it uses the ordinary cwd setup, control lock, `switch_session`, cursor synchronization, and post-switch `get_state.sessionId` check.
+上述三个共享操作是仅元数据的认证 Bridge 操作，不会绕过 cwd/控制锁。解析返回唯一一条当前 `SessionRecord`；恢复它使用常规的 cwd 设置、控制锁、`switch_session`、游标同步以及切换后的 `get_state.sessionId` 校验。
 
-References are 16 random bytes encoded as unpadded base64url (22 characters). The versioned owner-only state is `${BRIDGE_STATE_DIR}/share-references.json`, written through a synced temporary file and atomic rename. It contains no tokens, paths, cwd values, titles, previews, or transcript data. Corrupt/unsupported state returns `share_state_unavailable` while normal listing and RPC remain available. Revoke is durable and explicit; deleting/resetting the state invalidates links and requires operator repair/recovery.
+引用是 16 字节随机数据，编码为不带填充的 base64url（22 字符）。版本化的仅所有者状态保存在 `${BRIDGE_STATE_DIR}/share-references.json`，通过同步临时文件 + 原子重命名写入。其中不包含令牌、路径、cwd、标题、预览或对话内容。状态损坏/版本不受支持时返回 `share_state_unavailable`，正常的列表与 RPC 不受影响。撤销是持久且显式的；删除/重置状态会使链接失效，需要操作者修复恢复。
 
-When `BRIDGE_SHARE_ORIGIN` is configured as a strict HTTP(S) origin, landing pages are `/s/v1/<reference>` and contain only generic open-in-app instructions. They use no request `Host` header and return `no-store`, no-referrer, `nosniff`, frame protection, and restrictive CSP headers. The custom fallback is `pimobile://open/v1/<reference>?host=<authority>&port=<port>&tls=<0|1>`.
+配置 `BRIDGE_SHARE_ORIGIN` 为严格 HTTP(S) 源时，落地页为 `/s/v1/<reference>`，只包含通用的「在应用中打开」指引。不使用请求 `Host` 头，返回 `no-store`、no-referrer、`nosniff`、防框架与严格 CSP 头。自定义 scheme 兜底为 `pimobile://open/v1/<reference>?host=<authority>&port=<port>&tls=<0|1>`。
 
-### `bridge_get_session_tree` filters
+### `bridge_get_session_tree` 筛选器
 
-Allowed values:
+允许的取值：
 
 - `default`
 - `all`
@@ -128,13 +128,13 @@ Allowed values:
 - `user-only`
 - `labeled-only`
 
-Unknown filter -> `bridge_error` (`invalid_tree_filter`).
+未知筛选 → `bridge_error`（`invalid_tree_filter`）。
 
-The bridge rejects WebSocket messages larger than `BRIDGE_WEBSOCKET_MAX_PAYLOAD_BYTES` (16 MiB by default).
+Bridge 拒绝超过 `BRIDGE_WEBSOCKET_MAX_PAYLOAD_BYTES`（默认 16 MiB）的 WebSocket 消息。
 
 ### `bridge_get_session_freshness`
 
-Request payload:
+请求载荷：
 
 ```json
 {
@@ -143,7 +143,7 @@ Request payload:
 }
 ```
 
-Response payload:
+响应载荷：
 
 ```json
 {
@@ -168,7 +168,7 @@ Response payload:
 
 ### `bridge_import_session_jsonl`
 
-Request payload:
+请求载荷：
 
 ```json
 {
@@ -178,7 +178,7 @@ Request payload:
 }
 ```
 
-Response payload:
+响应载荷：
 
 ```json
 {
@@ -187,17 +187,17 @@ Response payload:
 }
 ```
 
-Notes:
+注意：
 
-- requires cwd context + control lock
-- writes the uploaded JSONL into the bridge session directory
-- switches the active pi runtime to the imported session
-- filename is sanitized and uniqued server-side to avoid path traversal and overwrites
-- UTF-8 content is limited by `BRIDGE_IMPORT_MAX_BYTES` (10 MiB by default); oversized content returns `import_payload_too_large` without closing the connection
+- 需要 cwd 上下文 + 控制锁
+- 把上传的 JSONL 写入 Bridge 会话目录
+- 把活动 pi 运行时切换到导入的会话
+- 文件名在服务端脱敏并去重，防止路径穿越与覆盖
+- UTF-8 内容受 `BRIDGE_IMPORT_MAX_BYTES`（默认 10 MiB）限制；超限返回 `import_payload_too_large` 且不断开连接
 
 ### `bridge_navigate_tree`
 
-Request payload:
+请求载荷：
 
 ```json
 {
@@ -206,7 +206,7 @@ Request payload:
 }
 ```
 
-Response payload:
+响应载荷：
 
 ```json
 {
@@ -218,28 +218,28 @@ Response payload:
 }
 ```
 
-## RPC Channel Messages
+## RPC 通道消息
 
-`rpc` channel forwards pi RPC commands/events unchanged. Android uses `get_entries` for active-session synchronization and `get_tree` for active topology. Cross-project session listing and inactive-session tree browsing remain bridge-owned. Direct tree navigation remains bridge-owned because Pi 0.80.6 does not expose a navigation RPC command.
+`rpc` 通道原样转发 pi RPC 命令/事件。Android 用 `get_entries` 做活动会话同步、用 `get_tree` 获取活动拓扑。跨项目会话列表与非活动会话树浏览仍由 Bridge 负责。树导航也仍由 Bridge 负责，因为 Pi 0.80.6 没有导航类 RPC 命令。
 
-### Preconditions for sending RPC payloads
+### 发送 RPC 载荷的前置条件
 
-Client must have:
+客户端必须已完成：
 
-1. cwd context (`bridge_set_cwd`)
-2. control lock (`bridge_acquire_control`)
+1. cwd 上下文（`bridge_set_cwd`）
+2. 控制锁（`bridge_acquire_control`）
 
-Otherwise bridge returns `bridge_error` with code `control_lock_required`.
+否则 Bridge 返回 `bridge_error`，代码为 `control_lock_required`。
 
-### Forwarding behavior
+### 转发行为
 
-- Request payload is forwarded to cwd-specific pi subprocess stdin
-- pi stdout events are wrapped as `{ channel: "rpc", payload: ... }`
-- events are delivered only to the controlling client for that cwd
+- 请求载荷转发给该 cwd 专属 pi 子进程的 stdin
+- pi stdout 事件包装为 `{ channel: "rpc", payload: ... }`
+- 事件只投递给该 cwd 的控制客户端
 
-## Errors
+## 错误
 
-Bridge errors always use:
+Bridge 错误统一使用：
 
 ```json
 {
@@ -247,12 +247,12 @@ Bridge errors always use:
   "payload": {
     "type": "bridge_error",
     "code": "error_code",
-    "message": "Human readable message"
+    "message": "可读的错误说明"
   }
 }
 ```
 
-Common codes:
+常见代码：
 
 - `malformed_envelope`
 - `unsupported_bridge_message`
@@ -273,37 +273,37 @@ Common codes:
 - `session_import_failed`
 - `import_payload_too_large`
 
-## Health Endpoint
+## 健康端点
 
-Optional HTTP endpoint:
+可选 HTTP 端点：
 
 - `GET /health`
-- enabled by `BRIDGE_ENABLE_HEALTH_ENDPOINT=true`
+- 由 `BRIDGE_ENABLE_HEALTH_ENDPOINT=true` 启用
 
-Response includes:
+响应包含：
 
-- uptime
-- process manager stats
-- connected/reconnectable client counts
+- 运行时长
+- 进程管理统计
+- 已连接/可重连的客户端计数
 
-When disabled, `/health` returns 404.
+关闭时 `/health` 返回 404。
 
-## Practical Message Sequence
+## 典型消息时序
 
-Minimal sequence for a typical RPC session:
+一次典型 RPC 会话的最小时序：
 
-1. Connect websocket with auth token
-2. Receive `bridge_hello`
-3. Send `bridge_set_cwd`
-4. Send `bridge_acquire_control`
-5. Send `rpc` command payloads (`get_state`, `prompt`, ...)
-6. Receive `rpc` events and `response` payloads
-7. Optionally send `bridge_release_control`
+1. 携带认证令牌连接 WebSocket
+2. 接收 `bridge_hello`
+3. 发送 `bridge_set_cwd`
+4. 发送 `bridge_acquire_control`
+5. 发送 `rpc` 命令载荷（`get_state`、`prompt` 等）
+6. 接收 `rpc` 事件与 `response` 载荷
+7. 可选发送 `bridge_release_control`
 
-## Reference Files
+## 参考文件
 
 - `bridge/src/protocol.ts`
 - `bridge/src/server.ts`
 - `bridge/src/process-manager.ts`
-- `core-net/src/main/kotlin/com/ayagmar/pimobile/corenet/PiRpcConnection.kt`
+- `core-net/src/main/kotlin/top/guozk/pipilot/corenet/PiRpcConnection.kt`
 - `bridge/test/server.test.ts`

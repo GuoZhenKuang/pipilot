@@ -1,76 +1,76 @@
-# Custom Extensions (Pi Mobile)
+# 自定义扩展（PiPilot）
 
-Pi Mobile uses **internal pi extensions** to provide mobile-specific workflows that are not available through standard RPC commands.
+PiPilot 使用 **pi 内部扩展** 提供标准 RPC 命令不具备的移动端专属工作流。
 
-These extensions are loaded by the bridge when it starts `pi --mode rpc`.
+这些扩展由 Bridge 在启动 `pi --mode rpc` 时加载。
 
-## Table of Contents
+## 目录
 
-- [Overview](#overview)
-- [Where Extensions Live](#where-extensions-live)
-- [Runtime Loading](#runtime-loading)
-- [Extension 1: `pi-mobile-tree`](#extension-1-pi-mobile-tree)
-- [Extension 2: `pi-mobile-open-stats`](#extension-2-pi-mobile-open-stats)
-- [Android Client Integration](#android-client-integration)
-- [Extension UI Method Support](#extension-ui-method-support)
-- [How to Add a New Internal Extension](#how-to-add-a-new-internal-extension)
-- [Troubleshooting](#troubleshooting)
-- [Reference Files](#reference-files)
+- [总览](#总览)
+- [扩展文件位置](#扩展文件位置)
+- [运行时加载](#运行时加载)
+- [扩展 1：`pi-mobile-tree`](#扩展-1-pi-mobile-tree)
+- [扩展 2：`pi-mobile-open-stats`](#扩展-2-pi-mobile-open-stats)
+- [Android 客户端集成](#android-客户端集成)
+- [扩展 UI 方法支持](#扩展-ui-方法支持)
+- [如何新增内部扩展](#如何新增内部扩展)
+- [故障排查](#故障排查)
+- [参考文件](#参考文件)
 
-## Overview
+## 总览
 
-Our custom extensions are intentionally **internal plumbing** between:
+自定义扩展刻意保持为三端之间的**内部管道**：
 
-- the Node bridge (`bridge/`)
-- the pi runtime
-- the Android client (`app/`)
+- Node Bridge（`bridge/`）
+- pi 运行时
+- Android 客户端（`app/`）
 
-They are used to:
+它们用于：
 
-1. enable in-place tree navigation with structured results
-2. trigger mobile-only workflow actions (currently: open stats sheet)
+1. 以结构化结果实现原位会话树导航
+2. 触发移动端专属工作流动作（当前为：打开统计面板）
 
-These commands should not appear as user-facing commands in the mobile command palette.
+这些命令不应出现在移动端命令面板的用户可见命令中。
 
-## Where Extensions Live
+## 扩展文件位置
 
 - `bridge/src/extensions/pi-mobile-tree.ts`
 - `bridge/src/extensions/pi-mobile-workflows.ts`
 
-## Runtime Loading
+## 运行时加载
 
-The bridge injects both extensions into every pi RPC subprocess:
+Bridge 把两个扩展注入每个 pi RPC 子进程：
 
 - `--extension bridge/src/extensions/pi-mobile-tree.ts`
 - `--extension bridge/src/extensions/pi-mobile-workflows.ts`
 
-Implemented in:
+实现位置：
 
-- `bridge/src/server.ts` (`createPiRpcForwarder(...args)`)
+- `bridge/src/server.ts`（`createPiRpcForwarder(...args)`）
 
-## Extension 1: `pi-mobile-tree`
+## 扩展 1：`pi-mobile-tree`
 
-**Command name:** `pi-mobile-tree`  
-**Purpose:** perform tree navigation from the bridge and return a structured status payload.
+**命令名：** `pi-mobile-tree`
+**用途：** 由 Bridge 执行会话树导航并返回结构化状态载荷。
 
-### Arguments
+### 参数
 
 `/<command> <entryId> <statusKey>`
 
-- `entryId`: required target tree entry ID
-- `statusKey`: required, must start with `pi_mobile_tree_result:`
+- `entryId`：必需，目标树节点 ID
+- `statusKey`：必需，必须以 `pi_mobile_tree_result:` 开头
 
-If arguments are invalid, command exits without side effects.
+参数非法时命令直接退出，无副作用。
 
-### Behavior
+### 行为
 
 1. `waitForIdle()`
 2. `navigateTree(entryId, { summarize: false })`
-3. If navigation is not cancelled, update editor text via `ctx.ui.setEditorText(...)`
-4. Emit result via `ctx.ui.setStatus(statusKey, JSON.stringify(payload))`
-5. Immediately clear status key via `ctx.ui.setStatus(statusKey, undefined)`
+3. 导航未被取消时，通过 `ctx.ui.setEditorText(...)` 更新编辑器文本
+4. 通过 `ctx.ui.setStatus(statusKey, JSON.stringify(payload))` 发出结果
+5. 立即用 `ctx.ui.setStatus(statusKey, undefined)` 清除状态键
 
-### Result Payload Shape
+### 结果载荷结构
 
 ```json
 {
@@ -82,135 +82,135 @@ If arguments are invalid, command exits without side effects.
 }
 ```
 
-If an exception occurs, `error` is set and the bridge treats navigation as failed.
+发生异常时设置 `error`，Bridge 视导航为失败。
 
-## Extension 2: `pi-mobile-open-stats`
+## 扩展 2：`pi-mobile-open-stats`
 
-**Command name:** `pi-mobile-open-stats`  
-**Purpose:** emit a workflow action to open the stats sheet in the Android app.
+**命令名：** `pi-mobile-open-stats`
+**用途：** 发出工作流动作，打开 Android 应用中的统计面板。
 
-### Behavior
+### 行为
 
-- Accepts optional action argument
-- Default action: `open_stats`
-- Rejects unknown actions silently
+- 接受可选的动作参数
+- 默认动作：`open_stats`
+- 未知的动作被静默拒绝
 
-When accepted, it emits:
+接受时发出：
 
-- status key: `pi-mobile-workflow-action`
-- status text: `{"action":"open_stats"}`
+- 状态键：`pi-mobile-workflow-action`
+- 状态文本：`{"action":"open_stats"}`
 
-Then clears the status key immediately.
+随后立即清除状态键。
 
-## Android Client Integration
+## Android 客户端集成
 
-The Android client treats these as internal bridge mechanisms.
+Android 客户端把它们视为内部 Bridge 机制。
 
-### Internal command constants
+### 内部命令常量
 
-Defined in `ChatViewModel`:
+定义于 `ChatViewModel`：
 
 - `pi-mobile-tree`
 - `pi-mobile-open-stats`
 
-They are hidden from visible slash-command results by filtering internal names.
+通过过滤内部名称，把它们从可见的斜杠命令结果中隐藏。
 
-### Builtin command mapping
+### 内置命令映射
 
-| Mobile command | Behavior |
+| 移动端命令 | 行为 |
 |---|---|
-| `/tree` | Opens mobile tree sheet directly |
-| `/stats` | Attempts internal `/pi-mobile-open-stats`, falls back to local stats sheet if unavailable |
-| `/model` | Opens model picker |
-| `/session` | Opens stats/session overview sheet |
-| `/compact` | Runs compact on active session |
-| `/export` | Exports current session to HTML |
-| `/import` | Opens the Android document picker and imports a JSONL session into the active runtime |
-| `/copy` | Copies the last assistant response to the Android clipboard |
-| `/fork` | Opens tree sheet and guides user to select fork entry |
-| `/new` | Starts a new session |
-| `/name <new name>` | Renames active session |
-| `/settings` | Shows guidance to use Settings tab |
-| `/hotkeys`, `/resume`, `/share`, `/reload`, `/changelog`, `/scoped-models` | Explicitly marked unavailable on mobile |
+| `/tree` | 直接打开移动端会话树面板 |
+| `/stats` | 尝试内部 `/pi-mobile-open-stats`，不可用时回退到本地统计面板 |
+| `/model` | 打开模型选择器 |
+| `/session` | 打开统计/会话总览面板 |
+| `/compact` | 对当前会话执行压缩 |
+| `/export` | 把当前会话导出为 HTML |
+| `/import` | 打开 Android 文档选择器，把 JSONL 会话导入当前运行时 |
+| `/copy` | 复制最新助手回复到剪贴板 |
+| `/fork` | 打开会话树面板并引导选择分叉条目 |
+| `/new` | 开始新会话 |
+| `/name <新名称>` | 重命名当前会话 |
+| `/settings` | 提示前往设置页 |
+| `/hotkeys`、`/resume`、`/share`、`/reload`、`/changelog`、`/scoped-models` | 明确标记为移动端不可用 |
 
-### Workflow status handling
+### 工作流状态处理
 
-`ChatViewModel` listens for `extension_ui_request` with:
+`ChatViewModel` 监听满足以下条件的 `extension_ui_request`：
 
 - `method = setStatus`
 - `statusKey = pi-mobile-workflow-action`
 
-If payload action is `open_stats`, it opens the stats sheet.
+载荷动作为 `open_stats` 时打开统计面板。
 
-Non-workflow status keys are surfaced in the extension status strip and can be hidden via Settings.
+非工作流状态键显示在扩展状态条中，可在设置里隐藏。
 
-## Extension UI Method Support
+## 扩展 UI 方法支持
 
-Pi Mobile currently handles these `extension_ui_request` methods:
+PiPilot 当前处理这些 `extension_ui_request` 方法：
 
-| Method | Client behavior |
+| 方法 | 客户端行为 |
 |---|---|
-| `select` | Shows select dialog |
-| `confirm` | Shows yes/no dialog |
-| `input` | Shows text input dialog |
-| `editor` | Shows multiline editor dialog |
-| `notify` | Shows transient notification |
-| `setStatus` | Handles internal workflow key (`pi-mobile-workflow-action`) |
-| `setWidget` | Updates extension widgets above/below editor |
-| `setTitle` | Updates chat title |
-| `set_editor_text` | Replaces prompt editor text |
+| `select` | 显示单选对话框 |
+| `confirm` | 显示确认对话框 |
+| `input` | 显示文本输入对话框 |
+| `editor` | 显示多行编辑对话框 |
+| `notify` | 显示临时通知 |
+| `setStatus` | 处理内部工作流键（`pi-mobile-workflow-action`） |
+| `setWidget` | 更新编辑器上/下方的扩展小组件 |
+| `setTitle` | 更新聊天标题 |
+| `set_editor_text` | 替换输入框文本 |
 
-Related model types:
+相关模型类型：
 
 - `core-rpc/.../ExtensionUiRequestEvent`
 - `core-rpc/.../ExtensionErrorEvent`
 
-## How to Add a New Internal Extension
+## 如何新增内部扩展
 
-Use this checklist for safe integration:
+按此清单安全接入：
 
-1. **Create extension file** in `bridge/src/extensions/`
-2. **Register command(s)** with explicit internal names (prefix with `pi-mobile-`)
-3. **Load extension in bridge** (`bridge/src/server.ts` forwarder args)
-4. **Define status key contract** if extension communicates via `setStatus`
-5. **Hide internal commands** in `ChatViewModel.INTERNAL_HIDDEN_COMMAND_NAMES`
-6. **Wire client handling** (event parsing + UI updates + fallback behavior)
-7. **Add tests**
-   - bridge behavior (`bridge/test/server.test.ts`)
-   - viewmodel behavior (`app/src/test/...`)
-8. **Document payload schemas** in this file
+1. **创建扩展文件** 于 `bridge/src/extensions/`
+2. **注册命令** 并使用明确的内部名称（以 `pi-mobile-` 为前缀）
+3. **在 Bridge 中加载**（`bridge/src/server.ts` 的转发器参数）
+4. **定义状态键契约**（若通过 `setStatus` 通信）
+5. **隐藏内部命令** 于 `ChatViewModel.INTERNAL_HIDDEN_COMMAND_NAMES`
+6. **接通客户端处理**（事件解析 + UI 更新 + 回退行为）
+7. **添加测试**
+   - Bridge 行为（`bridge/test/server.test.ts`）
+   - ViewModel 行为（`app/src/test/...`）
+8. **在本文件记录载荷结构**
 
-## Troubleshooting
+## 故障排查
 
-### `/stats` does nothing
+### `/stats` 无反应
 
-Check:
+检查：
 
-- `get_commands` includes `pi-mobile-open-stats`
-- extension loaded by bridge subprocess args
-- `setStatus` event payload action is exactly `open_stats`
+- `get_commands` 包含 `pi-mobile-open-stats`
+- 扩展已由 Bridge 通过子进程参数加载
+- `setStatus` 事件载荷的 action 恰为 `open_stats`
 
-### Tree navigation returns `tree_navigation_failed`
+### 树导航返回 `tree_navigation_failed`
 
-Check:
+检查：
 
-- `get_commands` includes `pi-mobile-tree`
-- emitted status key starts with `pi_mobile_tree_result:`
-- extension returns valid JSON payload in `statusText`
+- `get_commands` 包含 `pi-mobile-tree`
+- 发出的状态键以 `pi_mobile_tree_result:` 开头
+- 扩展在 `statusText` 中返回了合法 JSON 载荷
 
-### Internal commands visible in command palette
+### 内部命令出现在命令面板
 
-Check `ChatViewModel.INTERNAL_HIDDEN_COMMAND_NAMES` contains:
+检查 `ChatViewModel.INTERNAL_HIDDEN_COMMAND_NAMES` 是否包含：
 
 - `pi-mobile-tree`
 - `pi-mobile-open-stats`
 
-## Reference Files
+## 参考文件
 
 - `bridge/src/extensions/pi-mobile-tree.ts`
 - `bridge/src/extensions/pi-mobile-workflows.ts`
 - `bridge/src/server.ts`
-- `app/src/main/java/com/ayagmar/pimobile/chat/ChatViewModel.kt`
-- `app/src/main/java/com/ayagmar/pimobile/ui/chat/ChatOverlays.kt`
+- `app/src/main/java/top/guozk/pipilot/chat/ChatViewModel.kt`
+- `app/src/main/java/top/guozk/pipilot/ui/chat/ChatOverlays.kt`
 - `bridge/test/server.test.ts`
-- `app/src/test/java/com/ayagmar/pimobile/chat/ChatViewModelWorkflowCommandTest.kt`
+- `app/src/test/java/top/guozk/pipilot/chat/ChatViewModelWorkflowCommandTest.kt`
