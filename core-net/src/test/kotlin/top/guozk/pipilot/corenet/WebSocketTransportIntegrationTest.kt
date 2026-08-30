@@ -57,6 +57,9 @@ class WebSocketTransportIntegrationTest {
                 // 等待入站流订阅建立后再握手，避免 server-hello 早于订阅被丢弃
                 transport.inboundSubscriptionCount.first { it >= 1 }
 
+                // 等待入站流订阅建立后再握手，避免首条服务端消息早于订阅被丢弃
+                transport.inboundSubscriptionCount.first { it >= 1 }
+
                 transport.connect(targetFor(server))
 
                 awaitState(transport, ConnectionState.CONNECTED)
