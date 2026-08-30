@@ -13,5 +13,6 @@
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">ts.net</domain>
+        <domain includeSubdomains="true">tail.guozk.top</domain>
     </domain-config>
 </network-security-config>
