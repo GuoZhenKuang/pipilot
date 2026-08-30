@@ -513,11 +513,7 @@ private fun HostDraftFields(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        Text(
-            text = "建议使用 Tailscale/Headscale 的 MagicDNS 主机名（如 *.ts.net 或你的自有域名），避免裸 IP。",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.outline,
-        )
+        FormHint("建议使用 Tailscale/Headscale 的 MagicDNS 主机名（如 *.ts.net 或你的自有域名），避免裸 IP。")
 
         OutlinedTextField(
             value = draft.port,
@@ -540,11 +536,7 @@ private fun HostDraftFields(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        Text(
-            text = "令牌来自电脑端 bridge/.env 的 BRIDGE_AUTH_TOKEN 或配对二维码；保存后不会显示。",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.outline,
-        )
+        FormHint("令牌来自电脑端 bridge/.env 的 BRIDGE_AUTH_TOKEN 或配对二维码；保存后不会显示。")
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -560,10 +552,15 @@ private fun HostDraftFields(
             )
         }
 
-        Text(
-            text = "通过 Tailscale/Headscale 直连时保持关闭即可（隧道自身已加密）；仅在 Bridge 前另配了 HTTPS 反向代理时才开启。",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.outline,
-        )
+        FormHint("通过 Tailscale/Headscale 直连时保持关闭即可（隧道自身已加密）；仅在 Bridge 前另配了 HTTPS 反向代理时才开启。")
     }
+}
+
+@Composable
+private fun FormHint(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.outline,
+    )
 }
