@@ -38,6 +38,16 @@ jobs:
                   test -x "$ANDROID_HOME/build-tools/37.0.0/aapt2"
             - name: Verify Android
               run: ./gradlew clean ktlintCheck detekt test :benchmark:compileBenchmarkKotlin :app:lintDebug :app:assembleDebug :app:assembleRelease
+            - name: Upload test reports on failure
+              if: failure()
+              uses: actions/upload-artifact@v7
+              with:
+                  name: test-reports
+                  path: |
+                      **/build/reports/tests/
+                      **/build/test-results/
+                  if-no-files-found: ignore
+
             - name: Compile Android test sources
               run: ./gradlew :app:compileDebugAndroidTestKotlin
             - name: Upload debug APK
