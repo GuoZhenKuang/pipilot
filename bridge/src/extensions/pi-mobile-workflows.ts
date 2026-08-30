@@ -24,7 +24,7 @@ export default function registerPiMobileWorkflowExtension(pi: {
     }) => void;
 }): void {
     pi.registerCommand(STATS_COMMAND_NAME, {
-        description: "Internal Pi Mobile workflow command",
+        description: "Internal PiPilot workflow command",
         handler: async (args, ctx) => {
             const action = resolveWorkflowAction(args);
             if (!action) {

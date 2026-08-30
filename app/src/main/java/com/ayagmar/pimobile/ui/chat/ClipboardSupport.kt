@@ -23,4 +23,4 @@ internal fun rememberClipboardCopy(): (String) -> Unit {
     }
 }
 
-private const val CLIPBOARD_LABEL = "Pi Mobile"
+private const val CLIPBOARD_LABEL = "PiPilot"

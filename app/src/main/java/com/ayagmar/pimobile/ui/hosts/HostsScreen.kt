@@ -284,7 +284,7 @@ private fun FirstRunConnectionCard(
             Text("连接你的电脑", style = MaterialTheme.typography.headlineSmall)
             Text(
                 text =
-                    "继续之前，请在电脑上启动 Pi Mobile Bridge，" +
+                    "继续之前，请在电脑上启动 PiPilot Bridge，" +
                         "并通过 Tailscale 连接电脑和手机。",
                 style = MaterialTheme.typography.bodyMedium,
             )

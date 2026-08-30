@@ -67,7 +67,7 @@ internal suspend fun ChatImageSource.createShareUri(context: Context): Uri =
     withContext(Dispatchers.IO) {
         val extension = mimeType().substringAfter('/', "img").substringBefore('+')
         val shareDirectory = File(context.cacheDir, "shared-images").apply { mkdirs() }
-        val file = File(shareDirectory, "pi-mobile-image.$extension")
+        val file = File(shareDirectory, "pipilot-image.$extension")
         file.outputStream().use { output ->
             when (this@createShareUri) {
                 is ChatImageSource.LocalUri ->

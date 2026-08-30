@@ -61,10 +61,10 @@ export function buildShareLandingPage(origin: string, reference: string): string
     const customUri = escapeHtml(buildCustomShareUri(reference, authorityFromShareOrigin(origin)));
     return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
         "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
-        "<title>Open in Pi Mobile</title></head><body><main>" +
-        "<h1>Open in Pi Mobile</h1><p>Authenticate with the configured bridge to open this shared session.</p>" +
-        `<p><a rel="noreferrer" href="${customUri}">Open in Pi Mobile</a></p>` +
-        "<p>If the app is not configured, open Pi Mobile and review the host details first.</p>" +
+        "<title>Open in PiPilot</title></head><body><main>" +
+        "<h1>Open in PiPilot</h1><p>Authenticate with the configured bridge to open this shared session.</p>" +
+        `<p><a rel="noreferrer" href="${customUri}">Open in PiPilot</a></p>` +
+        "<p>If the app is not configured, open PiPilot and review the host details first.</p>" +
         "</main></body></html>";
 }
 

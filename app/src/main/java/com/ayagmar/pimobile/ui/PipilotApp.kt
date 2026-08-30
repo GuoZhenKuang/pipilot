@@ -188,7 +188,7 @@ private fun DrawerDestinationItem(
 @OptIn(ExperimentalMaterial3Api::class)
 @Suppress("LongMethod", "MaxLineLength")
 @Composable
-fun PiMobileApp(appGraph: AppGraph) {
+fun PipilotApp(appGraph: AppGraph) {
     val context = LocalContext.current
     val settingsPrefs =
         remember(context) {
@@ -336,7 +336,7 @@ fun PiMobileApp(appGraph: AppGraph) {
                         Scaffold(
                             topBar = {
                                 TopAppBar(
-                                    title = { Text(currentRoute?.replaceFirstChar(Char::uppercase) ?: "Pi Mobile") },
+                                    title = { Text(currentRoute?.replaceFirstChar(Char::uppercase) ?: "PiPilot") },
                                     navigationIcon = {
                                         if (!isExpanded) {
                                             IconButton(

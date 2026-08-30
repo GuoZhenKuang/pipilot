@@ -522,7 +522,7 @@ internal fun ImagePreviewDialog(
             actionMessage = actionMessage,
             onSave = {
                 actionMessage = null
-                saveLauncher.launch(presentation.displayName ?: "pi-mobile-image")
+                saveLauncher.launch(presentation.displayName ?: "pipilot-image")
             },
             onShare = {
                 actionMessage = null

@@ -84,7 +84,7 @@ class ShareNavigationCoordinator(
                             } else {
                                 ShareNavigationFailure.INVALID_LINK
                             },
-                        message = "该 Pi Mobile 链接无效或不受支持",
+                        message = "该 PiPilot 链接无效或不受支持",
                     )
                 return
             }

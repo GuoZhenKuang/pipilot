@@ -17,7 +17,7 @@ describe("parseBridgeConfig", () => {
             processIdleTtlMs: 300_000,
             reconnectGraceMs: 30_000,
             sessionDirectory: path.join(os.homedir(), ".pi", "agent", "sessions"),
-            stateDirectory: path.join(os.homedir(), ".pi-mobile"),
+            stateDirectory: path.join(os.homedir(), ".pipilot"),
             shareOrigin: undefined,
             enableHealthEndpoint: true,
             websocketMaxPayloadBytes: 16 * 1024 * 1024,

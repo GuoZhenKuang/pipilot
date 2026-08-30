@@ -1,11 +1,11 @@
-# Pi Mobile
+# PiPilot（领航 Pi）
 
 > **把你的 Pi 编程智能体装进口袋。**
 > 通过 Tailscale 在 Android 上随时随地运行和操控编程会话。
 
 [English](./README.en.md) | 简体中文
 
-Pi Mobile 是 [Pi 编程智能体](https://github.com/badlogic/pi-mono)的 Android 客户端，让你在离开笔记本时也能实时掌控会话。
+PiPilot（领航 Pi）是 [Pi 编程智能体](https://github.com/badlogic/pi-mono)的 Android 客户端，让你在离开笔记本时也能实时掌控会话。
 
 ## 演示（施工中）
 
@@ -15,7 +15,7 @@ Pi Mobile 是 [Pi 编程智能体](https://github.com/badlogic/pi-mono)的 Andro
 
 | 聊天 + 工具 | 会话 + 控制 |
 |---|---|
-| ![Pi Mobile 聊天与工具流式输出截图](https://i.imgur.com/sKXfkOe.png) | ![Pi Mobile 会话浏览截图](https://i.imgur.com/JBFchOQ.png) |
+| ![PiPilot 聊天与工具流式输出截图](https://i.imgur.com/sKXfkOe.png) | ![PiPilot 会话浏览截图](https://i.imgur.com/JBFchOQ.png) |
 
 ## 它能做什么
 
@@ -80,8 +80,8 @@ pi --version # 最低且经过测试的版本：0.80.6
 克隆仓库并启动 Bridge：
 
 ```bash
-git clone https://github.com/ayagmar/pi-mobile.git
-cd pi-mobile/bridge
+git clone https://github.com/GuoZhenKuang/pipilot.git
+cd pipilot/bridge
 pnpm install
 # 创建 .env 并设置 BRIDGE_AUTH_TOKEN（见下方「配置」一节）
 pnpm start
@@ -94,6 +94,10 @@ Bridge 默认绑定 `127.0.0.1:8787`。将 `BRIDGE_HOST` 设为笔记本的 Tail
 ### 2. 手机端
 
 安装 APK 或从源码构建：
+
+> 本项目基于 [ayagmar/pi-mobile](https://github.com/ayagmar/pi-mobile) 早期版本发展而来，现由 GuoZhenKuang 独立维护与发布。
+
+> 本项目基于 [ayagmar/pi-mobile](https://github.com/ayagmar/pi-mobile) 早期版本发展而来，现由 GuoZhenKuang 独立维护与发布。
 
 ```bash
 ./gradlew :app:assembleDebug

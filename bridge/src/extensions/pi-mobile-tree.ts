@@ -49,7 +49,7 @@ export default function registerPiMobileTreeExtension(pi: {
     }) => void;
 }): void {
     pi.registerCommand(TREE_COMMAND_NAME, {
-        description: "Internal Pi Mobile tree navigation command",
+        description: "Internal PiPilot tree navigation command",
         handler: async (args, ctx) => {
             const { entryId, statusKey } = parseArguments(args);
             if (!entryId || !isInternalStatusKey(statusKey)) {

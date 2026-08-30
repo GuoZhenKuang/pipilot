@@ -9,12 +9,12 @@ import androidx.lifecycle.lifecycleScope
 import com.ayagmar.pimobile.di.AppGraph
 import com.ayagmar.pimobile.perf.PerformanceMetrics
 import com.ayagmar.pimobile.perf.PerformanceMetrics.recordAppStart
-import com.ayagmar.pimobile.ui.PiMobileApp
+import com.ayagmar.pimobile.ui.PipilotApp
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val appGraph: AppGraph
-        get() = (application as PiMobileApplication).appGraph
+        get() = (application as PipilotApplication).appGraph
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Record app start as early as possible
@@ -24,7 +24,7 @@ class MainActivity : ComponentActivity() {
         appGraph.shareNavigationCoordinator.submitExternalIntent(intent.action, intent.dataString)
         enableEdgeToEdge()
         setContent {
-            PiMobileApp(appGraph = appGraph)
+            PipilotApp(appGraph = appGraph)
         }
     }
 

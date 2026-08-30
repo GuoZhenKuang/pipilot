@@ -1,11 +1,11 @@
-# Pi Mobile
+# PiPilot
 
 > **Your Pi coding agent, in your pocket.**
 > Run and steer coding sessions from Android anywhere over Tailscale.
 
 English | [简体中文](./README.md)
 
-Pi Mobile is an Android client for the [Pi coding agent](https://github.com/badlogic/pi-mono). It gives you live session control when you’re away from your laptop.
+PiPilot is an Android client for the [Pi coding agent](https://github.com/badlogic/pi-mono). It gives you live session control when you’re away from your laptop.
 
 ## Demo (WIP)
 
@@ -15,7 +15,7 @@ Pi Mobile is an Android client for the [Pi coding agent](https://github.com/badl
 
 | Chat + tools | Sessions + controls |
 |---|---|
-| ![Pi Mobile chat and tool streaming screenshot](https://i.imgur.com/sKXfkOe.png) | ![Pi Mobile session browsing screenshot](https://i.imgur.com/JBFchOQ.png) |
+| ![PiPilot chat and tool streaming screenshot](https://i.imgur.com/sKXfkOe.png) | ![PiPilot session browsing screenshot](https://i.imgur.com/JBFchOQ.png) |
 
 ## What This Does
 
@@ -77,8 +77,8 @@ pi --version # minimum and tested version: 0.80.6
 
 Clone and start the bridge:
 ```bash
-git clone https://github.com/ayagmar/pi-mobile.git
-cd pi-mobile/bridge
+git clone https://github.com/GuoZhenKuang/pipilot.git
+cd pipilot/bridge
 pnpm install
 # create .env and set BRIDGE_AUTH_TOKEN (see Configuration section below)
 pnpm start
@@ -91,6 +91,10 @@ The bridge binds to `127.0.0.1:8787` by default. Set `BRIDGE_HOST` to your lapto
 ### 2. Phone Setup
 
 Install the APK or build from source:
+
+> This project started from an early version of [ayagmar/pi-mobile](https://github.com/ayagmar/pi-mobile) and is now independently maintained and released by GuoZhenKuang.
+
+> This project started from an early version of [ayagmar/pi-mobile](https://github.com/ayagmar/pi-mobile) and is now independently maintained and released by GuoZhenKuang.
 ```bash
 ./gradlew :app:assembleDebug
 adb install app/build/outputs/apk/debug/app-debug.apk

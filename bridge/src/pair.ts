@@ -23,7 +23,7 @@ async function main(): Promise<void> {
         errorCorrectionLevel: "M",
     });
 
-    process.stdout.write("\nScan this code in Pi Mobile: Hosts → Scan QR\n\n");
+    process.stdout.write("\nScan this code in PiPilot: Hosts → Scan QR\n\n");
     process.stdout.write(qrCode);
     process.stdout.write(`\nHost: ${payload.host}:${payload.port}\n`);
     process.stdout.write("Keep this terminal QR private because it contains the bridge token.\n\n");

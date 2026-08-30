@@ -13,7 +13,7 @@ private const val PAIRING_PAYLOAD_VERSION_2 = 2
 fun parseHostPairingPayload(rawValue: String): Result<HostDraft> =
     runCatching {
         val payload = Json.parseToJsonElement(rawValue).jsonObject
-        require(payload.string("type") == PAIRING_PAYLOAD_TYPE) { "这不是 Pi Mobile 配对二维码" }
+        require(payload.string("type") == PAIRING_PAYLOAD_TYPE) { "这不是 PiPilot 配对二维码" }
         val version = payload.int("version")
         require(version == PAIRING_PAYLOAD_VERSION_1 || version == PAIRING_PAYLOAD_VERSION_2) {
             "配对二维码版本不受支持"

@@ -16,7 +16,7 @@ enum class HandoffRunStatus(val label: String) {
 
 fun formatHandoffSummary(data: HandoffSummaryData): String =
     buildList {
-        add("Pi Mobile 交接摘要")
+        add("PiPilot 交接摘要")
         data.sessionName?.takeIf { it.isNotBlank() }?.let { add("会话：$it") }
         data.cwd?.takeIf { it.isNotBlank() }?.let { add("工作目录：$it") }
         data.sessionPath?.takeIf { it.isNotBlank() }?.let { add("会话文件：$it") }

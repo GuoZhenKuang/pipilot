@@ -250,7 +250,7 @@ fun ChatRoute(
         val copied =
             runCatching {
                 clipboard.setClipEntry(
-                    ClipEntry(ClipData.newPlainText("Pi Mobile", pendingText)),
+                    ClipEntry(ClipData.newPlainText("PiPilot", pendingText)),
                 )
             }.isSuccess
         chatViewModel.consumePendingClipboardText(copySucceeded = copied)
