@@ -55,6 +55,7 @@ Bridge 是一个小型 Node.js 服务，负责在 WebSocket 与 pi 的 stdin/std
 
 ## 文档
 
+- [产品路线图](docs/roadmap.md)
 - [文档索引](docs/README.md)
 - [架构图（Mermaid）](docs/architecture.md)
 - [架构决策记录（ADR）](docs/adr/README.md)

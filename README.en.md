@@ -54,6 +54,7 @@ The bridge is a small Node.js service that translates WebSocket to pi's stdin/st
 
 ## Documentation
 
+- [Product roadmap (Chinese)](docs/roadmap.md)
 - [Documentation index](docs/README.md)
 - [Architecture diagrams (Mermaid)](docs/architecture.md)
 - [Architecture Decision Records (ADRs)](docs/adr/README.md)

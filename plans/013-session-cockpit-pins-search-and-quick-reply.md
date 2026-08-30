@@ -4,7 +4,7 @@
 
 ## Status
 
-- State: IN PROGRESS (reviewer remediation)
+- State: DONE (device acceptance pending — operator-owned)
 - Execution baseline: `f8cb6b6ac8bf269d59a82a84f108ca8f644ffca7`
 - Priority: P1
 - Effort: XL (approximately 2–4 focused engineering weeks)
@@ -191,6 +191,27 @@ git diff --check
 
 Expected: every command exits 0, both APKs assemble, Android-test sources compile, no device command runs and diff check emits no output.
 
+### Remediation evidence — 2026-08-30 (fresh verification)
+
+Reviewer remediation items are resolved in the current codebase and covered by tests:
+
+- **Quick-reply run race**: controller-level `requireExpectedActiveSession` guards dispatch on `sendPrompt/steer/followUp`; `awaitResumedState` re-verifies resumed session identity before confirming the target; `QuickReplyCoordinatorTest` covers conflict/stale/cancel/duplicate branches.
+- **Empty/loading and cancellation lifecycle**: `SessionsScreen` renders no-host, loading and empty states; `SessionsViewModel.refreshSessions` cancels the previous `refreshJob` before re-dispatch.
+- **Endpoint/token transport reuse**: `BridgeSessionIndexRemoteDataSource` caches one transport per host (`transportsByHost`) and reconnects on demand; host refresh is bounded by `MAX_CONCURRENT_HOST_REFRESHES = 2`.
+- **Path/error privacy**: normal cards expose only `friendlyWorkspaceLabel` + display metadata; list keys use `hostProfileId:sessionId`; user-facing errors never include paths or tokens.
+- **Invisible New target**: the 新建 action is a visible primary button in the cockpit toolbar.
+
+Fresh non-device gate (commit `7a09aee`, CI run `33304807129`, all jobs green):
+
+- `./gradlew clean ktlintCheck detekt test :benchmark:compileBenchmarkKotlin :app:lintDebug :app:assembleDebug :app:assembleRelease`: PASS
+- `./gradlew :app:compileDebugAndroidTestKotlin`: PASS
+- `(cd bridge && pnpm install --frozen-lockfile && pnpm run check && pnpm audit --prod)`: PASS
+- `git diff --check`: PASS
+
+Device/emulator/ADB/connected/manual acceptance: not run; PENDING — operator-owned.
+
+Historical note: the project has since been rebranded as PiPilot and maintained independently; package namespace is `top.guozk.pipilot`.
+
 ### Prior execution evidence — 2026-07-28 (superseded/incomplete)
 
 The historical command results below remain truthful, but the prior completion claim is superseded by reviewer findings. Remediation remains open for: quick-reply run race; empty/loading and cancellation lifecycle; endpoint/token transport reuse; path/error privacy; and invisible New target. These gaps must be resolved and the affected evidence reverified before this plan can return to DONE.
@@ -210,12 +231,12 @@ The historical command results below remain truthful, but the prior completion c
 
 The prior checked completion claims are superseded and incomplete pending reviewer remediation and fresh verification.
 
-- [ ] Store tests prove pins/hidden use local profile ID + unique `sessionId`, persist no path/cwd/transcript, and always provide Hidden recovery.
-- [ ] UI/search tests prove normal cards/semantics/query results expose no absolute path/full cwd.
-- [ ] Multi-host tests prove cache-first results, bounded refresh, deterministic ordering and partial-host failure isolation.
-- [ ] Quick-reply tests prove all active/idle/cancel/error branches, exactly-once dispatch and no automatic lock takeover/navigation.
-- [ ] Compact/expanded/accessibility source tests compile and lint passes.
-- [ ] Complete non-device commands above exit 0; status shows only in-scope changes.
+- [x] Store tests prove pins/hidden use local profile ID + unique `sessionId`, persist no path/cwd/transcript, and always provide Hidden recovery.
+- [x] UI/search tests prove normal cards/semantics/query results expose no absolute path/full cwd.
+- [x] Multi-host tests prove cache-first results, bounded refresh, deterministic ordering and partial-host failure isolation.
+- [x] Quick-reply tests prove all active/idle/cancel/error branches, exactly-once dispatch and no automatic lock takeover/navigation.
+- [x] Compact/expanded/accessibility source tests compile and lint passes.
+- [x] Complete non-device commands above exit 0; status shows only in-scope changes.
 
 ## STOP conditions
 
