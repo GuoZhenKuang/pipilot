@@ -41,3 +41,7 @@ local.properties
 
 #env files
 .env
+# 签名凭据（只存放在仓库之外或 GitHub Secrets）
+keystore.properties
+*.jks
+*.keystore

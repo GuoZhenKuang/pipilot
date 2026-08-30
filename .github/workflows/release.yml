@@ -1,0 +1,69 @@
+name: release
+
+on:
+    push:
+        tags: ['v*']
+
+permissions:
+    contents: write
+
+jobs:
+    release:
+        name: Build and publish signed release
+        runs-on: ubuntu-latest
+        timeout-minutes: 40
+        steps:
+            - uses: actions/checkout@v7
+
+            - name: Set up JDK 21 for stable detekt
+              uses: actions/setup-java@v5
+              with:
+                  distribution: temurin
+                  java-version: 21
+
+            - name: Set up JDK 25 build runtime
+              uses: actions/setup-java@v5
+              with:
+                  distribution: temurin
+                  java-version: 25
+                  cache: gradle
+
+            - uses: android-actions/setup-android@v4
+
+            - name: Install Android SDK 37
+              run: sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
+
+            - name: Restore signing key from secrets
+              env:
+                  KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+                  KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+                  KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+                  KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+              run: |
+                  echo "$KEYSTORE_B64" | base64 -d > "$HOME/pipilot-release.jks"
+                  {
+                    echo "KEYSTORE_FILE=$HOME/pipilot-release.jks"
+                    echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+                    echo "KEY_ALIAS=$KEY_ALIAS"
+                    echo "KEY_PASSWORD=$KEY_PASSWORD"
+                  } > keystore.properties
+
+            - name: Run verification gate
+              run: ./gradlew test :app:ktlintCheck detekt :app:lintDebug :app:assembleRelease
+
+            - name: Extract release notes from changelog
+              run: |
+                  awk -v tag="${GITHUB_REF_NAME}" 'index($0, "## " tag) == 1 {flag = 1; next} /^## / {if (flag) exit} flag' \
+                      CHANGELOG.md > release-notes.md
+                  head -1 release-notes.md
+
+            - name: Rename APK with version
+              run: |
+                  cp app/build/outputs/apk/release/app-release.apk "pipilot-${GITHUB_REF_NAME}.apk"
+
+            - name: Create GitHub Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  body_path: release-notes.md
+                  files: pipilot-*.apk
+                  make_latest: true

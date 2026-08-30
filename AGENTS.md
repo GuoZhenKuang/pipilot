@@ -40,7 +40,7 @@ Gradle 与编译使用 JDK 25；detekt 稳定 CLI 保留 JDK 21 工具链；安�
 
 - 绝不打印、展示、记录、提交或复制令牌、认证头、`.env` 内容、凭据或私有会话。
 - 令牌使用 Android Keystore AES-GCM 加密，不得进入普通偏好存储或系统备份。
-- 不要添加签名凭据。release 构建使用仓库安全的未签名/默认配置。
+- 签名凭据只存放在仓库之外（本地签名目录或 GitHub Secrets）。release 构建在缺少凭据时保持未签名配置；`keystore.properties` 与密钥文件绝不能入库。
 
 ## 计划协议
 

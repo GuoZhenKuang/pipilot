@@ -1,5 +1,6 @@
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -18,14 +19,37 @@ android {
         minSdk = 26
         targetSdk = 37
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // 签名凭据只来自仓库外的 keystore.properties 或 CI 环境变量，绝不入库
+    val keystoreProperties =
+        Properties().apply {
+            val file = rootProject.file("keystore.properties")
+            if (file.exists()) file.inputStream().use { load(it) }
+        }
+    val keystoreFile = keystoreProperties.getProperty("KEYSTORE_FILE") ?: System.getenv("KEYSTORE_FILE")
+    val keystorePassword = keystoreProperties.getProperty("KEYSTORE_PASSWORD") ?: System.getenv("KEYSTORE_PASSWORD")
+    val keystoreAlias = keystoreProperties.getProperty("KEY_ALIAS") ?: System.getenv("KEY_ALIAS")
+    val keystoreKeyPassword = keystoreProperties.getProperty("KEY_PASSWORD") ?: System.getenv("KEY_PASSWORD")
+
+    signingConfigs {
+        if (keystoreFile != null && keystorePassword != null && keystoreAlias != null && keystoreKeyPassword != null) {
+            create("release") {
+                storeFile = file(keystoreFile)
+                storePassword = keystorePassword
+                keyAlias = keystoreAlias
+                keyPassword = keystoreKeyPassword
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfigs.findByName("release")?.let { signingConfig = it }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

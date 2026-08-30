@@ -1,0 +1,1333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pi Mobile UI 重设计 · 方向一 · 包豪斯几何 Bauhaus Geometric</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ============ 基础 ============ */
+:root{
+  --paper:#F7F5F0;        /* 暖纸白底 */
+  --paper2:#EFECE2;       /* 次级纸面 */
+  --paper3:#E7E3D6;       /* 凹陷纸面 */
+  --ink:#141414;          /* 黑（规则线/文字） */
+  --ink2:#44443E;         /* 次级文字 */
+  --ink3:#6B685C;         /* 最轻注释 */
+  --red:#E63946;          /* 包豪斯红 */
+  --red-ink:#C42D39;      /* 红·可读文字变体 */
+  --yellow:#FFB703;       /* 包豪斯黄 */
+  --blue:#0077B6;         /* 包豪斯蓝 */
+  --blue-ink:#00648F;     /* 蓝·可读文字变体 */
+  --canvas:#101014;       /* 展示画布 */
+  --disp:'Poppins','PingFang SC','HarmonyOS Sans SC','Microsoft YaHei',sans-serif;
+  --body:'Manrope','PingFang SC','HarmonyOS Sans SC','Microsoft YaHei',sans-serif;
+  --mono:'Space Mono','SFMono-Regular',Consolas,'Courier New',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+button{font-family:inherit;border:0;background:none;color:inherit;cursor:pointer;padding:0}
+input{font-family:inherit;color:var(--ink)}
+h1,h2,h3{font-family:var(--disp)}
+.mono{font-family:var(--mono)}
+body{
+  background:var(--canvas);
+  background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
+  background-size:64px 64px;
+  color:#F2F0E9;font-family:var(--body);
+  -webkit-font-smoothing:antialiased;
+  padding:0 48px 72px;
+}
+
+/* ============ 画布标注条 ============ */
+.canvas-head{
+  display:flex;align-items:center;gap:22px;flex-wrap:wrap;
+  background:var(--paper);color:var(--ink);
+  padding:20px 26px;margin:0 -48px 0;
+  border-bottom:4px solid var(--red);
+}
+.trio{display:flex;gap:10px;align-items:center;flex:none}
+.trio i{display:block;width:26px;height:26px}
+.trio .t-sq{background:var(--red)}
+.trio .t-ci{background:var(--blue);border-radius:50%}
+.trio .t-tr{background:var(--yellow);clip-path:polygon(50% 0,100% 100%,0 100%)}
+.canvas-head h1{font-size:24px;font-weight:800;letter-spacing:-.01em;line-height:1.15}
+.canvas-head h1 small{font-weight:600;font-size:15px;color:var(--ink2)}
+.canvas-head .dir{font:700 13px var(--disp);letter-spacing:.14em;text-transform:uppercase;color:var(--blue-ink);margin-top:3px}
+.canvas-head .motto{
+  margin-left:auto;max-width:430px;
+  font:500 13px/1.65 var(--body);color:var(--ink2);
+  border-left:3px solid var(--ink);padding-left:14px;
+}
+.canvas-head .motto b{color:var(--ink)}
+
+/* ============ 图例条 ============ */
+.legend{
+  display:flex;flex-wrap:wrap;gap:0 34px;align-items:center;
+  padding:14px 4px 18px;
+}
+.legend .lg{display:flex;align-items:center;gap:12px;padding-right:34px;border-right:1px solid rgba(255,255,255,.16)}
+.legend .lg:last-child{border-right:0}
+.legend .lg-t{font:700 12px var(--body);letter-spacing:.16em;color:#8F8D84;text-transform:uppercase;flex:none}
+.sw-row{display:flex;gap:8px}
+.sw-row .swp{width:22px;height:22px;border:1px solid rgba(255,255,255,.25)}
+.sw-row .swp span{display:block;font:700 12px/1 var(--mono);color:#B9B6AC;margin-top:26px;white-space:nowrap}
+.geo-row{display:flex;gap:16px}
+.geo-row .gi{display:flex;align-items:center;gap:7px;font:500 12px var(--body);color:#C9C6BC}
+.geo-row .gi i{display:block;width:12px;height:12px}
+.type-row{display:flex;flex-direction:column;gap:3px}
+.type-row span{font-size:13px;color:#C9C6BC}
+
+/* ============ 展示板与手机 ============ */
+.board{display:flex;flex-wrap:wrap;gap:44px 40px;justify-content:center;padding-top:26px}
+.slot{display:flex;flex-direction:column;align-items:center;gap:14px}
+.slot-label{display:flex;align-items:center;gap:10px}
+.slot-label b{font:700 12px var(--mono);background:var(--red);color:#fff;padding:4px 8px}
+.slot-label span{font:700 14px var(--disp);letter-spacing:.04em;color:#F2F0E9}
+.slot-label em{font:400 12px var(--mono);font-style:normal;color:#8F8D84;letter-spacing:.12em}
+
+.phone{
+  width:432px;height:912px;padding:10px;flex:none;
+  background:#1a1a1a;border-radius:44px;position:relative;
+  box-shadow:0 0 0 2px #2a2a2a,0 34px 70px rgba(0,0,0,.55);
+}
+.screen{
+  width:412px;height:892px;border-radius:36px;overflow:hidden;
+  position:relative;background:var(--paper);
+}
+.punch{
+  position:absolute;top:10px;left:50%;transform:translateX(-50%);
+  width:14px;height:14px;border-radius:50%;background:#0B0B0E;z-index:7;
+  box-shadow:0 0 0 2px rgba(0,0,0,.35);
+}
+.statusbar{
+  position:absolute;top:0;left:0;right:0;height:32px;z-index:6;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px;
+}
+.statusbar .time{font:700 12.5px var(--mono);color:var(--ink)}
+.statusbar .sicons{display:flex;align-items:center;gap:6px}
+.gesturebar{
+  position:absolute;bottom:9px;left:50%;transform:translateX(-50%);
+  width:100px;height:4px;border-radius:2px;background:var(--ink);z-index:6;
+}
+.app{position:absolute;top:32px;bottom:24px;left:0;right:0;display:flex;flex-direction:column;background:var(--paper)}
+.scrollarea{flex:1;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none}
+.scrollarea::-webkit-scrollbar{display:none}
+
+/* ============ 几何 / 状态语义 ============ */
+.dot{display:inline-block;width:14px;height:14px;flex:none}
+.dot.round{border-radius:50%}
+.dot.b-blue{background:var(--blue)}
+.dot.b-ink{background:var(--ink)}
+.dot.b-red{background:var(--red)}
+.dot.tri-y{background:var(--yellow);clip-path:polygon(50% 0,100% 100%,0 100%)}
+.dot.tri-r{background:var(--red);clip-path:polygon(50% 0,100% 100%,0 100%)}
+.dot.ring{border:2.5px solid var(--ink3);border-radius:50%}
+.dot.sq-hollow{border:2.5px solid #A29E90}
+@keyframes breathe{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.76);opacity:.72}}
+.breathe{animation:breathe 1.6s ease-in-out infinite}
+.geo{display:inline-block;flex:none}
+.geo.c{border-radius:50%}
+.geo.tri{clip-path:polygon(50% 0,100% 100%,0 100%)}
+
+/* ============ 通用组件 ============ */
+.bar{
+  display:flex;align-items:center;gap:10px;min-height:52px;
+  padding:8px 14px;border-bottom:2px solid var(--ink);flex:none;background:var(--paper);
+}
+.bar .bar-geo{width:16px;height:16px;flex:none}
+.bar h2{font-size:16px;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar .bar-tag{margin-left:auto;font:400 12px var(--mono);color:var(--ink3);letter-spacing:.1em;flex:none}
+.icobtn{
+  width:28px;height:28px;flex:none;border:2px solid var(--ink);background:var(--paper);
+  display:flex;align-items:center;justify-content:center;
+  font:700 14px/1 var(--mono);transition:background .12s,color .12s;
+}
+.icobtn:hover{background:var(--ink);color:#fff}
+.icobtn.blue{background:var(--blue);color:#fff;border-color:var(--ink)}
+.icobtn.blue:hover{background:var(--blue-ink)}
+.chip{
+  font:700 12px var(--body);letter-spacing:.02em;padding:7px 12px;
+  border:2px solid var(--ink);background:var(--paper);color:var(--ink);
+  transition:background .12s,color .12s;white-space:nowrap;
+}
+.chip.on{background:var(--ink);color:#fff}
+.chip .n{font-family:var(--mono);margin-left:5px;opacity:.75}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  font:700 13px var(--body);padding:10px 14px;border:2px solid var(--ink);
+  background:var(--paper);color:var(--ink);box-shadow:2px 2px 0 var(--ink);
+  transition:transform .07s,box-shadow .07s;
+}
+.btn:active{transform:translate(2px,2px);box-shadow:none}
+.btn.blue{background:var(--blue);color:#fff}
+.btn.blue:disabled{opacity:.65;box-shadow:2px 2px 0 var(--ink)}
+.sqbtn{
+  width:36px;height:36px;flex:none;border:2px solid var(--ink);background:var(--paper);
+  display:flex;align-items:center;justify-content:center;font:700 15px var(--mono);
+}
+.sqbtn:hover{background:var(--yellow)}
+.fold{border:2px solid var(--ink);background:#FBF9F3}
+.fold-head{display:flex;align-items:center;gap:9px;padding:9px 11px;width:100%;text-align:left}
+.fold-head .ft{font:700 13px var(--body);color:var(--ink)}
+.fb{
+  width:24px;height:24px;flex:none;margin-left:auto;border:2px solid var(--ink);background:#fff;
+  font:700 15px/1 var(--mono);display:flex;align-items:center;justify-content:center;
+}
+.fb:hover{background:var(--yellow)}
+.fold-body{display:none;border-top:2px solid var(--ink);padding:10px 12px}
+.fold.open .fold-body{display:block}
+
+/* 顶栏内小状态（聊天头部连接行） */
+.conn-line{display:flex;align-items:center;gap:6px;font:500 12px var(--body);color:var(--ink2);margin-top:2px}
+.conn-line .dot{width:9px;height:9px}
+
+/* ============ ① 主机 ============ */
+.pair-card{margin:12px 14px 0;border:2px solid var(--ink);background:var(--paper2);box-shadow:4px 4px 0 rgba(20,20,20,.85)}
+.pair-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:2px solid var(--ink)}
+.pair-head h3{font-size:15px;font-weight:700}
+.pair-head .mono{margin-left:auto;font-size:12px;color:var(--ink2)}
+.pair-illus{display:flex;align-items:center;justify-content:center;gap:14px;padding:16px 12px 10px}
+.pair-illus .node{display:flex;flex-direction:column;align-items:center;gap:7px}
+.pair-illus .node i{width:34px;height:34px}
+.pair-illus .node span{font:700 12px var(--body);letter-spacing:.1em}
+.pair-illus .link{display:flex;align-items:center;gap:6px;padding-bottom:20px}
+.pair-illus .link i.dash{width:26px;border-top:2px dashed var(--ink)}
+.pair-illus .link i.geo{width:16px;height:16px}
+@keyframes scan{0%,100%{top:6px}50%{top:84px}}
+.pair-grid{display:flex;gap:12px;padding:6px 12px 14px}
+.pair-steps{flex:1;display:flex;flex-direction:column;gap:8px}
+.step{border:2px solid var(--ink);background:var(--paper)}
+.step-head{display:flex;align-items:center;gap:9px;padding:8px 9px;width:100%;text-align:left}
+.step-head b{font:700 12px var(--mono);background:var(--ink);color:#fff;padding:3px 6px;flex:none}
+.step-head .st{font:700 13px var(--body)}
+.step-head .fb{width:22px;height:22px}
+.step-body{display:none;border-top:2px solid var(--ink);padding:8px 10px;font:500 12px/1.7 var(--body);color:var(--ink2)}
+.step.open .step-body{display:block}
+.cmd{display:block;font:700 12px/1.5 var(--mono);background:var(--ink);color:var(--yellow);padding:6px 9px;margin-top:6px;white-space:pre-wrap}
+.qr-wrap{flex:none;display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:2px}
+.qr-box{position:relative;width:98px;height:98px;border:2px solid var(--ink);background:#fff;padding:7px}
+.qr-box svg{width:100%;height:100%;display:block}
+.qr-box::after{
+  content:"";position:absolute;left:4px;right:4px;height:2px;background:var(--red);
+  animation:scan 2.6s ease-in-out infinite;
+}
+.qr-wrap .mono{font-size:12px;font-weight:700}
+.qr-wrap .qr-note{font:500 11px var(--body);color:var(--ink3)}
+.host-card{margin:14px 14px 0;border:2px solid var(--ink);background:var(--paper);box-shadow:4px 4px 0 rgba(20,20,20,.85)}
+.host-state{display:flex;align-items:center;gap:9px;padding:10px 14px;border-bottom:2px solid var(--ink);background:var(--yellow)}
+.host-state .dot{width:13px;height:13px}
+.host-state b{font:700 13px var(--body);color:var(--ink)}
+.host-state .mono{margin-left:auto;font-size:12px;font-weight:700;color:var(--ink)}
+.host-main{padding:12px 14px 14px}
+.host-main h3{font-size:21px;font-weight:800;letter-spacing:-.01em}
+.host-ep{font:700 13px var(--mono);color:var(--ink2);margin-top:4px;word-break:break-all}
+.host-chips{display:flex;gap:8px;margin-top:10px}
+.hchip{font:700 12px var(--body);padding:4px 9px}
+.hchip.tls{background:var(--blue);color:#fff}
+.hchip.tok{background:var(--yellow);color:var(--ink)}
+.host-diag{
+  display:flex;margin-top:12px;border-top:2px solid var(--ink);border-bottom:2px solid var(--ink);
+}
+.host-diag div{flex:1;padding:8px 2px}
+.host-diag div + div{border-left:2px solid var(--ink);padding-left:12px}
+.host-diag .dl{display:block;font:700 12px var(--body);letter-spacing:.12em;color:var(--ink3);text-transform:uppercase}
+.host-diag .dv{display:block;font:700 13px var(--mono);color:var(--ink);margin-top:2px}
+.host-acts{display:flex;gap:10px;margin-top:14px}
+.host-acts .btn{flex:1;padding:10px 6px}
+.host-acts .btn.ghost{box-shadow:none}
+.host-acts .btn.danger{box-shadow:none}
+.host-acts .btn.danger i{width:9px;height:9px;background:var(--red);display:inline-block}
+
+/* ============ ② 会话驾驶舱 ============ */
+.health{
+  display:flex;align-items:center;gap:9px;padding:9px 14px;
+  background:var(--yellow);border-bottom:2px solid var(--ink);flex:none;
+}
+.health b{font:700 13px var(--body);color:var(--ink)}
+.health .mono{margin-left:auto;font:700 12px var(--mono);color:var(--ink)}
+.filters{padding:10px 14px;border-bottom:2px solid var(--ink);flex:none}
+.filter-row{display:flex;gap:8px;align-items:center}
+.filter-row .count{margin-left:auto;font:700 12px var(--mono);color:var(--ink2);border:2px solid var(--ink);padding:5px 9px;background:var(--paper)}
+.searchbox{
+  display:flex;align-items:center;gap:8px;margin-top:9px;
+  border:2px solid var(--ink);background:#fff;padding:0 10px;height:38px;
+}
+.searchbox svg{flex:none}
+.searchbox input{flex:1;border:0;outline:0;font:500 13px var(--body);background:transparent;min-width:0}
+.searchbox input::placeholder{color:var(--ink3)}
+.glabel{
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--ink);color:#fff;padding:6px 14px;
+  font:700 12px var(--body);letter-spacing:.14em;
+}
+.glabel .mono{font-size:12px;color:#B9B6AC;letter-spacing:.06em}
+.srow{display:flex;gap:12px;padding:13px 14px;border-bottom:2px solid var(--ink)}
+.srow > .dot{margin-top:3px;width:15px;height:15px}
+.s-main{flex:1;min-width:0}
+.s-top{display:flex;align-items:center;gap:8px}
+.s-top h3{font-size:15px;font-weight:700;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.s-acts{display:flex;gap:6px;flex:none}
+.flag{font:700 12px var(--body);padding:2px 7px;flex:none}
+.flag.run{background:var(--blue);color:#fff}
+.flag.pause{background:var(--yellow);color:var(--ink)}
+.flag.idle{border:1.5px solid var(--ink3);color:var(--ink2)}
+.flag.hide{background:var(--paper3);color:var(--ink2)}
+.s-meta{font:400 12px var(--mono);color:var(--ink3);margin-top:4px}
+.s-prev{font:500 13px/1.55 var(--body);color:var(--ink2);margin-top:6px}
+.qbar{display:none;margin-top:10px;gap:8px}
+.qbar.open{display:flex}
+.qbar input{flex:1;min-width:0;border:2px solid var(--ink);background:#fff;padding:7px 10px;font:500 13px var(--body);outline:0}
+.qbar input:focus{border-color:var(--blue)}
+.qbar .send{font:700 12px var(--body);background:var(--blue);color:#fff;border:2px solid var(--ink);padding:0 12px}
+.sent-note{display:none;font:700 12px var(--mono);color:var(--blue-ink);margin-top:8px}
+
+/* ============ ③ 聊天 ============ */
+.chat-bar{padding:8px 14px;min-height:58px}
+.chat-bar h2{font-size:15.5px}
+.gauges{display:flex;border-bottom:2px solid var(--ink);flex:none;background:var(--paper)}
+.gcell{flex:1;min-width:0;padding:9px 10px 10px;display:flex;flex-direction:column;justify-content:center;gap:3px}
+.gcell + .gcell{border-left:2px solid var(--ink)}
+.glabel2{font:700 12px var(--body);letter-spacing:.12em;color:var(--ink3);text-transform:uppercase}
+.gv{font:700 14px var(--mono);color:var(--ink);white-space:nowrap}
+.gv.big{font-size:19px;letter-spacing:-.02em}
+.gv.big i{font-style:normal;font-size:13px}
+.gv.cn{font-family:var(--body);font-size:15px}
+.gsub{font:400 12px var(--mono);color:var(--ink3);white-space:nowrap}
+.lvl{display:inline-flex;gap:3px;margin-left:6px;vertical-align:1px}
+.lvl s{width:8px;height:8px;text-decoration:none;border:1.5px solid var(--ink);display:block}
+.lvl s.f{background:var(--yellow)}
+.ctxbar{height:5px;background:var(--paper3);margin-top:2px}
+.ctxbar i{display:block;height:100%;width:42%;background:var(--blue)}
+.timeline{padding:14px 14px 6px;display:flex;flex-direction:column;gap:14px}
+.who{font:700 12px var(--mono);color:var(--ink3);letter-spacing:.06em;margin-bottom:5px}
+.msg{display:flex;flex-direction:column;max-width:94%}
+.msg.user{align-self:flex-end;align-items:flex-end;max-width:82%}
+.msg.user .who{text-align:right}
+.bubble{background:var(--ink);color:#fff;padding:11px 13px;font:500 14px/1.65 var(--body)}
+.attach{
+  display:flex;align-items:center;gap:10px;border:2px solid var(--ink);background:#fff;
+  padding:8px;margin-top:8px;
+}
+.attach .thumb{position:relative;width:52px;height:52px;flex:none;background:var(--paper2);overflow:hidden}
+.attach .thumb i{position:absolute;display:block}
+.attach .th-c{width:30px;height:30px;border-radius:50%;background:var(--blue);top:6px;left:8px}
+.attach .th-s{width:20px;height:20px;background:var(--red);bottom:5px;right:6px}
+.attach .th-t{width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-bottom:15px solid var(--yellow);top:7px;right:7px}
+.attach .af{font:700 12px var(--mono);color:var(--ink)}
+.attach .am{font:400 12px var(--mono);color:var(--ink3);margin-top:2px}
+.think{border:2px solid var(--ink);background:#FBF7EA}
+.think .fold-body{border-top:1.5px solid #D9D2B8;font:500 13px/1.7 var(--body);color:var(--ink2)}
+.prose{font:500 14px/1.7 var(--body);color:var(--ink)}
+.prose p + p{margin-top:8px}
+.prose code{
+  font:700 12.5px var(--mono);background:var(--paper2);border:1px solid #D8D2C0;
+  padding:1px 5px;white-space:nowrap;
+}
+.diff{border:2px solid var(--ink);margin-top:10px}
+.diff-head{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  background:var(--ink);color:#fff;padding:6px 10px;
+  font:700 12px var(--mono);
+}
+.diff-head .dm{color:var(--yellow)}
+.diff-body{overflow-x:auto;scrollbar-width:none}
+.diff-body::-webkit-scrollbar{display:none}
+.dl-row{
+  display:flex;font:400 13px/1.6 var(--mono);color:var(--ink);
+  white-space:pre;border-bottom:1px solid rgba(20,20,20,.07);
+}
+.dl-row:last-child{border-bottom:0}
+.dl-row .sign{width:18px;flex:none;text-align:center;font-weight:700}
+.dl-row.add{background:rgba(0,119,182,.10)}
+.dl-row.add .sign{color:var(--blue-ink)}
+.dl-row.del{background:rgba(230,57,70,.10)}
+.dl-row.del .sign{color:var(--red-ink)}
+.dl-row.ctx{background:#FBF9F3}
+.tools{border:2px solid var(--ink);background:#FBF9F3}
+.tool-row{display:flex;align-items:center;gap:9px;padding:8px 11px;border-top:1.5px solid rgba(20,20,20,.14)}
+.tool-row:first-child{border-top:0}
+.tool-row svg{flex:none}
+.tool-row .tn{font:500 13px var(--body);color:var(--ink);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tool-row .tn code{font:700 12px var(--mono);background:var(--paper2);padding:0 4px;border:1px solid #D8D2C0}
+.tool-row .ts{margin-left:auto;display:flex;align-items:center;gap:6px;font:400 12px var(--mono);color:var(--ink3);flex:none}
+.tool-row .ts .dot{width:10px;height:10px}
+.runbar{border-top:2px solid var(--ink);flex:none;background:var(--paper)}
+.runbar .run-top{display:flex;align-items:center;gap:9px;padding:9px 14px 7px}
+.runbar .run-top b{font:700 13px var(--body)}
+.runbar .run-top .mono{margin-left:auto;font:700 12px var(--mono);color:var(--ink2)}
+.hazard{
+  height:8px;margin:0 14px 10px;
+  background:repeating-linear-gradient(-45deg,var(--yellow) 0 9px,var(--ink) 9px 18px);
+  animation:slide 1.1s linear infinite;
+}
+@keyframes slide{to{background-position:25.4px 0}}
+.runbar.paused .hazard{animation-play-state:paused}
+.composer{border-top:2px solid var(--ink);flex:none;background:var(--paper);padding:9px 12px 10px;display:flex;flex-direction:column;gap:9px}
+.comp-row{display:flex;align-items:center;gap:8px}
+.comp-row #modeChips{display:flex;gap:8px}
+.comp-row .sqbtn{margin-left:auto;width:32px;height:32px;font-size:14px}
+.comp-row2{display:flex;align-items:center;gap:8px}
+.comp-row2 .sqbtn{width:40px;height:42px}
+#chatInput{
+  flex:1;min-width:0;height:42px;border:2px solid var(--ink);background:#fff;
+  padding:0 12px;font:500 14px var(--body);outline:0;
+}
+#chatInput:focus{border-color:var(--blue)}
+#stopBtn{height:42px}
+#stopBtn .stopsq{width:11px;height:11px;background:var(--ink);display:block}
+#stopBtn:hover{background:var(--red)}
+#stopBtn:hover .stopsq{background:#fff}
+#sendBtn{
+  width:52px;height:42px;flex:none;border:2px solid var(--ink);background:var(--blue);
+  display:flex;align-items:center;justify-content:center;box-shadow:2px 2px 0 var(--ink);
+  transition:transform .07s,box-shadow .07s;
+}
+#sendBtn:active{transform:translate(2px,2px);box-shadow:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin .55s ease}
+
+/* ============ ④ 终端 ============ */
+.term{
+  flex:1;margin:12px 14px 0;background:#141414;border:2px solid var(--ink);
+  display:flex;flex-direction:column;min-height:0;box-shadow:4px 4px 0 rgba(20,20,20,.85);
+}
+.term-head{
+  display:flex;align-items:center;gap:8px;padding:7px 12px;flex:none;
+  border-bottom:2px solid rgba(255,255,255,.22);
+  font:700 12px var(--mono);color:#B9B6AC;letter-spacing:.1em;
+}
+.term-head .tl{margin-left:auto;display:flex;gap:5px}
+.term-head .tl i{width:9px;height:9px;display:block}
+.term-scroll{flex:1;overflow-y:auto;padding:12px 14px;scrollbar-width:none}
+.term-scroll::-webkit-scrollbar{display:none}
+.t-line{font:400 14px/1.75 var(--mono);color:#F7F5F0;white-space:pre-wrap;word-break:break-all}
+.t-line .t-p{color:var(--yellow);font-weight:700}
+.t-line.t-dim{color:#B9B6AC}
+.t-line.t-ok{font-weight:700}
+.t-exit{display:flex;align-items:center;gap:8px}
+.t-exit .excode{
+  width:11px;height:11px;background:var(--blue);display:inline-block;flex:none;
+}
+.term-input{display:flex;align-items:center;gap:8px;padding:10px 14px;border-top:2px solid rgba(255,255,255,.22);flex:none}
+.term-input .t-p{font:700 14px var(--mono);color:var(--yellow)}
+.term-input input{
+  flex:1;min-width:0;background:transparent;border:0;outline:0;
+  font:400 14px var(--mono);color:#F7F5F0;caret-color:var(--yellow);
+}
+.term-input input::placeholder{color:#6E6C64}
+.stats{margin:14px 14px 0;border:2px solid var(--ink);flex:none}
+.stats .gauges{border-bottom:0}
+.stat-label{
+  display:flex;align-items:center;gap:8px;padding:7px 12px;background:var(--ink);color:#fff;
+  font:700 12px var(--body);letter-spacing:.14em;
+}
+.stat-label .mono{margin-left:auto;font-size:12px;color:#B9B6AC}
+.handoff{padding:10px 12px 12px;background:var(--yellow);border-top:2px solid var(--ink)}
+.handoff .hl{font:800 12px var(--body);letter-spacing:.14em;color:var(--ink)}
+.handoff p{font:600 13px/1.65 var(--body);color:var(--ink);margin-top:4px}
+.tchips{display:flex;align-items:center;gap:8px;padding:11px 14px 12px;flex:none;flex-wrap:wrap}
+.tchips .tl2{font:700 12px var(--body);letter-spacing:.1em;color:var(--ink3);margin-right:2px}
+.tchip{font:700 12px var(--mono);border:2px solid var(--ink);background:var(--paper);padding:6px 10px}
+.tchip:hover{background:var(--ink);color:var(--yellow)}
+
+/* ============ ⑤ 设置 ============ */
+.set-mod{border-bottom:2px solid var(--ink);padding:12px 14px 14px}
+.set-mod .sm-t{
+  display:flex;align-items:center;gap:8px;
+  font:800 12px var(--body);letter-spacing:.16em;text-transform:uppercase;color:var(--ink3);
+  margin-bottom:10px;
+}
+.set-mod .sm-t i{width:8px;height:8px;display:block;flex:none}
+.conn-row{display:flex;align-items:center;gap:10px}
+.conn-row .dot{width:13px;height:13px}
+.conn-row b{font:700 14px var(--body)}
+.conn-row .mono{margin-left:auto;font:400 12px var(--mono);color:var(--ink3)}
+.set-row{display:flex;align-items:center;gap:12px;padding:9px 0}
+.set-row + .set-row{border-top:1.5px solid rgba(20,20,20,.14)}
+.set-row .sr-main{flex:1;min-width:0}
+.set-row .sr-main b{font:700 14px var(--body);display:block}
+.set-row .sr-main span{font:500 12px/1.5 var(--body);color:var(--ink2);display:block;margin-top:2px}
+.sw{
+  width:46px;height:26px;flex:none;border:2px solid var(--ink);background:var(--paper);
+  position:relative;transition:background .15s;
+}
+.sw i{
+  position:absolute;top:2px;left:2px;width:16px;height:16px;background:var(--ink);
+  transition:transform .16s steps(3,end);
+}
+.sw.on{background:var(--blue)}
+.sw.on i{transform:translateX(20px);background:#fff}
+.seg{display:flex;border:2px solid var(--ink);background:var(--paper)}
+.seg button{
+  flex:1;padding:9px 4px;font:700 13px var(--body);color:var(--ink);background:var(--paper);
+  border-right:2px solid var(--ink);display:flex;align-items:center;justify-content:center;gap:7px;
+  transition:background .12s,color .12s;white-space:nowrap;
+}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--ink);color:#fff}
+.tp{width:14px;height:14px;flex:none;border:1.5px solid currentColor}
+.tp-light{background:var(--paper)}
+.tp-dark{background:var(--ink)}
+.tp-auto{background:linear-gradient(90deg,var(--ink) 0 50%,var(--paper) 50% 100%)}
+.set-desc{font:500 12px/1.6 var(--body);color:var(--ink2);margin-top:8px}
+.ver{padding:14px;text-align:center;font:400 12px var(--mono);color:var(--ink3);letter-spacing:.04em}
+</style>
+</head>
+<body>
+
+<!-- ============ 画布标注条 ============ -->
+<header class="canvas-head">
+  <div class="trio"><i class="t-sq"></i><i class="t-ci"></i><i class="t-tr"></i></div>
+  <div>
+    <h1>Pi Mobile <small>UI 重设计</small></h1>
+    <p class="dir">方向一 · 包豪斯几何 Bauhaus Geometric · 中性 · 还原度 90%</p>
+  </div>
+  <p class="motto"><b>form 来自：几何模块 = 功能分区</b> —— 每个色块都是一块仪表，每条规则线都是一处结构；遥测读数以圆 / 方 / 三角发声。</p>
+</header>
+
+<!-- ============ 图例：色板 / 几何语义 / 字体 ============ -->
+<div class="legend">
+  <div class="lg">
+    <span class="lg-t">色板</span>
+    <div class="sw-row">
+      <div class="swp" style="background:#E63946"><span>#E63946</span></div>
+      <div class="swp" style="background:#FFB703"><span>#FFB703</span></div>
+      <div class="swp" style="background:#0077B6"><span>#0077B6</span></div>
+      <div class="swp" style="background:#141414"><span>#141414</span></div>
+      <div class="swp" style="background:#F7F5F0"><span>#F7F5F0</span></div>
+    </div>
+  </div>
+  <div class="lg">
+    <span class="lg-t">几何语义</span>
+    <div class="geo-row">
+      <span class="gi"><i class="dot round b-blue breathe"></i>运行中</span>
+      <span class="gi"><i class="dot b-ink"></i>已完成 · 稳定</span>
+      <span class="gi"><i class="dot tri-y"></i>暂停 · 警告</span>
+      <span class="gi"><i class="dot tri-r"></i>失败</span>
+      <span class="gi"><i class="dot sq-hollow"></i>已隐藏</span>
+    </div>
+  </div>
+  <div class="lg">
+    <span class="lg-t">字体</span>
+    <div class="type-row">
+      <span style="font:700 14px var(--disp)">Poppins · 标题</span>
+      <span style="font:500 13px var(--body)">Manrope · 正文</span>
+      <span style="font:700 12.5px var(--mono)">Space Mono · 读数与代码</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 展示板 ============ -->
+<main class="board">
+
+  <!-- ================= ① 主机 ================= -->
+  <section class="slot" id="slot-host">
+    <div class="slot-label"><b>01</b><span>① 主机</span><em>HOST · 引导与管理</em></div>
+    <div class="phone">
+      <div class="screen">
+        <div class="punch"></div>
+        <div class="statusbar">
+          <span class="time">22:17</span>
+          <span class="sicons">
+            <svg width="16" height="11" viewBox="0 0 16 11"><rect x="0" y="7" width="3" height="4" fill="#141414"/><rect x="4.3" y="5" width="3" height="6" fill="#141414"/><rect x="8.6" y="2.5" width="3" height="8.5" fill="#141414"/><rect x="12.9" y="0" width="3" height="11" fill="#141414"/></svg>
+            <svg width="16" height="12" viewBox="0 0 16 12"><path d="M2 4.5A9 9 0 0 1 14 4.5" stroke="#141414" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M4.5 7A5.5 5.5 0 0 1 11.5 7" stroke="#141414" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="8" cy="9.8" r="1.4" fill="#141414"/></svg>
+            <svg width="19" height="12" viewBox="0 0 19 12"><rect x="0.5" y="0.5" width="14" height="11" rx="2" fill="none" stroke="#141414" stroke-width="1.2"/><rect x="2.2" y="2.2" width="8.5" height="7.6" rx="0.8" fill="#141414"/><rect x="15.8" y="3.5" width="2.2" height="5" rx="1" fill="#141414"/></svg>
+          </span>
+        </div>
+        <div class="app">
+          <header class="bar">
+            <i class="bar-geo b-ink" style="background:var(--ink)"></i>
+            <h2>主机</h2>
+            <span class="bar-tag">01 HOST · 1/1 在线</span>
+          </header>
+          <div class="scrollarea">
+
+            <!-- 引导模块 -->
+            <div class="pair-card">
+              <div class="pair-head">
+                <i class="geo tri" style="width:13px;height:13px;background:var(--yellow)"></i>
+                <h3>连接你的电脑</h3>
+                <span class="mono">PAIR · 3 步</span>
+              </div>
+              <div class="pair-illus">
+                <div class="node"><i style="background:var(--blue)"></i><span>电脑</span></div>
+                <div class="link"><i class="dash"></i><i class="geo tri" style="background:var(--yellow)"></i><i class="dash"></i></div>
+                <div class="node"><i style="background:var(--red);border-radius:50%"></i><span>手机</span></div>
+              </div>
+              <div class="pair-grid">
+                <div class="pair-steps">
+                  <div class="step open">
+                    <button class="step-head" data-step><b>01</b><span class="st">启动 Bridge</span><span class="fb">−</span></button>
+                    <div class="step-body">在电脑上运行 Pi 的 RPC 模式，Bridge 负责认证与进程隔离。<span class="cmd">pi --mode rpc</span></div>
+                  </div>
+                  <div class="step">
+                    <button class="step-head" data-step><b>02</b><span class="st">Tailscale 组网</span><span class="fb">+</span></button>
+                    <div class="step-body">手机与电脑加入同一 Tailnet，流量端到端加密，不走公网。<span class="cmd">tailscale up</span></div>
+                  </div>
+                  <div class="step">
+                    <button class="step-head" data-step><b>03</b><span class="st">扫码配对</span><span class="fb">+</span></button>
+                    <div class="step-body">右侧二维码即一次性配对码，扫码后令牌经 Keystore 加密保存。<span class="cmd">pnpm pair</span></div>
+                  </div>
+                </div>
+                <div class="qr-wrap">
+                  <div class="qr-box">
+                    <svg viewBox="0 0 21 21">
+                      <rect width="21" height="21" fill="#F7F5F0"/>
+                      <path d="M0 0h7v7H0zM14 0h7v7h-7zM0 14h7v7H0z" fill="#141414"/>
+                      <path d="M1 1h5v5H1zM15 1h5v5h-5zM1 15h5v5H1z" fill="#F7F5F0"/>
+                      <path d="M2 2h3v3H2zM16 2h3v3h-3zM2 16h3v3H2z" fill="#141414"/>
+                      <path d="M9 1h2v2H9zM12 2h2v2h-2zM9 5h2v1H9zM11 6h2v2h-2zM8 9h2v2H8zM11 9h2v1h-2zM14 10h2v2h-2zM9 12h1v2H9zM12 13h2v2h-2zM15 15h2v2h-2zM9 16h2v2H9zM12 17h1v2h-1zM17 9h2v2h-2zM18 13h1v2h-1zM13 11h1v2h-1z" fill="#141414"/>
+                    </svg>
+                  </div>
+                  <span class="mono">pnpm pair</span>
+                  <span class="qr-note">对准电脑屏幕扫码</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 主机卡 -->
+            <div class="host-card">
+              <div class="host-state">
+                <i class="dot b-ink" id="hostDot"></i>
+                <b id="hostTxt">连接成功</b>
+                <span class="mono">WS · 34ms</span>
+              </div>
+              <div class="host-main">
+                <h3>MacBook Pro</h3>
+                <p class="host-ep">dev-mac.tailnet1234.ts.net:8787</p>
+                <div class="host-chips">
+                  <span class="hchip tls">TLS 开</span>
+                  <span class="hchip tok">令牌已保存</span>
+                </div>
+                <div class="host-diag">
+                  <div><span class="dl">模型</span><span class="dv">GLM-4.7</span></div>
+                  <div><span class="dl">工作目录</span><span class="dv">~/projects</span></div>
+                </div>
+                <div class="host-acts">
+                  <button class="btn blue" id="testBtn">测试连接</button>
+                  <button class="btn ghost">编辑</button>
+                  <button class="btn ghost danger"><i></i>删除</button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+        <div class="gesturebar"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ② 会话驾驶舱 ================= -->
+  <section class="slot" id="slot-deck">
+    <div class="slot-label"><b>02</b><span>② 会话驾驶舱</span><em>DECK · 调度台</em></div>
+    <div class="phone">
+      <div class="screen">
+        <div class="punch"></div>
+        <div class="statusbar">
+          <span class="time">22:17</span>
+          <span class="sicons">
+            <svg width="16" height="11" viewBox="0 0 16 11"><rect x="0" y="7" width="3" height="4" fill="#141414"/><rect x="4.3" y="5" width="3" height="6" fill="#141414"/><rect x="8.6" y="2.5" width="3" height="8.5" fill="#141414"/><rect x="12.9" y="0" width="3" height="11" fill="#141414"/></svg>
+            <svg width="16" height="12" viewBox="0 0 16 12"><path d="M2 4.5A9 9 0 0 1 14 4.5" stroke="#141414" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M4.5 7A5.5 5.5 0 0 1 11.5 7" stroke="#141414" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="8" cy="9.8" r="1.4" fill="#141414"/></svg>
+            <svg width="19" height="12" viewBox="0 0 19 12"><rect x="0.5" y="0.5" width="14" height="11" rx="2" fill="none" stroke="#141414" stroke-width="1.2"/><rect x="2.2" y="2.2" width="8.5" height="7.6" rx="0.8" fill="#141414"/><rect x="15.8" y="3.5" width="2.2" height="5" rx="1" fill="#141414"/></svg>
+          </span>
+        </div>
+        <div class="app">
+          <header class="bar">
+            <i class="bar-geo" style="background:var(--blue);border-radius:50%"></i>
+            <h2>驾驶舱</h2>
+            <span class="bar-tag">02 DECK</span>
+          </header>
+
+          <!-- 主机健康行 -->
+          <div class="health">
+            <i class="dot b-ink" style="width:12px;height:12px"></i>
+            <b>MacBook Pro · 已连接</b>
+            <span class="mono">GLM-4.7 · ~/projects</span>
+          </div>
+
+          <!-- 收敛后的过滤 -->
+          <div class="filters">
+            <div class="filter-row">
+              <button class="chip on" data-f="all">全部<b class="n">5</b></button>
+              <button class="chip" data-f="active">活动中<b class="n">2</b></button>
+              <button class="chip" data-f="pinned">置顶<b class="n">2</b></button>
+              <span class="count">共 <b id="deckCount">5</b></span>
+            </div>
+            <div class="searchbox">
+              <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="6" cy="6" r="4.4" fill="none" stroke="#6B685C" stroke-width="1.8"/><path d="M9.4 9.4 13 13" stroke="#6B685C" stroke-width="1.8" stroke-linecap="round"/></svg>
+              <input id="deckSearch" placeholder="搜索会话 / 工作区…">
+            </div>
+          </div>
+
+          <div class="scrollarea" id="deckList">
+            <div class="sgroup">
+              <div class="glabel">置顶 <span class="mono">PINNED</span></div>
+
+              <article class="srow" data-pinned="true" data-state="active" data-title="重构 WebSocket 重连逻辑" data-ws="pi-mobile">
+                <i class="dot round b-blue breathe"></i>
+                <div class="s-main">
+                  <div class="s-top">
+                    <h3>重构 WebSocket 重连逻辑</h3>
+                    <em class="flag run">活动</em>
+                    <div class="s-acts">
+                      <button class="icobtn open-chat" title="打开会话">↗</button>
+                      <button class="icobtn blue qreply-btn" title="快速回复">↩</button>
+                      <button class="icobtn" title="更多">⋯</button>
+                    </div>
+                  </div>
+                  <div class="s-meta">pi-mobile · GLM-4.7 · 46 条 · 2 分钟前</div>
+                  <p class="s-prev">把指数退避上限从 30s 调到 120s，并在认证失败时触发一次全量重建。</p>
+                  <div class="qbar"><input placeholder="快速回复…"><button class="send">发送</button></div>
+                  <p class="sent-note"></p>
+                </div>
+              </article>
+
+              <article class="srow" data-pinned="true" data-state="active" data-title="修复会话树分叉后游标漂移" data-ws="pi-mobile">
+                <i class="dot round b-blue breathe"></i>
+                <div class="s-main">
+                  <div class="s-top">
+                    <h3>修复会话树分叉后游标漂移</h3>
+                    <em class="flag run">活动</em>
+                    <div class="s-acts">
+                      <button class="icobtn open-chat" title="打开会话">↗</button>
+                      <button class="icobtn blue qreply-btn" title="快速回复">↩</button>
+                      <button class="icobtn" title="更多">⋯</button>
+                    </div>
+                  </div>
+                  <div class="s-meta">pi-mobile · GLM-4.7 · 18 条 · 12 分钟前</div>
+                  <p class="s-prev">分叉后 leaf 指针与游标不一致，正在重建索引映射。</p>
+                  <div class="qbar"><input placeholder="快速回复…"><button class="send">发送</button></div>
+                  <p class="sent-note"></p>
+                </div>
+              </article>
+            </div>
+
+            <div class="sgroup">
+              <div class="glabel">全部会话 <span class="mono">ALL</span></div>
+
+              <article class="srow" data-pinned="false" data-state="paused" data-title="设计周报自动化脚本" data-ws="blog-tool">
+                <i class="dot tri-y"></i>
+                <div class="s-main">
+                  <div class="s-top">
+                    <h3>设计周报自动化脚本</h3>
+                    <em class="flag pause">暂停</em>
+                    <div class="s-acts">
+                      <button class="icobtn open-chat" title="打开会话">↗</button>
+                      <button class="icobtn blue qreply-btn" title="快速回复">↩</button>
+                      <button class="icobtn" title="更多">⋯</button>
+                    </div>
+                  </div>
+                  <div class="s-meta">blog-tool · GLM-4.7 · 31 条 · 昨天</div>
+                  <p class="s-prev">生成每周工作日报草稿并自动提交，等待模板确认。</p>
+                  <div class="qbar"><input placeholder="快速回复…"><button class="send">发送</button></div>
+                  <p class="sent-note"></p>
+                </div>
+              </article>
+
+              <article class="srow" data-pinned="false" data-state="idle" data-title="梳理 Q3 OKR 文档" data-ws="notes">
+                <i class="dot ring"></i>
+                <div class="s-main">
+                  <div class="s-top">
+                    <h3>梳理 Q3 OKR 文档</h3>
+                    <em class="flag idle">空闲</em>
+                    <div class="s-acts">
+                      <button class="icobtn open-chat" title="打开会话">↗</button>
+                      <button class="icobtn blue qreply-btn" title="快速回复">↩</button>
+                      <button class="icobtn" title="更多">⋯</button>
+                    </div>
+                  </div>
+                  <div class="s-meta">notes · GLM-4.7 · 9 条 · 3 天前</div>
+                  <p class="s-prev">整理三个季度目标的进展、风险与依赖。</p>
+                  <div class="qbar"><input placeholder="快速回复…"><button class="send">发送</button></div>
+                  <p class="sent-note"></p>
+                </div>
+              </article>
+
+              <article class="srow" data-pinned="false" data-state="hidden" data-title="优化图片编码器内存占用" data-ws="pi-mobile">
+                <i class="dot sq-hollow"></i>
+                <div class="s-main">
+                  <div class="s-top">
+                    <h3>优化图片编码器内存占用</h3>
+                    <em class="flag hide">已隐藏</em>
+                    <div class="s-acts">
+                      <button class="icobtn open-chat" title="打开会话">↗</button>
+                      <button class="icobtn blue qreply-btn" title="快速回复">↩</button>
+                      <button class="icobtn" title="更多">⋯</button>
+                    </div>
+                  </div>
+                  <div class="s-meta">pi-mobile · GLM-4.7 · 57 条 · 上周</div>
+                  <p class="s-prev">编码器峰值内存下降 38%，改动已合入，待回归。</p>
+                  <div class="qbar"><input placeholder="快速回复…"><button class="send">发送</button></div>
+                  <p class="sent-note"></p>
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
+        <div class="gesturebar"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ③ 聊天（主角） ================= -->
+  <section class="slot" id="slot-chat">
+    <div class="slot-label"><b>03</b><span>③ 聊天</span><em>CHAT · 主角 · 信息最全</em></div>
+    <div class="phone">
+      <div class="screen">
+        <div class="punch"></div>
+        <div class="statusbar">
+          <span class="time">22:17</span>
+          <span class="sicons">
+            <svg width="16" height="11" viewBox="0 0 16 11"><rect x="0" y="7" width="3" height="4" fill="#141414"/><rect x="4.3" y="5" width="3" height="6" fill="#141414"/><rect x="8.6" y="2.5" width="3" height="8.5" fill="#141414"/><rect x="12.9" y="0" width="3" height="11" fill="#141414"/></svg>
+            <svg width="16" height="12" viewBox="0 0 16 12"><path d="M2 4.5A9 9 0 0 1 14 4.5" stroke="#141414" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M4.5 7A5.5 5.5 0 0 1 11.5 7" stroke="#141414" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="8" cy="9.8" r="1.4" fill="#141414"/></svg>
+            <svg width="19" height="12" viewBox="0 0 19 12"><rect x="0.5" y="0.5" width="14" height="11" rx="2" fill="none" stroke="#141414" stroke-width="1.2"/><rect x="2.2" y="2.2" width="8.5" height="7.6" rx="0.8" fill="#141414"/><rect x="15.8" y="3.5" width="2.2" height="5" rx="1" fill="#141414"/></svg>
+          </span>
+        </div>
+        <div class="app">
+          <!-- 头部：会话名 + 连接状态 -->
+          <header class="bar chat-bar">
+            <i class="bar-geo" style="background:var(--red);border-radius:50%"></i>
+            <div style="flex:1;min-width:0">
+              <h2>重构 WebSocket 重连逻辑</h2>
+              <p class="conn-line"><i class="dot b-ink"></i>已连接 · MacBook Pro</p>
+            </div>
+            <button class="icobtn" id="syncBtn" title="同步">
+              <svg viewBox="0 0 16 16" width="14" height="14"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M13.8 1.8v3h-3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+            </button>
+            <button class="icobtn" title="更多">⋯</button>
+          </header>
+
+          <!-- 模型·思考·上下文读数 -->
+          <div class="gauges">
+            <div class="gcell">
+              <span class="glabel2">模型</span>
+              <span class="gv">GLM-4.7</span>
+              <span class="gsub">RPC 直连</span>
+            </div>
+            <div class="gcell">
+              <span class="glabel2">思考</span>
+              <span class="gv cn">中<i class="lvl"><s class="f"></s><s class="f"></s><s></s></i></span>
+              <span class="gsub">LEVEL 2/3</span>
+            </div>
+            <div class="gcell">
+              <span class="glabel2">上下文</span>
+              <span class="gv big">42<i>%</i></span>
+              <span class="ctxbar"><i></i></span>
+            </div>
+            <div class="gcell">
+              <span class="glabel2">费用</span>
+              <span class="gv big">$0.084</span>
+              <span class="gsub">12.3K / 200K</span>
+            </div>
+          </div>
+
+          <!-- 时间线 -->
+          <div class="scrollarea">
+            <div class="timeline" id="timeline">
+
+              <div class="msg user">
+                <div class="who">我 · 22:03</div>
+                <div class="bubble">重连时不要立刻重试，先等 backoff。另外把上次那个竞态修一下。</div>
+                <div class="attach">
+                  <span class="thumb"><i class="th-c"></i><i class="th-t"></i><i class="th-s"></i></span>
+                  <span><span class="af">截图.png</span><br><span class="am">PNG · 1.2 MB</span></span>
+                </div>
+              </div>
+
+              <div class="msg pi">
+                <div class="who">PI · GLM-4.7</div>
+                <div class="think fold">
+                  <div class="fold-head">
+                    <i class="geo tri" style="width:12px;height:12px;background:var(--yellow)"></i>
+                    <span class="ft">思考 · 8 秒</span>
+                    <button class="fb" data-fold aria-expanded="false">+</button>
+                  </div>
+                  <div class="fold-body">重连前先按 2^n × 500ms 退避，上限提到 120s；认证失败不再原地重试，直接触发全量重建，避免半开连接与游标竞态。</div>
+                </div>
+                <div class="prose" style="margin-top:9px">
+                  <p>已把重连改为先计算 <code>2^n * 500ms</code> 的指数退避，上限 120s，不再立刻重试。</p>
+                  <p>认证失败路径单独处理：触发一次全量重建，消除会话树分叉后的游标竞态。</p>
+                </div>
+                <div class="diff">
+                  <div class="diff-head"><span>SessionController.kt</span><span class="dm">+6 −3</span></div>
+                  <div class="diff-body">
+                    <div class="dl-row del"><span class="sign">−</span><span>    private fun connectImmediately() {</span></div>
+                    <div class="dl-row del"><span class="sign">−</span><span>        webSocket.connect()</span></div>
+                    <div class="dl-row del"><span class="sign">−</span><span>    }</span></div>
+                    <div class="dl-row add"><span class="sign">+</span><span>    private fun scheduleReconnect() {</span></div>
+                    <div class="dl-row add"><span class="sign">+</span><span>        // exponential backoff, max 120s</span></div>
+                    <div class="dl-row add"><span class="sign">+</span><span>        val base = 500.0 * pow(2.0, attempt)</span></div>
+                    <div class="dl-row add"><span class="sign">+</span><span>        val delay = minOf(base, BACKOFF_MAX)</span></div>
+                    <div class="dl-row add"><span class="sign">+</span><span>        if (authFailed) triggerFullRebuild()</span></div>
+                    <div class="dl-row add"><span class="sign">+</span><span>        handler.postDelayed(::reconnect, delay)</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="tools fold" id="toolGroup">
+                <div class="fold-head">
+                  <i class="dot b-ink" style="width:10px;height:10px"></i>
+                  <span class="ft">使用了 3 个工具 · 已完成</span>
+                  <button class="fb" data-fold aria-expanded="false">+</button>
+                </div>
+                <div class="fold-body" style="padding:0;border-top:2px solid var(--ink)">
+                  <div class="tool-row">
+                    <svg width="15" height="15" viewBox="0 0 14 14"><rect x="2" y="1.5" width="10" height="11" fill="none" stroke="#141414" stroke-width="1.6"/><path d="M4.5 5h5M4.5 7.5h5M4.5 10h3" stroke="#141414" stroke-width="1.4"/></svg>
+                    <span class="tn">读取 <code>SessionController.kt</code></span>
+                    <span class="ts">132 行<i class="dot b-ink"></i></span>
+                  </div>
+                  <div class="tool-row">
+                    <svg width="15" height="15" viewBox="0 0 14 14"><rect x="1.5" y="3" width="9" height="9" fill="none" stroke="#141414" stroke-width="1.6"/><path d="M12.5 1.5 6 8" stroke="#E63946" stroke-width="2"/></svg>
+                    <span class="tn">编辑 <code>SessionController.kt</code></span>
+                    <span class="ts">+6 −3<i class="dot b-ink"></i></span>
+                  </div>
+                  <div class="tool-row">
+                    <svg width="15" height="15" viewBox="0 0 14 14"><path d="M4 2.5v9l7-4.5z" fill="#0077B6"/></svg>
+                    <span class="tn">执行 <code>pnpm test</code></span>
+                    <span class="ts">42 passed · 退出码 0<i class="dot b-ink"></i></span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- 运行进度 -->
+          <div class="runbar" id="runbar">
+            <div class="run-top">
+              <i class="dot round b-blue breathe" id="runDot"></i>
+              <b id="runTxt">工作中 · 正在运行工具</b>
+              <span class="mono" id="runTime">01:24</span>
+            </div>
+            <div class="hazard"></div>
+          </div>
+
+          <!-- 输入区 -->
+          <div class="composer">
+            <div class="comp-row">
+              <div id="modeChips">
+                <button class="chip on" data-ph="输入调整方向的消息…">调整方向</button>
+                <button class="chip" data-ph="输入追加消息…">追加消息</button>
+              </div>
+              <button class="sqbtn" id="slashBtn" title="斜杠命令">/</button>
+            </div>
+            <div class="comp-row2">
+              <button class="sqbtn" id="attachBtn" title="附件">＋</button>
+              <input id="chatInput" placeholder="输入调整方向的消息…">
+              <button class="sqbtn" id="stopBtn" title="停止"><i class="stopsq"></i></button>
+              <button id="sendBtn" title="发送">
+                <svg viewBox="0 0 14 14" width="15" height="15"><path d="M3.5 2v10l8-5z" fill="#fff"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="gesturebar"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ④ 终端 ================= -->
+  <section class="slot" id="slot-term">
+    <div class="slot-label"><b>04</b><span>④ 终端</span><em>SHELL · 详情</em></div>
+    <div class="phone">
+      <div class="screen">
+        <div class="punch"></div>
+        <div class="statusbar">
+          <span class="time">22:17</span>
+          <span class="sicons">
+            <svg width="16" height="11" viewBox="0 0 16 11"><rect x="0" y="7" width="3" height="4" fill="#141414"/><rect x="4.3" y="5" width="3" height="6" fill="#141414"/><rect x="8.6" y="2.5" width="3" height="8.5" fill="#141414"/><rect x="12.9" y="0" width="3" height="11" fill="#141414"/></svg>
+            <svg width="16" height="12" viewBox="0 0 16 12"><path d="M2 4.5A9 9 0 0 1 14 4.5" stroke="#141414" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M4.5 7A5.5 5.5 0 0 1 11.5 7" stroke="#141414" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="8" cy="9.8" r="1.4" fill="#141414"/></svg>
+            <svg width="19" height="12" viewBox="0 0 19 12"><rect x="0.5" y="0.5" width="14" height="11" rx="2" fill="none" stroke="#141414" stroke-width="1.2"/><rect x="2.2" y="2.2" width="8.5" height="7.6" rx="0.8" fill="#141414"/><rect x="15.8" y="3.5" width="2.2" height="5" rx="1" fill="#141414"/></svg>
+          </span>
+        </div>
+        <div class="app">
+          <header class="bar">
+            <i class="bar-geo" style="border:2.5px solid var(--ink);width:16px;height:16px"></i>
+            <h2>终端 · 重构 WebSocket 重连逻辑</h2>
+            <span class="bar-tag">04 SHELL</span>
+          </header>
+
+          <!-- bash 面板 -->
+          <div class="term">
+            <div class="term-head">
+              <span>bash · pi-mobile</span>
+              <span class="tl"><i style="background:var(--red)"></i><i style="background:var(--yellow)"></i><i style="background:var(--blue)"></i></span>
+            </div>
+            <div class="term-scroll" id="termScroll">
+              <div id="termHist">
+                <div class="t-line"><span class="t-p">$</span> pnpm test</div>
+                <div class="t-line t-dim">&gt; pi-mobile@0.3.1 test</div>
+                <div class="t-line t-dim">&gt; vitest run</div>
+                <div class="t-line">&nbsp;</div>
+                <div class="t-line t-ok">Tests  42 passed (42)</div>
+                <div class="t-line t-exit"><span>退出码 0</span><i class="excode"></i></div>
+              </div>
+            </div>
+            <div class="term-input">
+              <span class="t-p">$</span>
+              <input id="termInput" placeholder="输入命令，回车执行（试试 clear）" autocomplete="off">
+            </div>
+          </div>
+
+          <!-- 会话统计 -->
+          <div class="stats">
+            <div class="stat-label">会话统计 <span class="mono">SESSION · 46 MSG</span></div>
+            <div class="gauges">
+              <div class="gcell"><span class="glabel2">输入</span><span class="gv">8.2K</span><span class="gsub">tokens</span></div>
+              <div class="gcell"><span class="glabel2">输出</span><span class="gv">4.1K</span><span class="gsub">tokens</span></div>
+              <div class="gcell"><span class="glabel2">消息</span><span class="gv">46</span><span class="gsub">条</span></div>
+              <div class="gcell"><span class="glabel2">总费用</span><span class="gv">$0.084</span><span class="gsub">本次会话</span></div>
+            </div>
+            <div class="handoff">
+              <span class="hl">交接摘要 HANDOFF</span>
+              <p>重连退避改造与认证竞态修复已完成，42 项测试全部通过；下一步在真机验证后台切换后的重连表现。</p>
+            </div>
+          </div>
+
+          <div class="tchips">
+            <span class="tl2">快速命令</span>
+            <button class="tchip" data-cmd="pnpm test">pnpm test</button>
+            <button class="tchip" data-cmd="git status">git status</button>
+            <button class="tchip" data-cmd="clear">clear</button>
+          </div>
+        </div>
+        <div class="gesturebar"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ⑤ 设置 ================= -->
+  <section class="slot" id="slot-set">
+    <div class="slot-label"><b>05</b><span>⑤ 设置</span><em>SETUP</em></div>
+    <div class="phone">
+      <div class="screen">
+        <div class="punch"></div>
+        <div class="statusbar">
+          <span class="time">22:17</span>
+          <span class="sicons">
+            <svg width="16" height="11" viewBox="0 0 16 11"><rect x="0" y="7" width="3" height="4" fill="#141414"/><rect x="4.3" y="5" width="3" height="6" fill="#141414"/><rect x="8.6" y="2.5" width="3" height="8.5" fill="#141414"/><rect x="12.9" y="0" width="3" height="11" fill="#141414"/></svg>
+            <svg width="16" height="12" viewBox="0 0 16 12"><path d="M2 4.5A9 9 0 0 1 14 4.5" stroke="#141414" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M4.5 7A5.5 5.5 0 0 1 11.5 7" stroke="#141414" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="8" cy="9.8" r="1.4" fill="#141414"/></svg>
+            <svg width="19" height="12" viewBox="0 0 19 12"><rect x="0.5" y="0.5" width="14" height="11" rx="2" fill="none" stroke="#141414" stroke-width="1.2"/><rect x="2.2" y="2.2" width="8.5" height="7.6" rx="0.8" fill="#141414"/><rect x="15.8" y="3.5" width="2.2" height="5" rx="1" fill="#141414"/></svg>
+          </span>
+        </div>
+        <div class="app">
+          <header class="bar">
+            <i class="bar-geo" style="border:3px solid var(--ink);border-radius:50%;width:16px;height:16px;background:transparent"></i>
+            <h2>设置</h2>
+            <span class="bar-tag">05 SETUP</span>
+          </header>
+
+          <div class="scrollarea">
+            <div class="set-mod">
+              <div class="sm-t"><i style="background:var(--blue)"></i>连接</div>
+              <div class="conn-row">
+                <i class="dot b-ink"></i>
+                <b>MacBook Pro · 已连接</b>
+                <span class="mono">WS · 34ms</span>
+              </div>
+              <p class="set-desc mono">dev-mac.tailnet1234.ts.net:8787</p>
+            </div>
+
+            <div class="set-mod">
+              <div class="sm-t"><i style="background:var(--yellow)"></i>自动化</div>
+              <div class="set-row">
+                <div class="sr-main"><b>自动压缩</b><span>上下文接近上限时自动压缩历史</span></div>
+                <button class="sw on" role="switch" aria-checked="true" aria-label="自动压缩"><i></i></button>
+              </div>
+              <div class="set-row">
+                <div class="sr-main"><b>自动重试</b><span>网络抖动时自动重连并续传</span></div>
+                <button class="sw" role="switch" aria-checked="false" aria-label="自动重试"><i></i></button>
+              </div>
+            </div>
+
+            <div class="set-mod">
+              <div class="sm-t"><i style="background:var(--red)"></i>传输方式</div>
+              <div class="seg" id="segTrans">
+                <button class="on">自动</button>
+                <button>WebSocket</button>
+                <button>SSE</button>
+              </div>
+              <p class="set-desc">自动：优先 WebSocket，失败时回退 SSE 长轮询。</p>
+            </div>
+
+            <div class="set-mod">
+              <div class="sm-t"><i style="background:var(--ink)"></i>外观</div>
+              <div class="seg" id="segTheme">
+                <button class="on"><span class="tp tp-light"></span>浅色</button>
+                <button><span class="tp tp-dark"></span>深色</button>
+                <button><span class="tp tp-auto"></span>跟随系统</button>
+              </div>
+            </div>
+
+            <div class="set-mod">
+              <div class="sm-t"><i style="background:var(--blue)"></i>发送模式</div>
+              <div class="seg" id="segSend">
+                <button class="on">回车发送</button>
+                <button>点按钮发送</button>
+              </div>
+            </div>
+
+            <p class="ver">Pi Mobile v0.3.1 · Pi 0.80.6 · Bridge 协议 v1</p>
+          </div>
+        </div>
+        <div class="gesturebar"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- form 来自：几何模块 = 功能分区 —— 遥测读数化作圆 / 方 / 三角的仪表语言，色块即功能，规则线即结构 -->
+
+<script>
+(function(){
+  'use strict';
+  var $ = function(s, el){ return (el || document).querySelector(s); };
+  var $$ = function(s, el){ return Array.prototype.slice.call((el || document).querySelectorAll(s)); };
+  function esc(s){
+    return s.replace(/[&<>"]/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];
+    });
+  }
+
+  /* ---------- 通用折叠（+/− 方块） ---------- */
+  $$('[data-fold]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var box = btn.closest('.fold');
+      box.classList.toggle('open');
+      var open = box.classList.contains('open');
+      btn.textContent = open ? '−' : '+';
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  });
+
+  /* ---------- ① 主机：引导步骤手风琴 ---------- */
+  $$('[data-step]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var step = btn.closest('.step');
+      step.classList.toggle('open');
+      $('.fb', step).textContent = step.classList.contains('open') ? '−' : '+';
+    });
+  });
+
+  /* ---------- ① 主机：测试连接 ---------- */
+  var testBtn = $('#testBtn'), hostDot = $('#hostDot'), hostTxt = $('#hostTxt');
+  if (testBtn) {
+    testBtn.addEventListener('click', function(){
+      if (testBtn.disabled) return;
+      testBtn.disabled = true;
+      testBtn.textContent = '测试中…';
+      hostDot.className = 'dot round b-blue breathe';
+      hostTxt.textContent = '正在测试…';
+      setTimeout(function(){
+        hostDot.className = 'dot b-ink';
+        hostTxt.textContent = '连接成功';
+        testBtn.disabled = false;
+        testBtn.textContent = '测试连接';
+      }, 1100);
+    });
+  }
+
+  /* ---------- ② 驾驶舱：过滤 chip + 搜索 ---------- */
+  var deckRows = $$('#deckList .srow');
+  var deckGroups = $$('#deckList .sgroup');
+  var deckChips = $$('.filter-row .chip');
+  var deckFilter = 'all', deckQuery = '';
+  function applyDeck(){
+    var visible = 0;
+    deckRows.forEach(function(r){
+      var okF = deckFilter === 'all'
+        || (deckFilter === 'pinned' && r.dataset.pinned === 'true')
+        || (deckFilter === 'active' && r.dataset.state === 'active');
+      var hay = (r.dataset.title + ' ' + r.dataset.ws).toLowerCase();
+      var okQ = !deckQuery || hay.indexOf(deckQuery) !== -1;
+      var show = okF && okQ;
+      r.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    deckGroups.forEach(function(g){
+      var any = $$('.srow', g).some(function(r){ return r.style.display !== 'none'; });
+      g.style.display = any ? '' : 'none';
+    });
+    $('#deckCount').textContent = visible;
+  }
+  deckChips.forEach(function(c){
+    c.addEventListener('click', function(){
+      deckChips.forEach(function(x){ x.classList.remove('on'); });
+      c.classList.add('on');
+      deckFilter = c.dataset.f;
+      applyDeck();
+    });
+  });
+  var deckSearch = $('#deckSearch');
+  if (deckSearch) {
+    deckSearch.addEventListener('input', function(){
+      deckQuery = deckSearch.value.trim().toLowerCase();
+      applyDeck();
+    });
+  }
+
+  /* ---------- ② 驾驶舱：快速回复 + 打开会话 ---------- */
+  $$('.qreply-btn').forEach(function(b){
+    b.addEventListener('click', function(){
+      var bar = $('.qbar', b.closest('.srow'));
+      bar.classList.toggle('open');
+      if (bar.classList.contains('open')) $('input', bar).focus();
+    });
+  });
+  function sendQuick(bar){
+    var inp = $('input', bar);
+    var v = inp.value.trim();
+    if (!v) return;
+    var note = $('.sent-note', bar.closest('.srow'));
+    note.textContent = '→ 已发送快速回复：' + v;
+    note.style.display = 'block';
+    inp.value = '';
+    bar.classList.remove('open');
+  }
+  $$('.qbar .send').forEach(function(b){
+    b.addEventListener('click', function(){ sendQuick(b.closest('.qbar')); });
+  });
+  $$('.qbar input').forEach(function(inp){
+    inp.addEventListener('keydown', function(e){
+      if (e.key === 'Enter') sendQuick(inp.closest('.qbar'));
+    });
+  });
+  $$('.open-chat').forEach(function(b){
+    b.addEventListener('click', function(){
+      var slot = $('#slot-chat');
+      if (slot) slot.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  /* ---------- ③ 聊天：模式 chip 切换 ---------- */
+  var modeChips = $$('#modeChips .chip');
+  var chatInput = $('#chatInput');
+  modeChips.forEach(function(c){
+    c.addEventListener('click', function(){
+      modeChips.forEach(function(x){ x.classList.remove('on'); });
+      c.classList.add('on');
+      chatInput.placeholder = c.dataset.ph;
+    });
+  });
+
+  /* ---------- ③ 聊天：发送 / 附件 / 斜杠 / 停止 / 同步 ---------- */
+  var timeline = $('#timeline');
+  function scrollChat(){ timeline.parentNode.scrollTop = timeline.parentNode.scrollHeight; }
+  function appendUserBubble(text){
+    var div = document.createElement('div');
+    div.className = 'msg user';
+    div.innerHTML = '<div class="who">我 · 刚刚</div><div class="bubble"></div>';
+    $('.bubble', div).textContent = text;
+    timeline.appendChild(div);
+    scrollChat();
+  }
+  function sendChat(){
+    var v = chatInput.value.trim();
+    if (!v) return;
+    appendUserBubble(v);
+    chatInput.value = '';
+  }
+  $('#sendBtn').addEventListener('click', sendChat);
+  chatInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') sendChat(); });
+  $('#slashBtn').addEventListener('click', function(){
+    chatInput.value = '/';
+    chatInput.focus();
+  });
+  $('#attachBtn').addEventListener('click', function(){
+    var div = document.createElement('div');
+    div.className = 'msg user';
+    div.innerHTML = '<div class="who">我 · 刚刚</div>' +
+      '<div class="attach"><span class="thumb"><i class="th-c"></i><i class="th-t"></i><i class="th-s"></i></span>' +
+      '<span><span class="af">截图-2.png</span><br><span class="am">PNG · 0.8 MB</span></span></div>';
+    timeline.appendChild(div);
+    scrollChat();
+  });
+  var runbar = $('#runbar'), runDot = $('#runDot'), runTxt = $('#runTxt');
+  $('#stopBtn').addEventListener('click', function(){
+    runbar.classList.toggle('paused');
+    var paused = runbar.classList.contains('paused');
+    runTxt.textContent = paused ? '已暂停 · 可随时继续' : '工作中 · 正在运行工具';
+    runDot.className = paused ? 'dot tri-y' : 'dot round b-blue breathe';
+  });
+  var syncBtn = $('#syncBtn');
+  syncBtn.addEventListener('click', function(){
+    syncBtn.classList.remove('spin');
+    void syncBtn.offsetWidth;
+    syncBtn.classList.add('spin');
+  });
+
+  /* ---------- ④ 终端：输入回显 ---------- */
+  var termHist = $('#termHist'), termScroll = $('#termScroll'), termInput = $('#termInput');
+  function tline(html, cls){
+    var d = document.createElement('div');
+    d.className = 't-line' + (cls ? ' ' + cls : '');
+    d.innerHTML = html;
+    termHist.appendChild(d);
+  }
+  function scrollTerm(){ termScroll.scrollTop = termScroll.scrollHeight; }
+  function runCmd(raw){
+    var cmd = raw.trim();
+    tline('<span class="t-p">$</span> ' + esc(cmd));
+    if (!cmd) { scrollTerm(); return; }
+    if (cmd === 'clear') {
+      termHist.innerHTML = '';
+      scrollTerm();
+      return;
+    }
+    if (cmd === 'pnpm test') {
+      tline('&gt; pi-mobile@0.3.1 test', 't-dim');
+      tline('&gt; vitest run', 't-dim');
+      tline('&nbsp;');
+      tline('Tests  42 passed (42)', 't-ok');
+      tline('<span>退出码 0</span><i class="excode"></i>', 't-exit');
+    } else if (cmd === 'git status') {
+      tline('On branch main');
+      tline('nothing to commit, working tree clean', 't-dim');
+      tline('<span>退出码 0</span><i class="excode"></i>', 't-exit');
+    } else {
+      tline('zsh: command not found: ' + esc(cmd), 't-dim');
+      tline('<span>退出码 127</span><i class="excode" style="background:#E63946"></i>', 't-exit');
+    }
+    scrollTerm();
+  }
+  termInput.addEventListener('keydown', function(e){
+    if (e.key === 'Enter') {
+      runCmd(termInput.value);
+      termInput.value = '';
+    }
+  });
+  $$('.tchip').forEach(function(c){
+    c.addEventListener('click', function(){
+      termInput.value = c.dataset.cmd;
+      termInput.focus();
+    });
+  });
+
+  /* ---------- ⑤ 设置：开关 + 分段 ---------- */
+  $$('.sw').forEach(function(s){
+    s.addEventListener('click', function(){
+      s.classList.toggle('on');
+      s.setAttribute('aria-checked', s.classList.contains('on') ? 'true' : 'false');
+    });
+  });
+  $$('.seg').forEach(function(seg){
+    $$('button', seg).forEach(function(b){
+      b.addEventListener('click', function(){
+        $$('button', seg).forEach(function(x){ x.classList.remove('on'); });
+        b.classList.add('on');
+      });
+    });
+  });
+
+  /* ---------- 初始化 ---------- */
+  applyDeck();
+  scrollChat();
+})();
+</script>
+</body>
+</html>

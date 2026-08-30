@@ -209,6 +209,7 @@ class PiRpcConnectionTest {
         private val json = Json { ignoreUnknownKeys = true }
 
         override val inboundMessages = MutableSharedFlow<String>(replay = 64, extraBufferCapacity = 64)
+        override val inboundSubscriptionCount = MutableStateFlow(0)
         override val connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
 
         val sentMessages = mutableListOf<String>()
