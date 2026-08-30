@@ -60,7 +60,7 @@ class ConnectionDiagnostics {
         } catch (error: TimeoutCancellationException) {
             DiagnosticsResult.NetworkError(
                 hostProfile = hostProfile,
-                message = "Connection timed out after ${timeoutMs}ms (${error::class.simpleName})",
+                message = "连接在 $timeoutMs 毫秒后超时（${error::class.simpleName}）",
             )
         } catch (error: Exception) {
             mapError(hostProfile, error)
@@ -84,7 +84,7 @@ class ConnectionDiagnostics {
         if (!success) {
             return DiagnosticsResult.RpcError(
                 hostProfile = hostProfile,
-                message = error ?: "Unknown RPC error",
+                message = error ?: "未知 RPC 错误",
             )
         }
 
@@ -107,7 +107,7 @@ class ConnectionDiagnostics {
                 message.contains("unauthorized", ignoreCase = true) -> {
                 DiagnosticsResult.AuthError(
                     hostProfile = hostProfile,
-                    message = "Authentication failed: invalid token",
+                    message = "认证失败：令牌无效",
                 )
             }
 
@@ -115,14 +115,14 @@ class ConnectionDiagnostics {
                 message.contains("unreachable", ignoreCase = true) -> {
                 DiagnosticsResult.NetworkError(
                     hostProfile = hostProfile,
-                    message = "Bridge unreachable: $message",
+                    message = "无法连接 Bridge：$message",
                 )
             }
 
             else -> {
                 DiagnosticsResult.NetworkError(
                     hostProfile = hostProfile,
-                    message = if (message.isBlank()) "Unknown error" else message,
+                    message = if (message.isBlank()) "未知错误" else message,
                 )
             }
         }

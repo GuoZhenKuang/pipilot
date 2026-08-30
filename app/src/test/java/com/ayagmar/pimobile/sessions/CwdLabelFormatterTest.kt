@@ -22,6 +22,6 @@ class CwdLabelFormatterTest {
     fun formatCwdTailHandlesBlankValues() {
         val label = formatCwdTail("  ")
 
-        assertEquals("(unknown)", label)
+        assertEquals("（未知）", label)
     }
 }

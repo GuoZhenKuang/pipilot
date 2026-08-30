@@ -203,24 +203,24 @@ class SessionsViewModel(
         viewModelScope.launch(backgroundDispatcher) {
             val token = tokenStore.getToken(host.id)
             if (token.isNullOrBlank()) {
-                emitError("No token configured for host ${host.name}")
+                emitError("主机 ${host.name} 尚未配置令牌")
                 return@launch
             }
             _uiState.update { it.copy(isResuming = true, errorMessage = null) }
             val cwd = resolveConnectionCwdForHost(host.id)
             val connected = sessionController.ensureConnected(host, token, cwd)
             if (connected.isFailure) {
-                emitError(connected.exceptionOrNull()?.message ?: "Failed to connect for new session")
+                emitError(connected.exceptionOrNull()?.message ?: "连接失败，无法创建新会话")
                 return@launch
             }
             markConnectionWarm(host.id, cwd)
             val result = sessionController.newSession()
             if (result.isSuccess) {
                 _uiState.update { it.copy(isResuming = false, errorMessage = null) }
-                _messages.tryEmit("New session created")
+                _messages.tryEmit("已创建新会话")
                 _navigateToChat.trySend(Unit)
             } else {
-                emitError(result.exceptionOrNull()?.message ?: "Failed to create new session")
+                emitError(result.exceptionOrNull()?.message ?: "创建新会话失败")
             }
         }
     }
@@ -232,7 +232,7 @@ class SessionsViewModel(
     fun resumeSession(item: SessionCockpitItem) {
         val session =
             item.record ?: run {
-                emitError("Refresh this host before opening the saved session")
+                emitError("请先刷新该主机，再打开已保存的会话")
                 return
             }
         val host = _uiState.value.hosts.firstOrNull { it.id == item.hostId } ?: return
@@ -241,7 +241,7 @@ class SessionsViewModel(
         viewModelScope.launch(backgroundDispatcher) {
             val token = tokenStore.getToken(host.id)
             if (token.isNullOrBlank()) {
-                emitError("No token configured for host ${host.name}")
+                emitError("主机 ${host.name} 尚未配置令牌")
                 return@launch
             }
             _uiState.update { it.copy(isResuming = true, errorMessage = null) }
@@ -300,7 +300,7 @@ class SessionsViewModel(
     fun shareSession(item: SessionCockpitItem) {
         val source =
             shareRemoteDataSource ?: run {
-                emitError("Sharing is unavailable")
+                emitError("共享功能暂不可用")
                 return
             }
         val session = item.record ?: return
@@ -315,12 +315,12 @@ class SessionsViewModel(
                 )
             }.onSuccess { link ->
                 _uiState.update { it.copy(isPerformingAction = false, shareLink = link) }
-                _messages.tryEmit("Share link ready")
+                _messages.tryEmit("共享链接已生成")
             }.onFailure { error ->
                 _uiState.update {
                     it.copy(
                         isPerformingAction = false,
-                        errorMessage = error.message ?: "Sharing failed",
+                        errorMessage = error.message ?: "共享失败",
                     )
                 }
             }
@@ -335,19 +335,19 @@ class SessionsViewModel(
             runCatching { source.revoke(item.hostId, session) }
                 .onSuccess {
                     _uiState.update { it.copy(isPerformingAction = false, shareLink = null) }
-                    _messages.tryEmit("Shared link revoked")
+                    _messages.tryEmit("共享链接已撤销")
                 }.onFailure { error ->
                     _uiState.update { it.copy(isPerformingAction = false, errorMessage = error.message) }
                 }
         }
     }
 
-    fun shareActiveSession() = activeItem()?.let(::shareSession) ?: emitError("Resume a session before sharing")
+    fun shareActiveSession() = activeItem()?.let(::shareSession) ?: emitError("请先恢复会话再共享")
 
     fun revokeActiveSessionShare() = activeItem()?.let(::revokeSessionShare) ?: Unit
 
     fun runSessionAction(action: SessionAction) {
-        val hostId = _uiState.value.activeSessionKey?.hostProfileId ?: return emitError("Resume a session first")
+        val hostId = _uiState.value.activeSessionKey?.hostProfileId ?: return emitError("请先恢复一个会话")
         viewModelScope.launch(backgroundDispatcher) {
             _uiState.update { it.copy(isPerformingAction = true, errorMessage = null) }
             val result = action.execute(sessionController)
@@ -363,7 +363,7 @@ class SessionsViewModel(
     }
 
     fun requestForkMessages() {
-        if (_uiState.value.activeSessionKey == null) return emitError("Resume a session before forking")
+        if (_uiState.value.activeSessionKey == null) return emitError("请先恢复会话再分叉")
         viewModelScope.launch(backgroundDispatcher) {
             _uiState.update { it.copy(isLoadingForkMessages = true, isForkPickerVisible = true) }
             val result = sessionController.getForkMessages()
@@ -434,7 +434,7 @@ class SessionsViewModel(
                 selectedCwdByHost = selections,
                 groups = groups,
                 isLoading = hosts.isNotEmpty(),
-                errorMessage = if (hosts.isEmpty()) "Add a host to browse sessions." else null,
+                errorMessage = if (hosts.isEmpty()) "请先添加主机，才能浏览会话。" else null,
                 filter = state.filter.copy(hostId = state.filter.hostId?.takeIf(ids::contains)),
                 density = savedState.density,
             )
@@ -493,7 +493,7 @@ class SessionsViewModel(
 
     private fun requireStableKey(item: SessionCockpitItem): SessionKey? {
         val key = item.key
-        if (key == null) emitError(item.stableActionDisabledReason ?: "This action needs a stable session identity")
+        if (key == null) emitError(item.stableActionDisabledReason ?: "该操作需要稳定的会话标识")
         return key
     }
 
@@ -578,25 +578,25 @@ sealed interface SessionAction {
     suspend fun execute(controller: SessionController): Result<String?>
 
     data class Rename(val name: String) : SessionAction {
-        override val successMessage = "Renamed active session"
+        override val successMessage = "已重命名当前会话"
 
         override suspend fun execute(controller: SessionController) = controller.renameSession(name)
     }
 
     data object Compact : SessionAction {
-        override val successMessage = "Compacted active session"
+        override val successMessage = "已压缩当前会话上下文"
 
         override suspend fun execute(controller: SessionController) = controller.compactSession()
     }
 
     data class ForkFromEntry(val entryId: String) : SessionAction {
-        override val successMessage = "Forked from selected message"
+        override val successMessage = "已从所选消息分叉"
 
         override suspend fun execute(controller: SessionController) = controller.forkSessionFromEntryId(entryId)
     }
 
     data object Export : SessionAction {
-        override val successMessage = "Exported active session"
+        override val successMessage = "已导出当前会话"
 
         override suspend fun execute(controller: SessionController): Result<String?> =
             controller.exportSession().map { null }

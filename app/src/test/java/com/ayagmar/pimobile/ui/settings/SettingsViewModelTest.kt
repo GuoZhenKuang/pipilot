@@ -103,7 +103,7 @@ class SettingsViewModelTest {
             viewModel.pingBridge()
             dispatcher.scheduler.advanceUntilIdle()
 
-            assertEquals(listOf("Bridge reachable"), messages)
+            assertEquals(listOf("Bridge 连接正常"), messages)
             collector.cancel()
         }
 
@@ -158,7 +158,7 @@ class SettingsViewModelTest {
 
             assertEquals(TransportPreference.SSE, viewModel.uiState.transportPreference)
             assertEquals(TransportPreference.WEBSOCKET, viewModel.uiState.effectiveTransportPreference)
-            assertTrue(viewModel.uiState.transportRuntimeNote.contains("fallback"))
+            assertTrue(viewModel.uiState.transportRuntimeNote.contains("回退"))
             assertEquals(TransportPreference.SSE, controller.lastTransportPreference)
         }
 

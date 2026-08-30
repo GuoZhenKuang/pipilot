@@ -116,21 +116,21 @@ internal fun PromptControls(
             FilterChip(
                 selected = deliveryMode == ActiveRunDeliveryMode.FOLLOW_UP,
                 onClick = { deliveryMode = ActiveRunDeliveryMode.FOLLOW_UP },
-                label = { Text("Follow up") },
+                label = { Text("追加消息") },
                 enabled = isRunActive,
             )
             FilterChip(
                 selected = deliveryMode == ActiveRunDeliveryMode.STEER,
                 onClick = { deliveryMode = ActiveRunDeliveryMode.STEER },
-                label = { Text("Steer") },
+                label = { Text("调整方向") },
                 enabled = isRunActive && !isRetrying,
             )
             if (isDispatchingMessage) {
                 Text(
                     text =
                         when (deliveryMode) {
-                            ActiveRunDeliveryMode.FOLLOW_UP -> "Sending follow-up…"
-                            ActiveRunDeliveryMode.STEER -> "Sending steer…"
+                            ActiveRunDeliveryMode.FOLLOW_UP -> "正在发送追加消息…"
+                            ActiveRunDeliveryMode.STEER -> "正在发送调整方向消息…"
                         },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
@@ -138,11 +138,11 @@ internal fun PromptControls(
             } else if (isRunActive) {
                 TextButton(onClick = if (isRetrying) callbacks.onAbortRetry else callbacks.onAbort) {
                     Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Text("Stop")
+                    Text("停止")
                 }
             }
             if (pendingQueueItems.isNotEmpty()) {
-                TextButton(onClick = { showQueue = true }) { Text("Queue ${pendingQueueItems.size}") }
+                TextButton(onClick = { showQueue = true }) { Text("队列 ${pendingQueueItems.size}") }
             }
         }
 
@@ -195,16 +195,16 @@ private fun PendingQueueInspector(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Pending queue (${pendingItems.size})",
+                    text = "待发送队列（${pendingItems.size}）",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 TextButton(onClick = onClear) {
-                    Text("Clear")
+                    Text("清空")
                 }
             }
 
             Text(
-                text = "Steer: ${deliveryModeLabel(steeringMode)} · Follow-up: ${deliveryModeLabel(followUpMode)}",
+                text = "调整方向：${deliveryModeLabel(steeringMode)} · 追加消息：${deliveryModeLabel(followUpMode)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -217,7 +217,7 @@ private fun PendingQueueInspector(
             }
 
             Text(
-                text = "Items shown here were sent while streaming; clearing only removes local inspector entries.",
+                text = "这里显示流式生成期间发送的消息；清空操作只会移除本地查看记录。",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -238,8 +238,8 @@ private fun PendingQueueItemRow(
         Column(modifier = Modifier.weight(1f)) {
             val typeLabel =
                 when (item.type) {
-                    PendingQueueType.STEER -> "Steer"
-                    PendingQueueType.FOLLOW_UP -> "Follow-up"
+                    PendingQueueType.STEER -> "调整方向"
+                    PendingQueueType.FOLLOW_UP -> "追加消息"
                 }
             Text(
                 text = "$typeLabel · ${deliveryModeLabel(item.mode)}",
@@ -253,7 +253,7 @@ private fun PendingQueueItemRow(
         }
 
         TextButton(onClick = onRemove) {
-            Text("Remove")
+            Text("移除")
         }
     }
 }
@@ -272,8 +272,8 @@ private fun dispatchActiveRunMessage(
 
 private fun deliveryModeLabel(mode: String): String {
     return when (mode) {
-        ChatViewModel.DELIVERY_MODE_ONE_AT_A_TIME -> "one-at-a-time"
-        else -> "all"
+        ChatViewModel.DELIVERY_MODE_ONE_AT_A_TIME -> "一次一条"
+        else -> "全部"
     }
 }
 
@@ -320,7 +320,7 @@ internal fun PromptInputRow(
             value = inputText,
             onValueChange = onInputTextChanged,
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Message Pi") },
+            placeholder = { Text("给 Pi 发送消息") },
             singleLine = false,
             minLines = 1,
             maxLines = 5,
@@ -337,7 +337,7 @@ internal fun PromptInputRow(
                 ) {
                     Icon(
                         imageVector = Icons.Default.AttachFile,
-                        contentDescription = "Attach image",
+                        contentDescription = "添加图片",
                     )
                 }
             },
@@ -347,7 +347,7 @@ internal fun PromptInputRow(
                     IconButton(onClick = onShowCommandPalette) {
                         Icon(
                             imageVector = Icons.Default.Menu,
-                            contentDescription = "Commands",
+                            contentDescription = "命令",
                         )
                     }
                 } else {
@@ -362,9 +362,9 @@ internal fun PromptInputRow(
                                 imageVector = Icons.AutoMirrored.Filled.Send,
                                 contentDescription =
                                     when (activeRunDeliveryMode) {
-                                        ActiveRunDeliveryMode.FOLLOW_UP -> "Send as follow-up"
-                                        ActiveRunDeliveryMode.STEER -> "Send as steer"
-                                        null -> "Send message"
+                                        ActiveRunDeliveryMode.FOLLOW_UP -> "作为追加消息发送"
+                                        ActiveRunDeliveryMode.STEER -> "作为调整方向消息发送"
+                                        null -> "发送消息"
                                     },
                             )
                         }
@@ -458,7 +458,7 @@ private fun ImageThumbnail(
         ) {
             Icon(
                 imageVector = Icons.Default.Close,
-                contentDescription = "Remove",
+                contentDescription = "移除",
                 modifier = Modifier.size(14.dp),
             )
         }
@@ -508,7 +508,7 @@ internal fun ImagePreviewDialog(
                 scope.launch {
                     actionMessage =
                         runCatching { image.copyTo(context, targetUri) }
-                            .fold(onSuccess = { "Image saved" }, onFailure = { "Unable to save image" })
+                            .fold(onSuccess = { "图片已保存" }, onFailure = { "无法保存图片" })
                 }
             }
         }
@@ -528,7 +528,7 @@ internal fun ImagePreviewDialog(
                 actionMessage = null
                 scope.launch {
                     runCatching { shareImage(context, image, presentation.mimeType) }
-                        .onFailure { actionMessage = "Unable to share image" }
+                        .onFailure { actionMessage = "无法分享图片" }
                 }
             },
             onDismiss = onDismiss,
@@ -592,7 +592,7 @@ private fun ZoomablePreviewImage(presentation: ChatImagePresentation) {
         else ->
             AsyncImage(
                 model = presentation.model,
-                contentDescription = presentation.displayName?.let { "Preview $it" } ?: "Image preview",
+                contentDescription = presentation.displayName?.let { "预览 $it" } ?: "图片预览",
                 modifier =
                     Modifier
                         .fillMaxSize()
@@ -636,9 +636,9 @@ private fun ImagePreviewActions(
     modifier: Modifier = Modifier,
 ) {
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        ImageAction(Icons.Default.Download, "Save image", enabled, onSave)
-        ImageAction(Icons.Default.Share, "Share image", enabled, onShare)
-        ImageAction(Icons.Default.Close, "Close image preview", true, onDismiss)
+        ImageAction(Icons.Default.Download, "保存图片", enabled, onSave)
+        ImageAction(Icons.Default.Share, "分享图片", enabled, onShare)
+        ImageAction(Icons.Default.Close, "关闭图片预览", true, onDismiss)
     }
 }
 
@@ -666,7 +666,7 @@ private suspend fun shareImage(
             putExtra(Intent.EXTRA_STREAM, shareUri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-    context.startActivity(Intent.createChooser(intent, "Share image"))
+    context.startActivity(Intent.createChooser(intent, "分享图片"))
 }
 
 private const val MIN_IMAGE_SCALE = 1f

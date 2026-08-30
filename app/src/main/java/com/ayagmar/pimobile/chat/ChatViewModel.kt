@@ -178,7 +178,7 @@ class ChatViewModel(
 
         if (pendingImages.isNotEmpty()) {
             _uiState.update {
-                it.copy(errorMessage = "Image attachments are only supported for normal prompts")
+                it.copy(errorMessage = "仅普通消息支持图片附件")
             }
         } else {
             handleKnownSlashCommand(slashInvocation)
@@ -227,7 +227,7 @@ class ChatViewModel(
         _uiState.update {
             it.copy(
                 isDispatchingMessage = false,
-                errorMessage = "Unable to attach image. Please try again.",
+                errorMessage = "图片添加失败，请重试。",
             )
         }
     }
@@ -531,7 +531,7 @@ class ChatViewModel(
     private fun runForkSlashCommand() {
         showTreeSheet()
         addSystemNotification(
-            message = "Select an entry and tap Fork to create a new branch session",
+            message = "请先在会话树中选择一个条目，再点击分叉创建分支会话",
             type = "info",
         )
     }
@@ -540,12 +540,12 @@ class ChatViewModel(
         when (commandName) {
             BUILTIN_SETTINGS_COMMAND -> {
                 _uiState.update {
-                    it.copy(errorMessage = "Use the Settings tab for /settings on mobile")
+                    it.copy(errorMessage = "移动端请前往设置页修改 /settings")
                 }
             }
             BUILTIN_HOTKEYS_COMMAND -> {
                 _uiState.update {
-                    it.copy(errorMessage = "/hotkeys is not supported on mobile yet")
+                    it.copy(errorMessage = "移动端暂不支持 /hotkeys")
                 }
             }
             BUILTIN_RESUME_COMMAND,
@@ -555,12 +555,12 @@ class ChatViewModel(
             BUILTIN_SCOPED_MODELS_COMMAND,
             -> {
                 _uiState.update {
-                    it.copy(errorMessage = "/$commandName is not available on mobile yet")
+                    it.copy(errorMessage = "移动端暂不支持 /$commandName")
                 }
             }
             else -> {
                 _uiState.update {
-                    it.copy(errorMessage = "/$commandName is interactive-only and unavailable via RPC prompt")
+                    it.copy(errorMessage = "/$commandName 仅支持交互模式，无法通过 RPC 消息发送")
                 }
             }
         }
@@ -569,7 +569,7 @@ class ChatViewModel(
     private fun runRenameSlashCommand(args: String?) {
         val newName = args?.trim().orEmpty()
         if (newName.isBlank()) {
-            _uiState.update { it.copy(errorMessage = "Usage: /name <session name>") }
+            _uiState.update { it.copy(errorMessage = "用法：/name <会话名称>") }
             return
         }
 
@@ -578,7 +578,7 @@ class ChatViewModel(
             val result = sessionController.renameSession(newName)
             if (result.isSuccess) {
                 _uiState.update { it.copy(sessionName = newName) }
-                addSystemNotification(message = "Session renamed to \"$newName\"", type = "info")
+                addSystemNotification(message = "会话已重命名为 “$newName”", type = "info")
             } else {
                 _uiState.update { it.copy(errorMessage = result.exceptionOrNull()?.message) }
             }
@@ -595,7 +595,7 @@ class ChatViewModel(
             if (result.isSuccess) {
                 val exportPath = result.getOrNull()
                 addSystemNotification(
-                    message = "Session exported${if (exportPath.isNullOrBlank()) "" else " to $exportPath"}",
+                    message = "会话已导出${if (exportPath.isNullOrBlank()) "" else "到 $exportPath"}",
                     type = "info",
                 )
             } else {
@@ -618,7 +618,7 @@ class ChatViewModel(
 
             val assistantText = result.getOrNull()
             if (assistantText.isNullOrBlank()) {
-                addSystemNotification(message = "No assistant response is available to copy", type = "warning")
+                addSystemNotification(message = "暂无可复制的助手回复", type = "warning")
                 return@launch
             }
 
@@ -640,7 +640,7 @@ class ChatViewModel(
             markLocalSessionMutationExpected()
             val result = sessionController.newSession()
             if (result.isSuccess) {
-                addSystemNotification(message = "Started a new session", type = "info")
+                addSystemNotification(message = "已开始新会话", type = "info")
             } else {
                 _uiState.update { it.copy(errorMessage = result.exceptionOrNull()?.message) }
             }
@@ -662,7 +662,7 @@ class ChatViewModel(
             if (!isCommandAvailable) {
                 val message =
                     commandsResult.exceptionOrNull()?.message
-                        ?: "Workflow command /$commandName is unavailable in this runtime"
+                        ?: "当前运行时不支持工作流命令 /$commandName"
                 handleWorkflowCommandFailure(message, onFailure)
                 return@launch
             }
@@ -683,7 +683,7 @@ class ChatViewModel(
             return
         }
 
-        _uiState.update { it.copy(errorMessage = message ?: "Failed to run workflow command") }
+        _uiState.update { it.copy(errorMessage = message ?: "工作流命令执行失败") }
     }
 
     private fun loadCommands() {
@@ -859,7 +859,7 @@ class ChatViewModel(
 
         if (trigger == FreshnessCheckTrigger.POLL && shouldEmitFreshnessWarning()) {
             addSystemNotification(
-                message = "Another client is editing this session. Use Sync now before continuing.",
+                message = "另一个客户端正在编辑此会话，请先点击立即同步再继续。",
                 type = "warning",
             )
         }
@@ -1116,7 +1116,7 @@ class ChatViewModel(
                 activeExtensionRequest =
                     ExtensionUiRequest.Select(
                         requestId = event.id,
-                        title = event.title ?: "Select",
+                        title = event.title ?: "选择",
                         options = event.options ?: emptyList(),
                     ),
             )
@@ -1129,7 +1129,7 @@ class ChatViewModel(
                 activeExtensionRequest =
                     ExtensionUiRequest.Confirm(
                         requestId = event.id,
-                        title = event.title ?: "Confirm",
+                        title = event.title ?: "确认",
                         message = event.message ?: "",
                     ),
             )
@@ -1142,7 +1142,7 @@ class ChatViewModel(
                 activeExtensionRequest =
                     ExtensionUiRequest.Input(
                         requestId = event.id,
-                        title = event.title ?: "Input",
+                        title = event.title ?: "输入",
                         placeholder = event.placeholder,
                     ),
             )
@@ -1155,7 +1155,7 @@ class ChatViewModel(
                 activeExtensionRequest =
                     ExtensionUiRequest.Editor(
                         requestId = event.id,
-                        title = event.title ?: "Editor",
+                        title = event.title ?: "编辑器",
                         prefill = event.prefill ?: "",
                     ),
             )
@@ -1282,16 +1282,16 @@ class ChatViewModel(
     private fun handleExtensionError(event: ExtensionErrorEvent) {
         val extension = firstNonBlank(event.extensionPath, event.path, "unknown-extension")
         val sourceEvent = firstNonBlank(event.event, event.extensionEvent, "unknown-event")
-        val error = firstNonBlank(event.error, event.message, "Unknown extension error")
-        addSystemNotification("Extension error [$extension:$sourceEvent] $error", "error")
+        val error = firstNonBlank(event.error, event.message, "未知扩展错误")
+        addSystemNotification("扩展错误 [$extension:$sourceEvent] $error", "error")
     }
 
     private fun handleCompactionStart(event: AutoCompactionStartEvent) {
         val message =
             when (event.reason) {
-                "threshold" -> "Compacting context (approaching limit)..."
-                "overflow" -> "Compacting context (overflow recovery)..."
-                else -> "Compacting context..."
+                "threshold" -> "正在压缩上下文（接近上限）…"
+                "overflow" -> "正在压缩上下文（溢出恢复）…"
+                else -> "正在压缩上下文…"
             }
         addSystemNotification(message, "info")
     }
@@ -1299,9 +1299,9 @@ class ChatViewModel(
     private fun handleCompactionEnd(event: AutoCompactionEndEvent) {
         val message =
             when {
-                event.aborted -> "Compaction aborted"
-                event.willRetry -> "Compaction complete, retrying..."
-                else -> "Context compacted successfully"
+                event.aborted -> "已中止上下文压缩"
+                event.willRetry -> "上下文压缩完成，正在重试…"
+                else -> "上下文压缩成功"
             }
         val type = if (event.aborted) "warning" else "info"
         addSystemNotification(message, type)
@@ -1319,9 +1319,9 @@ class ChatViewModel(
         applyDeferredFreshnessRefreshIfIdle()
         val message =
             if (event.success) {
-                "Retry successful (attempt ${event.attempt})"
+                "重试成功（第 ${event.attempt} 次尝试）"
             } else {
-                "Max retries exceeded: ${event.finalError ?: "Unknown error"}"
+                "已达最大重试次数：${event.finalError ?: "未知错误"}"
             }
         val type = if (event.success) "info" else "error"
         addSystemNotification(message, type)
@@ -1610,7 +1610,7 @@ class ChatViewModel(
 
         _uiState.update { it.copy(pendingClipboardText = null) }
         addSystemNotification(
-            message = if (copySucceeded) "Copied last assistant response" else "Failed to copy last assistant response",
+            message = if (copySucceeded) "已复制最新助手回复" else "复制最新助手回复失败",
             type = if (copySucceeded) "info" else "error",
         )
     }
@@ -1632,7 +1632,7 @@ class ChatViewModel(
             val result = sessionController.importSessionJsonl(fileName = fileName, jsonlContent = jsonlContent)
             if (result.isSuccess) {
                 addSystemNotification(
-                    message = "Session imported${if (fileName.isBlank()) "" else " from $fileName"}",
+                    message = "会话已导入${if (fileName.isBlank()) "" else "，来自 $fileName"}",
                     type = "info",
                 )
             } else {
@@ -1685,7 +1685,7 @@ class ChatViewModel(
             _uiState.update { it.copy(errorMessage = null) }
             val result = sessionController.compactSession()
             if (result.isSuccess) {
-                addSystemNotification("Compaction requested", "info")
+                addSystemNotification("已请求压缩上下文", "info")
                 loadSessionStats()
             } else {
                 _uiState.update { it.copy(errorMessage = result.exceptionOrNull()?.message) }
@@ -1976,7 +1976,7 @@ class ChatViewModel(
                 val reason =
                     assistantEvent?.partial?.stringField("reason")
                         ?: event.message?.stringField("stopReason")
-                val message = if (reason.isNullOrBlank()) "Assistant run failed" else "Assistant run failed ($reason)"
+                val message = if (reason.isNullOrBlank()) "助手运行失败" else "助手运行失败（$reason）"
                 addSystemNotification(message, "error")
             }
 
@@ -2115,7 +2115,7 @@ class ChatViewModel(
                 } else {
                     state.copy(
                         isBashExecuting = false,
-                        bashOutput = "Error: ${result.exceptionOrNull()?.message ?: "Unknown error"}",
+                        bashOutput = "错误：${result.exceptionOrNull()?.message ?: "未知错误"}",
                         bashExitCode = -1,
                     )
                 }
@@ -2260,7 +2260,7 @@ class ChatViewModel(
                     _uiState.update {
                         it.copy(
                             isTreeSheetVisible = false,
-                            errorMessage = "Tree navigation was cancelled",
+                            errorMessage = "会话树导航已取消",
                         )
                     }
                     return@launch
@@ -2308,7 +2308,7 @@ class ChatViewModel(
                     _uiState.update {
                         it.copy(
                             isLoadingTree = false,
-                            treeErrorMessage = stateResult.exceptionOrNull()?.message ?: "Failed to load session state",
+                            treeErrorMessage = stateResult.exceptionOrNull()?.message ?: "加载会话状态失败",
                         )
                     }
                     return@launch
@@ -2326,7 +2326,7 @@ class ChatViewModel(
                     _uiState.update {
                         it.copy(
                             isLoadingTree = false,
-                            treeErrorMessage = "No active session path available",
+                            treeErrorMessage = "当前没有可用的会话路径",
                         )
                     }
                     return@launch
@@ -2366,7 +2366,7 @@ class ChatViewModel(
                     } else {
                         state.copy(
                             isLoadingTree = false,
-                            treeErrorMessage = result.exceptionOrNull()?.message ?: "Failed to load session tree",
+                            treeErrorMessage = result.exceptionOrNull()?.message ?: "加载会话树失败",
                         )
                     }
                 }
@@ -2723,7 +2723,7 @@ class ChatViewModel(
 
     fun addImage(pendingImage: PendingImage) {
         if (pendingImage.sizeBytes > ImageEncoder.MAX_IMAGE_SIZE_BYTES) {
-            _uiState.update { it.copy(errorMessage = "Image too large (max 5MB)") }
+            _uiState.update { it.copy(errorMessage = "图片过大（最大 5MB）") }
             return
         }
         _uiState.update { state ->
@@ -2820,91 +2820,91 @@ class ChatViewModel(
             listOf(
                 SlashCommandInfo(
                     name = BUILTIN_SETTINGS_COMMAND,
-                    description = "Open mobile settings tab",
+                    description = "打开移动端设置页",
                     source = COMMAND_SOURCE_BUILTIN_BRIDGE_BACKED,
                     location = null,
                     path = null,
                 ),
                 SlashCommandInfo(
                     name = BUILTIN_TREE_COMMAND,
-                    description = "Open session tree sheet",
+                    description = "打开会话树面板",
                     source = COMMAND_SOURCE_BUILTIN_BRIDGE_BACKED,
                     location = null,
                     path = null,
                 ),
                 SlashCommandInfo(
                     name = BUILTIN_STATS_COMMAND,
-                    description = "Open session stats sheet",
+                    description = "打开会话统计面板",
                     source = COMMAND_SOURCE_BUILTIN_BRIDGE_BACKED,
                     location = null,
                     path = null,
                 ),
                 SlashCommandInfo(
                     name = BUILTIN_MODEL_COMMAND,
-                    description = "Open model picker",
+                    description = "打开模型选择器",
                     source = COMMAND_SOURCE_BUILTIN_BRIDGE_BACKED,
                     location = null,
                     path = null,
                 ),
                 SlashCommandInfo(
                     name = BUILTIN_SESSION_COMMAND,
-                    description = "Open session stats overview",
+                    description = "打开会话统计总览",
                     source = COMMAND_SOURCE_BUILTIN_BRIDGE_BACKED,
                     location = null,
                     path = null,
                 ),
                 SlashCommandInfo(
                     name = BUILTIN_COMPACT_COMMAND,
-                    description = "Compact the active session context",
+                    description = "压缩当前会话上下文",
                     source = COMMAND_SOURCE_BUILTIN_BRIDGE_BACKED,
                     location = null,
                     path = null,
                 ),
                 SlashCommandInfo(
                     name = BUILTIN_EXPORT_COMMAND,
-                    description = "Export session to HTML",
+                    description = "将会话导出为 HTML",
                     source = COMMAND_SOURCE_BUILTIN_BRIDGE_BACKED,
                     location = null,
                     path = null,
                 ),
                 SlashCommandInfo(
                     name = BUILTIN_IMPORT_COMMAND,
-                    description = "Import a JSONL session from this device",
+                    description = "从本机导入 JSONL 会话",
                     source = COMMAND_SOURCE_BUILTIN_BRIDGE_BACKED,
                     location = null,
                     path = null,
                 ),
                 SlashCommandInfo(
                     name = BUILTIN_COPY_COMMAND,
-                    description = "Copy the last assistant response",
+                    description = "复制最新助手回复",
                     source = COMMAND_SOURCE_BUILTIN_BRIDGE_BACKED,
                     location = null,
                     path = null,
                 ),
                 SlashCommandInfo(
                     name = BUILTIN_FORK_COMMAND,
-                    description = "Open tree and fork from a selected entry",
+                    description = "打开会话树并从所选条目分叉",
                     source = COMMAND_SOURCE_BUILTIN_BRIDGE_BACKED,
                     location = null,
                     path = null,
                 ),
                 SlashCommandInfo(
                     name = BUILTIN_NEW_COMMAND,
-                    description = "Start a new session",
+                    description = "开始一个新会话",
                     source = COMMAND_SOURCE_BUILTIN_BRIDGE_BACKED,
                     location = null,
                     path = null,
                 ),
                 SlashCommandInfo(
                     name = BUILTIN_RESUME_COMMAND,
-                    description = "Not available in chat on mobile (use Sessions tab)",
+                    description = "移动端聊天页暂不支持（请使用会话页）",
                     source = COMMAND_SOURCE_BUILTIN_UNSUPPORTED,
                     location = null,
                     path = null,
                 ),
                 SlashCommandInfo(
                     name = BUILTIN_HOTKEYS_COMMAND,
-                    description = "Not available on mobile yet",
+                    description = "移动端暂不支持",
                     source = COMMAND_SOURCE_BUILTIN_UNSUPPORTED,
                     location = null,
                     path = null,
@@ -2943,7 +2943,7 @@ class ChatViewModel(
         private const val THINKING_DIAGNOSTICS_LOG_TAG = "ThinkingDiagnostics"
         private const val STREAMING_DIAGNOSTICS_LOG_TAG = "StreamingDiagnostics"
         private const val SESSION_COHERENCY_WARNING_MESSAGE =
-            "Potential cross-device session edits detected. Use Sync now before continuing."
+            "检测到可能的跨设备会话编辑冲突，请先点击立即同步再继续。"
 
         // Safety fallback for edits made outside the bridge; bridge-observed mutations resync separately.
         private const val SESSION_FRESHNESS_POLL_INTERVAL_MS = 60_000L

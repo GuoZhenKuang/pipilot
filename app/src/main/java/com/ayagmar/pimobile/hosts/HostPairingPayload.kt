@@ -13,10 +13,10 @@ private const val PAIRING_PAYLOAD_VERSION_2 = 2
 fun parseHostPairingPayload(rawValue: String): Result<HostDraft> =
     runCatching {
         val payload = Json.parseToJsonElement(rawValue).jsonObject
-        require(payload.string("type") == PAIRING_PAYLOAD_TYPE) { "This QR code is not for Pi Mobile" }
+        require(payload.string("type") == PAIRING_PAYLOAD_TYPE) { "这不是 Pi Mobile 配对二维码" }
         val version = payload.int("version")
         require(version == PAIRING_PAYLOAD_VERSION_1 || version == PAIRING_PAYLOAD_VERSION_2) {
-            "This pairing QR version is not supported"
+            "配对二维码版本不受支持"
         }
         val shareOrigin =
             payload.string("shareOrigin")
@@ -32,7 +32,7 @@ fun parseHostPairingPayload(rawValue: String): Result<HostDraft> =
                 token = payload.string("token").orEmpty(),
                 shareOrigin = shareOrigin,
             )
-        require(draft.token.isNotBlank()) { "The pairing QR does not contain a token" }
+        require(draft.token.isNotBlank()) { "配对二维码中不包含令牌" }
 
         when (val validation = draft.validate()) {
             is HostValidationResult.Valid -> draft

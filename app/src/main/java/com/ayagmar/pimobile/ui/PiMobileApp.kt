@@ -83,22 +83,22 @@ private val destinations =
     listOf(
         AppDestination(
             route = "hosts",
-            label = "Hosts",
+            label = "主机",
             icon = Icons.Default.Computer,
         ),
         AppDestination(
             route = "sessions",
-            label = "Sessions",
+            label = "会话",
             icon = Icons.Default.Storage,
         ),
         AppDestination(
             route = "chat",
-            label = "Chat",
+            label = "聊天",
             icon = Icons.AutoMirrored.Filled.Chat,
         ),
         AppDestination(
             route = "settings",
-            label = "Settings",
+            label = "设置",
             icon = Icons.Default.Settings,
         ),
     )
@@ -299,11 +299,11 @@ fun PiMobileApp(appGraph: AppGraph) {
                                             verticalArrangement = Arrangement.spacedBy(4.dp),
                                         ) {
                                             Text(
-                                                text = "Navigation",
+                                                text = "导航",
                                                 style = MaterialTheme.typography.titleMedium,
                                             )
                                             Text(
-                                                text = "Slides from the left. Tap outside to close.",
+                                                text = "从左侧滑出，点击外部即可关闭。",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
@@ -313,7 +313,7 @@ fun PiMobileApp(appGraph: AppGraph) {
                                     HorizontalDivider()
 
                                     Text(
-                                        text = "WORKSPACE",
+                                        text = "工作区",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.padding(horizontal = 8.dp),
@@ -348,7 +348,7 @@ fun PiMobileApp(appGraph: AppGraph) {
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Default.Menu,
-                                                    contentDescription = "Open navigation",
+                                                    contentDescription = "打开导航",
                                                 )
                                             }
                                         }
@@ -418,10 +418,10 @@ fun PiMobileApp(appGraph: AppGraph) {
 
 private fun shareNavigationMessage(state: ShareNavigationState): String =
     when (state) {
-        ShareNavigationState.Resolving -> "Resolving shared session…"
-        ShareNavigationState.SetupRequired -> "Review and save the host before opening this link."
-        ShareNavigationState.AuthenticationRequired -> "Enter a token for the configured host to continue."
-        ShareNavigationState.AmbiguousHost -> "More than one configured host matches this link. Review host settings."
+        ShareNavigationState.Resolving -> "正在解析共享会话…"
+        ShareNavigationState.SetupRequired -> "请先检查并保存主机，再打开此链接。"
+        ShareNavigationState.AuthenticationRequired -> "请为已配置的主机填写令牌后继续。"
+        ShareNavigationState.AmbiguousHost -> "有多个已配置主机匹配此链接，请检查主机设置。"
         is ShareNavigationState.Failed -> state.message
         else -> ""
     }

@@ -6,11 +6,11 @@ import java.util.Locale
 internal enum class LiveRunPhase(
     val label: String,
 ) {
-    WORKING("Working"),
-    THINKING("Thinking"),
-    RESPONDING("Responding"),
-    RUNNING_TOOLS("Running tools"),
-    RETRYING("Retrying"),
+    WORKING("工作中"),
+    THINKING("思考中"),
+    RESPONDING("回复中"),
+    RUNNING_TOOLS("正在运行工具"),
+    RETRYING("正在重试"),
 }
 
 internal fun inferLiveRunPhase(

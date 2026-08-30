@@ -15,12 +15,12 @@ fun normalizeShareOrigin(raw: String): String {
         raw.none { character ->
             character.code < ASCII_CONTROL_CHARACTER_LIMIT || character.code == ASCII_DELETE_CHARACTER
         },
-    ) { "Invalid share origin" }
-    val url = raw.toHttpUrlOrNull() ?: error("Invalid share origin")
-    require(url.scheme == "http" || url.scheme == "https") { "Invalid share origin scheme" }
-    require(url.username.isEmpty() && url.password.isEmpty()) { "Share origin user information is not supported" }
+    ) { "共享来源地址无效" }
+    val url = raw.toHttpUrlOrNull() ?: error("共享来源地址无效")
+    require(url.scheme == "http" || url.scheme == "https") { "共享来源协议无效，仅支持 http/https" }
+    require(url.username.isEmpty() && url.password.isEmpty()) { "共享来源不支持携带用户信息" }
     require(url.encodedPath == "/" && url.query == null && url.fragment == null) {
-        "Share origin must not contain a path, query, or fragment"
+        "共享来源不能包含路径、查询参数或片段"
     }
     return url.toString().removeSuffix("/")
 }

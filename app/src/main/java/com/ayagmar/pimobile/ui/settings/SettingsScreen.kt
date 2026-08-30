@@ -82,7 +82,7 @@ private fun SettingsScreen(
         PiTopBar(
             title = {
                 Text(
-                    text = "Settings",
+                    text = "设置",
                     style = MaterialTheme.typography.headlineSmall,
                 )
             },
@@ -143,7 +143,7 @@ private fun ConnectionStatusCard(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(
-            text = "Connection",
+            text = "连接",
             style = MaterialTheme.typography.titleMedium,
         )
 
@@ -158,7 +158,7 @@ private fun ConnectionStatusCard(
         )
 
         PiButton(
-            label = "Check Connection",
+            label = "检查连接",
             onClick = onPing,
             enabled = !state.isChecking,
             modifier = Modifier.padding(top = PiSpacing.sm),
@@ -184,7 +184,7 @@ private fun ConnectionStatusRow(
             }
 
         Text(
-            text = "Status: ${connectionStatus?.name ?: "Unknown"}",
+            text = "状态：${localizedConnectionStatus(connectionStatus?.name)}",
             color = statusColor,
         )
 
@@ -204,28 +204,28 @@ private fun ConnectionMessages(
 ) {
     state.piVersion?.let { version ->
         Text(
-            text = "Active model: $version",
+            text = "当前模型：$version",
             style = MaterialTheme.typography.bodySmall,
         )
     }
 
     state.sessionName?.let { sessionName ->
         Text(
-            text = "Active session: $sessionName",
+            text = "当前会话：$sessionName",
             style = MaterialTheme.typography.bodySmall,
         )
     }
 
     state.pendingMessageCount?.let { pendingCount ->
         Text(
-            text = "Queued messages: $pendingCount",
+            text = "排队消息：$pendingCount",
             style = MaterialTheme.typography.bodySmall,
         )
     }
 
     state.clientId?.let { clientId ->
         Text(
-            text = "Client ID: $clientId",
+            text = "客户端 ID：$clientId",
             style = MaterialTheme.typography.bodySmall,
         )
     }
@@ -256,20 +256,20 @@ private fun AgentAutomationCard(
 ) {
     PiCard(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "Automation",
+            text = "自动化",
             style = MaterialTheme.typography.titleMedium,
         )
 
         SettingsToggleRow(
-            title = "Auto-compact context",
-            description = "Automatically compact conversation when nearing token limit",
+            title = "自动压缩上下文",
+            description = "接近 Token 上限时自动压缩对话",
             checked = autoCompactionEnabled,
             onToggle = onToggleAutoCompaction,
         )
 
         SettingsToggleRow(
-            title = "Auto-retry on errors",
-            description = "Automatically retry failed requests with exponential backoff",
+            title = "出错时自动重试",
+            description = "请求失败时按指数退避策略自动重试",
             checked = autoRetryEnabled,
             onToggle = onToggleAutoRetry,
         )
@@ -285,7 +285,7 @@ private fun TransportCard(
 ) {
     PiCard(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "Connection routing",
+            text = "连接路由",
             style = MaterialTheme.typography.titleMedium,
         )
 
@@ -307,7 +307,7 @@ private fun AppearanceCard(
 ) {
     PiCard(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "Appearance",
+            text = "外观",
             style = MaterialTheme.typography.titleMedium,
         )
 
@@ -317,8 +317,8 @@ private fun AppearanceCard(
         )
 
         SettingsToggleRow(
-            title = "Show extension status strip",
-            description = "Show compact extension runtime updates in chat",
+            title = "显示扩展状态栏",
+            description = "在聊天中显示紧凑的扩展运行状态",
             checked = showExtensionStatusStrip,
             onToggle = onToggleExtensionStatusStrip,
         )
@@ -337,21 +337,21 @@ private fun DeliveryModesCard(
 ) {
     PiCard(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "Streaming delivery",
+            text = "流式消息发送",
             style = MaterialTheme.typography.titleMedium,
         )
 
         ModeSelectorRow(
-            title = "Steering mode",
-            description = "How steer messages are delivered while streaming",
+            title = "调整方向模式",
+            description = "流式生成过程中调整方向消息的发送方式",
             selectedMode = steeringMode,
             isUpdating = isUpdatingSteeringMode,
             onModeSelected = onSteeringModeSelected,
         )
 
         ModeSelectorRow(
-            title = "Follow-up mode",
-            description = "How follow-up messages are queued while streaming",
+            title = "追加消息模式",
+            description = "流式生成过程中追加消息的排队方式",
             selectedMode = followUpMode,
             isUpdating = isUpdatingFollowUpMode,
             onModeSelected = onFollowUpModeSelected,
@@ -401,11 +401,11 @@ private fun TransportPreferenceRow(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            text = "Transport preference",
+            text = "传输方式",
             style = MaterialTheme.typography.bodyMedium,
         )
         Text(
-            text = "Preferred transport between the app and bridge runtime",
+            text = "App 与 Bridge 之间优先使用的传输协议",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -415,7 +415,7 @@ private fun TransportPreferenceRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TransportOptionButton(
-                label = "Auto",
+                label = "自动",
                 selected = selectedPreference == TransportPreference.AUTO,
                 onClick = { onPreferenceSelected(TransportPreference.AUTO) },
             )
@@ -432,7 +432,7 @@ private fun TransportPreferenceRow(
         }
 
         Text(
-            text = "Effective: ${effectivePreference.value}",
+            text = "当前使用：${localizedTransport(effectivePreference.value)}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.primary,
         )
@@ -457,11 +457,11 @@ private fun ThemePreferenceRow(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            text = "Theme",
+            text = "主题",
             style = MaterialTheme.typography.bodyMedium,
         )
         Text(
-            text = "Choose app appearance mode",
+            text = "选择 App 外观模式",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -471,17 +471,17 @@ private fun ThemePreferenceRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ThemeOptionButton(
-                label = "System",
+                label = "跟随系统",
                 selected = selectedPreference == ThemePreference.SYSTEM,
                 onClick = { onPreferenceSelected(ThemePreference.SYSTEM) },
             )
             ThemeOptionButton(
-                label = "Light",
+                label = "浅色",
                 selected = selectedPreference == ThemePreference.LIGHT,
                 onClick = { onPreferenceSelected(ThemePreference.LIGHT) },
             )
             ThemeOptionButton(
-                label = "Dark",
+                label = "深色",
                 selected = selectedPreference == ThemePreference.DARK,
                 onClick = { onPreferenceSelected(ThemePreference.DARK) },
             )
@@ -516,13 +516,13 @@ private fun ModeSelectorRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ModeOptionButton(
-                label = "All",
+                label = "全部",
                 selected = selectedMode == SettingsViewModel.MODE_ALL,
                 enabled = !isUpdating,
                 onClick = { onModeSelected(SettingsViewModel.MODE_ALL) },
             )
             ModeOptionButton(
-                label = "One at a time",
+                label = "一次一条",
                 selected = selectedMode == SettingsViewModel.MODE_ONE_AT_A_TIME,
                 enabled = !isUpdating,
                 onClick = { onModeSelected(SettingsViewModel.MODE_ONE_AT_A_TIME) },
@@ -576,33 +576,33 @@ private fun ModeOptionButton(
 private fun ChatHelpCard() {
     PiCard(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "Chat actions & gestures",
+            text = "聊天操作与手势",
             style = MaterialTheme.typography.titleMedium,
         )
 
         HelpItem(
-            action = "Send",
-            help = "Tap the send icon or use keyboard Send action",
+            action = "发送",
+            help = "点击发送图标，或使用键盘的发送操作",
         )
         HelpItem(
-            action = "Commands",
-            help = "Tap the menu icon in the prompt field to open slash commands",
+            action = "命令",
+            help = "点击输入框中的菜单图标打开斜杠命令",
         )
         HelpItem(
-            action = "Model",
-            help = "Tap model chip to cycle; long-press to open full picker",
+            action = "模型",
+            help = "点击模型标签快速切换；长按打开完整模型列表",
         )
         HelpItem(
-            action = "Thinking/Tool output",
-            help = "Tap show more/show less to expand or collapse long sections",
+            action = "思考/工具输出",
+            help = "点击展开或收起按钮查看较长内容",
         )
         HelpItem(
-            action = "Tree",
-            help = "Open Tree from chat header to inspect branches and fork from entries",
+            action = "会话树",
+            help = "从聊天标题栏打开会话树，查看分支并从条目处分叉",
         )
         HelpItem(
-            action = "Bash & Stats",
-            help = "Use terminal and chart icons in chat header",
+            action = "终端与统计",
+            help = "使用聊天标题栏中的终端和图表图标",
         )
     }
 }
@@ -631,14 +631,31 @@ private fun AppInfoCard(version: String) {
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(
-            text = "About",
+            text = "关于",
             style = MaterialTheme.typography.titleMedium,
         )
         Text(
-            text = "Version: $version",
+            text = "版本：$version",
             style = MaterialTheme.typography.bodyMedium,
         )
     }
 }
+
+private fun localizedConnectionStatus(status: String?): String =
+    when (status) {
+        "CONNECTED" -> "已连接"
+        "CONNECTING" -> "连接中"
+        "RECONNECTING" -> "重新连接中"
+        "DISCONNECTED" -> "未连接"
+        else -> "未知"
+    }
+
+private fun localizedTransport(transport: String): String =
+    when (transport.lowercase()) {
+        "auto" -> "自动"
+        "websocket" -> "WebSocket"
+        "sse" -> "SSE"
+        else -> transport
+    }
 
 private const val STATUS_MESSAGE_DURATION_MS = 3_000L

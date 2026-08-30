@@ -36,9 +36,9 @@ private fun flattenRpcTreeNode(
     node: JsonObject,
     destination: MutableList<SessionTreeEntry>,
 ) {
-    val entry = runCatching { node["entry"]?.jsonObject }.getOrNull() ?: error("Tree node missing entry")
-    val entryId = entry.stringField("id") ?: error("Tree entry missing id")
-    val entryType = entry.stringField("type") ?: error("Tree entry missing type")
+    val entry = runCatching { node["entry"]?.jsonObject }.getOrNull() ?: error("会话树节点缺少 entry")
+    val entryId = entry.stringField("id") ?: error("会话树条目缺少 id")
+    val entryType = entry.stringField("type") ?: error("会话树条目缺少 type")
     val message = runCatching { entry["message"]?.jsonObject }.getOrNull()
     val label = node.stringField("label")
 
@@ -86,7 +86,7 @@ private fun filterSessionTreeEntries(
         "no-tools" -> entries.filter { entry -> entry.role != "toolResult" }
         "user-only" -> entries.filter { entry -> entry.role == "user" }
         "labeled-only" -> entries.filter { entry -> entry.isBookmarked || entry.entryType == "label" }
-        else -> error("Unsupported tree filter: $filter")
+        else -> error("不支持的会话树筛选器：$filter")
     }
 }
 

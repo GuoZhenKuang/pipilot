@@ -8,7 +8,7 @@ class ChatScreenHeaderSummaryTest {
     @Test
     fun formatsConnectionSummaryWithoutQueuedMessages() {
         assertEquals(
-            "Connected",
+            "已连接",
             invokeConnectionSummary(ConnectionState.CONNECTED, 0),
         )
     }
@@ -16,14 +16,14 @@ class ChatScreenHeaderSummaryTest {
     @Test
     fun formatsConnectionSummaryWithQueuedMessages() {
         assertEquals(
-            "Reconnecting • Queued 2 msgs",
+            "重新连接中 • 排队中：2 条消息",
             invokeConnectionSummary(ConnectionState.RECONNECTING, 2),
         )
     }
 
     @Test
     fun formatsSingularQueuedMessageLabel() {
-        assertEquals("Queued 1 msg", invokeQueuedMessagesLabel(1))
+        assertEquals("排队中：1 条消息", invokeQueuedMessagesLabel(1))
     }
 
     private fun invokeConnectionSummary(

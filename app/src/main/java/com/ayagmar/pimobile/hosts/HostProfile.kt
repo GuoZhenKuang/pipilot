@@ -43,10 +43,10 @@ data class HostDraft(
         val parsedPort = port.toIntOrNull()
         val validationError =
             when {
-                name.isBlank() -> "Name is required"
-                host.isBlank() -> "Host is required"
-                parsedPort == null -> "Port must be between $MIN_PORT and $MAX_PORT"
-                parsedPort !in MIN_PORT..MAX_PORT -> "Port must be between $MIN_PORT and $MAX_PORT"
+                name.isBlank() -> "请填写名称"
+                host.isBlank() -> "请填写主机地址"
+                parsedPort == null -> "端口必须在 $MIN_PORT 到 $MAX_PORT 之间"
+                parsedPort !in MIN_PORT..MAX_PORT -> "端口必须在 $MIN_PORT 到 $MAX_PORT 之间"
                 else -> null
             }
 

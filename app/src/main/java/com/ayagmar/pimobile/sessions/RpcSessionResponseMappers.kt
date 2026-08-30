@@ -14,7 +14,7 @@ internal fun parseForkableMessages(data: JsonObject?): List<ForkableMessage> {
         val messageObject = messageElement.jsonObject
         val entryId = messageObject.stringField("entryId") ?: return@mapNotNull null
         // pi RPC currently returns "text" for fork messages; keep "preview" as fallback.
-        val preview = messageObject.stringField("text") ?: messageObject.stringField("preview") ?: "(no preview)"
+        val preview = messageObject.stringField("text") ?: messageObject.stringField("preview") ?: "（无预览）"
         val timestamp = messageObject["timestamp"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
 
         ForkableMessage(
@@ -26,7 +26,7 @@ internal fun parseForkableMessages(data: JsonObject?): List<ForkableMessage> {
 }
 
 internal fun parseSessionTreeSnapshot(payload: JsonObject): SessionTreeSnapshot {
-    val sessionPath = payload.stringField("sessionPath") ?: error("Session tree response missing sessionPath")
+    val sessionPath = payload.stringField("sessionPath") ?: error("会话树响应缺少 sessionPath")
     val rootIds =
         runCatching {
             payload["rootIds"]?.jsonArray?.mapNotNull { element ->
@@ -61,8 +61,8 @@ internal fun parseSessionTreeSnapshot(payload: JsonObject): SessionTreeSnapshot 
 }
 
 internal fun parseSessionFreshnessSnapshot(payload: JsonObject): SessionFreshnessSnapshot {
-    val sessionPath = payload.stringField("sessionPath") ?: error("Session freshness response missing sessionPath")
-    val cwd = payload.stringField("cwd") ?: error("Session freshness response missing cwd")
+    val sessionPath = payload.stringField("sessionPath") ?: error("会话状态响应缺少 sessionPath")
+    val cwd = payload.stringField("cwd") ?: error("会话状态响应缺少 cwd")
 
     val fingerprintPayload = runCatching { payload["fingerprint"]?.jsonObject }.getOrNull()
     val lockPayload = runCatching { payload["lock"]?.jsonObject }.getOrNull()
@@ -117,7 +117,7 @@ internal fun parseModelInfo(data: JsonObject?): ModelInfo? {
 
     return ModelInfo(
         id = model.stringField("id") ?: "unknown",
-        name = model.stringField("name") ?: "Unknown Model",
+        name = model.stringField("name") ?: "未知模型",
         provider = model.stringField("provider") ?: "unknown",
         thinkingLevel = data.stringField("thinkingLevel") ?: "off",
         contextWindow = model.intField("contextWindow"),

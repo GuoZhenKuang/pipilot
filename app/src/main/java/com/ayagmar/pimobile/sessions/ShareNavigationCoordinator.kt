@@ -84,7 +84,7 @@ class ShareNavigationCoordinator(
                             } else {
                                 ShareNavigationFailure.INVALID_LINK
                             },
-                        message = "This Pi Mobile link is invalid or unsupported",
+                        message = "该 Pi Mobile 链接无效或不受支持",
                     )
                 return
             }
@@ -152,7 +152,7 @@ class ShareNavigationCoordinator(
                 publishFailure(
                     requestGeneration,
                     ShareNavigationFailure.UNAVAILABLE,
-                    "This shared session is unavailable or was revoked",
+                    "该共享会话不可用或已被撤销",
                 )
                 return
             }
@@ -165,9 +165,9 @@ class ShareNavigationCoordinator(
                     requestGeneration,
                     if (isLockConflict) ShareNavigationFailure.LOCK_CONFLICT else ShareNavigationFailure.RESUME,
                     if (isLockConflict) {
-                        "This session is controlled by another client. Retry or open Sessions."
+                        "该会话正被另一个客户端控制，请重试或打开会话页。"
                     } else {
-                        "The shared session could not be resumed"
+                        "无法恢复该共享会话"
                     },
                 )
                 return
@@ -188,12 +188,12 @@ class ShareNavigationCoordinator(
                     "control_lock_denied", "control_lock_required" -> ShareNavigationFailure.LOCK_CONFLICT
                     else -> ShareNavigationFailure.UNREACHABLE
                 }
-            publishFailure(requestGeneration, failure, error.message ?: "The shared session could not be opened")
+            publishFailure(requestGeneration, failure, error.message ?: "无法打开该共享会话")
         } catch (_: Throwable) {
             publishFailure(
                 requestGeneration,
                 ShareNavigationFailure.UNREACHABLE,
-                "The configured bridge could not be reached",
+                "无法连接已配置的 Bridge",
             )
         }
     }

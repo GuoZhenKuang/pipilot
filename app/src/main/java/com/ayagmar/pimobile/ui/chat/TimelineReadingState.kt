@@ -84,10 +84,10 @@ fun countNewTimelineActivities(
 fun formatUnreadActivityLabel(state: TimelineReadingState): String =
     when {
         state.assistantUnreadCount > 0 && state.toolUnreadCount > 0 ->
-            "${state.assistantUnreadCount} replies · ${state.toolUnreadCount} tools"
+            "${state.assistantUnreadCount} 条回复 · ${state.toolUnreadCount} 个工具"
         state.assistantUnreadCount > 0 ->
-            if (state.assistantUnreadCount == 1) "1 reply" else "${state.assistantUnreadCount} replies"
+            "${state.assistantUnreadCount} 条回复"
         state.toolUnreadCount > 0 ->
-            if (state.toolUnreadCount == 1) "1 tool" else "${state.toolUnreadCount} tools"
-        else -> "Latest"
+            "${state.toolUnreadCount} 个工具"
+        else -> "最新消息"
     }

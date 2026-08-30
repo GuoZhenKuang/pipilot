@@ -38,6 +38,6 @@ class HostDraftTest {
 
         assertTrue(validation is HostValidationResult.Invalid)
         val invalid = validation as HostValidationResult.Invalid
-        assertEquals("Port must be between 1 and 65535", invalid.reason)
+        assertEquals("端口必须在 1 到 65535 之间", invalid.reason)
     }
 }

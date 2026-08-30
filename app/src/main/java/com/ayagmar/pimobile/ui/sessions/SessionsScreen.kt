@@ -205,9 +205,9 @@ internal fun SessionsScreen(
         PiTopBar(
             title = {
                 Column {
-                    Text("Session cockpit", style = MaterialTheme.typography.headlineSmall)
+                    Text("会话控制台", style = MaterialTheme.typography.headlineSmall)
                     Text(
-                        activeItem?.let { "Active · ${it.title} · ${it.hostLabel}" } ?: "Choose work across your hosts",
+                        activeItem?.let { "活动会话 · ${it.title} · ${it.hostLabel}" } ?: "从各主机中选择工作会话",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -217,12 +217,12 @@ internal fun SessionsScreen(
             },
             actions = {
                 TextButton(onClick = callbacks.onToggleDensity) {
-                    Text(if (state.density == SessionCardDensity.COMPACT) "Comfortable" else "Compact")
+                    Text(if (state.density == SessionCardDensity.COMPACT) "舒适" else "紧凑")
                 }
                 TextButton(onClick = callbacks.onRefresh, enabled = !state.isRefreshing) {
-                    Text(if (state.isRefreshing) "Refreshing" else "Refresh")
+                    Text(if (state.isRefreshing) "刷新中" else "刷新")
                 }
-                PiButton(label = "New", onClick = callbacks.onNew)
+                PiButton(label = "新建", onClick = callbacks.onNew)
             },
         )
 
@@ -230,18 +230,18 @@ internal fun SessionsScreen(
         PiTextField(
             value = state.query,
             onValueChange = callbacks.onSearchChanged,
-            label = "Search safe session metadata",
+            label = "搜索会话",
         )
         CockpitFilters(state, callbacks)
         HostStatusRow(state.hostStatuses)
         StatusMessages(state.errorMessage, statusMessage, state.shareLink, callbacks.onCopyLink)
 
         when {
-            state.hosts.isEmpty() -> Text("No hosts configured yet.")
+            state.hosts.isEmpty() -> Text("尚未配置主机。")
             state.isLoading && state.items.isEmpty() -> CircularProgressIndicator()
             state.items.isEmpty() ->
                 Text(
-                    if (state.filter.hiddenOnly) "No hidden sessions." else "No sessions match these filters.",
+                    if (state.filter.hiddenOnly) "没有已隐藏的会话。" else "没有符合当前筛选条件的会话。",
                 )
             else ->
                 SessionCards(state, callbacks, onRename = {
@@ -285,14 +285,14 @@ private fun HostFilters(
             FilterChip(
                 selected = state.filter.hostId == null,
                 onClick = callbacks.onShowAllHosts,
-                label = { Text("All hosts") },
+                label = { Text("全部主机") },
             )
         }
         items(state.hosts, key = { it.id }) { host ->
             FilterChip(
                 selected = state.filter.hostId == host.id,
                 onClick = { callbacks.onHostSelected(host.id) },
-                label = { Text(privacySafeText(host.name) ?: "Host") },
+                label = { Text(privacySafeText(host.name) ?: "主机") },
             )
         }
     }
@@ -304,9 +304,9 @@ private fun CockpitFilters(
     callbacks: SessionsCallbacks,
 ) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        item { FilterChip(state.filter.pinnedOnly, callbacks.onTogglePinned, { Text("Pinned") }) }
-        item { FilterChip(state.filter.hiddenOnly, callbacks.onToggleHidden, { Text("Hidden") }) }
-        item { FilterChip(state.filter.activeOnly, callbacks.onToggleActive, { Text("Active") }) }
+        item { FilterChip(state.filter.pinnedOnly, callbacks.onTogglePinned, { Text("已置顶") }) }
+        item { FilterChip(state.filter.hiddenOnly, callbacks.onToggleHidden, { Text("已隐藏") }) }
+        item { FilterChip(state.filter.activeOnly, callbacks.onToggleActive, { Text("活动中") }) }
         item {
             FilterChip(
                 selected = state.filter.freshness == SessionFreshnessFilter.STALE,
@@ -319,7 +319,7 @@ private fun CockpitFilters(
                         },
                     )
                 },
-                label = { Text("Stale") },
+                label = { Text("已过期") },
             )
         }
         item {
@@ -334,14 +334,14 @@ private fun CockpitFilters(
                         },
                     )
                 },
-                label = { Text("Host issues") },
+                label = { Text("主机异常") },
             )
         }
         item {
             FilterChip(
                 selected = state.filter.workspaceLabel == null,
                 onClick = { callbacks.onWorkspaceSelected(null) },
-                label = { Text("All workspaces") },
+                label = { Text("全部工作区") },
             )
         }
         items(state.workspaceLabels, key = { it }) { label ->
@@ -359,7 +359,7 @@ private fun HostStatusRow(statuses: List<HostSessionStatus>) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(statuses, key = { it.hostId }) { status ->
             Text(
-                text = "${status.hostLabel}: ${status.kind.name.lowercase().replace('_', ' ')}",
+                text = "${status.hostLabel}：${localizedHostStatus(status.kind.name)}",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -384,8 +384,8 @@ private fun StatusMessages(
     status?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
     shareLink?.let { link ->
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Share link ready", modifier = Modifier.weight(1f))
-            TextButton(onClick = { onCopy(link) }) { Text("Copy link") }
+            Text("分享链接已生成", modifier = Modifier.weight(1f))
+            TextButton(onClick = { onCopy(link) }) { Text("复制链接") }
         }
     }
 }
@@ -432,7 +432,7 @@ private fun SessionCard(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                "${item.hostLabel} · ${item.workspaceLabel}${if (item.isActive) " · Active" else ""}",
+                "${item.hostLabel} · ${item.workspaceLabel}${if (item.isActive) " · 活动中" else ""}",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -442,7 +442,7 @@ private fun SessionCard(
             val metadata =
                 listOfNotNull(
                     item.model,
-                    item.messageCount?.let { "$it messages" },
+                    item.messageCount?.let { "$it 条消息" },
                     item.updatedAt?.let(::relativeUpdatedTime),
                     item.freshness.name.lowercase(),
                 ).joinToString(" · ")
@@ -456,33 +456,33 @@ private fun SessionCard(
             }
             LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (item.isUnavailableSavedItem) {
-                    item { TextButton(onClick = { callbacks.onRetry(item) }) { Text("Retry") } }
-                    item { TextButton(onClick = { callbacks.onRemove(item) }) { Text("Remove") } }
+                    item { TextButton(onClick = { callbacks.onRetry(item) }) { Text("重试") } }
+                    item { TextButton(onClick = { callbacks.onRemove(item) }) { Text("移除") } }
                 } else {
-                    item { TextButton(onClick = { callbacks.onOpen(item) }) { Text("Open") } }
+                    item { TextButton(onClick = { callbacks.onOpen(item) }) { Text("打开") } }
                     item {
                         TextButton(onClick = { callbacks.onQuickReply(item) }, enabled = item.key != null) {
-                            Text("Quick reply")
+                            Text("快速回复")
                         }
                     }
                     item {
                         TextButton(onClick = { callbacks.onPin(item) }, enabled = item.key != null) {
-                            Text(if (item.isPinned) "Unpin" else "Pin")
+                            Text(if (item.isPinned) "取消置顶" else "置顶")
                         }
                     }
                     item {
                         TextButton(onClick = { callbacks.onHide(item) }, enabled = item.key != null) {
-                            Text(if (item.isHidden) "Unhide" else "Hide")
+                            Text(if (item.isHidden) "取消隐藏" else "隐藏")
                         }
                     }
                     item {
-                        TextButton(onClick = { callbacks.onShare(item) }, enabled = item.key != null) { Text("Share") }
+                        TextButton(onClick = { callbacks.onShare(item) }, enabled = item.key != null) { Text("分享") }
                     }
                     item {
                         TextButton(
                             onClick = { callbacks.onRevoke(item) },
                             enabled = item.key != null,
-                        ) { Text("Revoke") }
+                        ) { Text("撤销") }
                     }
                 }
             }
@@ -512,19 +512,19 @@ private fun QuickReplySheet(
     if (!state.isVisible) return
     ModalBottomSheet(
         onDismissRequest = callbacks.onQuickDismiss,
-        modifier = Modifier.semantics { paneTitle = "Quick reply" },
+        modifier = Modifier.semantics { paneTitle = "快速回复" },
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Quick reply", style = MaterialTheme.typography.titleLarge)
+            Text("快速回复", style = MaterialTheme.typography.titleLarge)
             Text(state.targetLabel, style = MaterialTheme.typography.bodyMedium)
             OutlinedTextField(
                 value = state.draft,
                 onValueChange = callbacks.onQuickDraft,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
-                label = { Text("Reply") },
+                label = { Text("回复内容") },
                 enabled = state.phase != QuickReplyPhase.SENDING,
             )
             if (state.phase == QuickReplyPhase.EDITING && isRunActive) {
@@ -532,13 +532,13 @@ private fun QuickReplySheet(
                     FilterChip(
                         selected = state.deliveryMode == QuickReplyDeliveryMode.FOLLOW_UP,
                         onClick = { callbacks.onQuickMode(QuickReplyDeliveryMode.FOLLOW_UP) },
-                        label = { Text("Follow up") },
+                        label = { Text("追加消息") },
                     )
                     FilterChip(
                         selected = state.deliveryMode == QuickReplyDeliveryMode.STEER,
                         onClick = { callbacks.onQuickMode(QuickReplyDeliveryMode.STEER) },
                         enabled = !isRetrying,
-                        label = { Text("Steer") },
+                        label = { Text("调整方向") },
                     )
                 }
             }
@@ -550,24 +550,24 @@ private fun QuickReplySheet(
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = callbacks.onQuickDismiss) { Text("Cancel") }
+                TextButton(onClick = callbacks.onQuickDismiss) { Text("取消") }
                 when (state.phase) {
                     QuickReplyPhase.EDITING, QuickReplyPhase.ERROR -> {
                         TextButton(
                             onClick = { callbacks.onQuickSend(false) },
                             enabled = state.draft.isNotBlank(),
-                        ) { Text(if (state.phase == QuickReplyPhase.ERROR) "Retry" else "Send") }
+                        ) { Text(if (state.phase == QuickReplyPhase.ERROR) "重试" else "发送") }
                         TextButton(
                             onClick = { callbacks.onQuickSend(true) },
                             enabled = state.draft.isNotBlank(),
-                        ) { Text("Send and open") }
+                        ) { Text("发送并打开") }
                     }
                     QuickReplyPhase.SENDING -> CircularProgressIndicator()
                     QuickReplyPhase.CONFLICT, QuickReplyPhase.SENT -> {
                         if (state.canOpenChat) {
                             TextButton(onClick = callbacks.onQuickOpenChat) {
                                 Text(
-                                    if (state.phase == QuickReplyPhase.CONFLICT) "Open current session" else "Open Chat",
+                                    if (state.phase == QuickReplyPhase.CONFLICT) "打开当前会话" else "打开聊天",
                                 )
                             }
                         }
@@ -600,14 +600,26 @@ internal fun relativeUpdatedTime(
     value: String,
     now: Instant = Instant.now(),
 ): String {
-    val instant = runCatching { Instant.parse(value) }.getOrNull() ?: return "Updated recently"
+    val instant = runCatching { Instant.parse(value) }.getOrNull() ?: return "最近更新"
     val duration = Duration.between(instant, now).coerceAtLeast(Duration.ZERO)
     return when {
-        duration.toMinutes() < 1 -> "Updated now"
-        duration.toHours() < 1 -> "Updated ${duration.toMinutes()}m ago"
-        duration.toDays() < 1 -> "Updated ${duration.toHours()}h ago"
-        else -> "Updated ${duration.toDays()}d ago"
+        duration.toMinutes() < 1 -> "刚刚更新"
+        duration.toHours() < 1 -> "${duration.toMinutes()} 分钟前更新"
+        duration.toDays() < 1 -> "${duration.toHours()} 小时前更新"
+        else -> "${duration.toDays()} 天前更新"
     }
 }
+
+private fun localizedHostStatus(kindName: String): String =
+    when (kindName) {
+        "FRESH" -> "正常"
+        "LOADING" -> "加载中"
+        "REFRESHING" -> "刷新中"
+        "STALE" -> "数据已过期"
+        "AUTH_REQUIRED" -> "需要认证"
+        "UNREACHABLE" -> "无法连接"
+        "ERROR" -> "发生错误"
+        else -> kindName.lowercase().replace('_', ' ')
+    }
 
 private const val STATUS_MESSAGE_DURATION_MS = 3_000L

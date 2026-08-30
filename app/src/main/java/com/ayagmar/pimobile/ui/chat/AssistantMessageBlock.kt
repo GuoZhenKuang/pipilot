@@ -53,7 +53,7 @@ internal fun highlightCodeBlock(
     language: String?,
     colors: androidx.compose.material3.ColorScheme,
 ): AnnotatedString {
-    val text = code.ifBlank { "(empty code block)" }
+    val text = code.ifBlank { "（空代码块）" }
     val commentPattern = commentRegexFor(language)
     val keywordPattern = keywordRegexFor(language)
 

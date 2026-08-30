@@ -33,32 +33,32 @@ fun SessionActionsRow(
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
             TextButton(onClick = onRenameClick, enabled = !isBusy) {
-                Text("Rename")
+                Text("重命名")
             }
         }
         item {
             TextButton(onClick = onForkClick, enabled = !isBusy) {
-                Text("Fork")
+                Text("分叉")
             }
         }
         item {
             TextButton(onClick = onExportClick, enabled = !isBusy) {
-                Text("Export")
+                Text("导出")
             }
         }
         item {
             TextButton(onClick = onCompactClick, enabled = !isBusy) {
-                Text("Compact")
+                Text("压缩上下文")
             }
         }
         item {
             TextButton(onClick = onShareClick, enabled = !isBusy) {
-                Text("Share session link")
+                Text("分享会话链接")
             }
         }
         item {
             TextButton(onClick = onRevokeShareClick, enabled = !isBusy) {
-                Text("Revoke shared link")
+                Text("撤销分享链接")
             }
         }
     }
@@ -76,7 +76,7 @@ fun RenameSessionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Rename active session") },
+        title = { Text("重命名当前会话") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 currentSession?.let { session ->
@@ -91,7 +91,7 @@ fun RenameSessionDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = onNameChange,
-                    label = { Text("Session name") },
+                    label = { Text("会话名称") },
                     singleLine = true,
                 )
             }
@@ -101,12 +101,12 @@ fun RenameSessionDialog(
                 onClick = onConfirm,
                 enabled = !isBusy && name.isNotBlank(),
             ) {
-                Text("Rename")
+                Text("重命名")
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text("取消")
             }
         },
     )
@@ -121,7 +121,7 @@ fun ForkPickerDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Fork from message") },
+        title = { Text("从消息处分叉") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (isLoading) {
@@ -139,7 +139,7 @@ fun ForkPickerDialog(
                                 onClick = { onSelect(candidate.entryId) },
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
-                                Text(privacySafeText(candidate.preview) ?: "User message")
+                                Text(privacySafeText(candidate.preview) ?: "用户消息")
                             }
                         }
                     }
@@ -149,14 +149,14 @@ fun ForkPickerDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text("取消")
             }
         },
     )
 }
 
 val SessionRecord.displayTitle: String
-    get() = privacySafeText(displayName ?: firstUserMessagePreview) ?: "Untitled session"
+    get() = privacySafeText(displayName ?: firstUserMessagePreview) ?: "未命名会话"
 
 val SessionRecord.displaySubtitle: String?
     get() =

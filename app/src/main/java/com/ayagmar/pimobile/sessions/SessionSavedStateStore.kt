@@ -85,7 +85,7 @@ class SessionSavedStateStore(
         if (raw.length > MAX_RAW_LENGTH) return SavedSessionsState()
         return runCatching {
             val persisted = json.decodeFromString<PersistedSavedSessions>(raw)
-            require(persisted.version == SAVED_STATE_VERSION) { "Unsupported saved-session state" }
+            require(persisted.version == SAVED_STATE_VERSION) { "已保存的会话状态版本不受支持" }
             SavedSessionsState(
                 pinned = persisted.pinned.decodeKeys(),
                 hidden = persisted.hidden.decodeKeys(),

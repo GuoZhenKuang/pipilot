@@ -34,7 +34,7 @@ class RpcSessionControllerTest {
             assertTrue(results.all { it.isFailure })
             assertTrue(
                 results.all { result ->
-                    result.exceptionOrNull()?.message?.contains("active session changed", ignoreCase = true) == true
+                    result.exceptionOrNull()?.message?.contains("活动会话已切换") == true
                 },
             )
         }

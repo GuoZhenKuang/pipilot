@@ -78,7 +78,7 @@ fun HostsRoute(
         rememberPairingScanner { result ->
             result
                 .onSuccess { draft -> editorDraft = draft }
-                .onFailure { error -> scanError = error.message ?: "Could not read pairing QR" }
+                .onFailure { error -> scanError = error.message ?: "无法读取配对二维码" }
         }
     val actions =
         HostsScreenActions(
@@ -137,7 +137,7 @@ private fun rememberPairingScanner(onResult: (Result<HostDraft>) -> Unit): () ->
                 val rawValue = barcode.rawValue
                 val result =
                     if (rawValue == null) {
-                        Result.failure(IllegalArgumentException("The QR code did not contain connection details"))
+                        Result.failure(IllegalArgumentException("二维码中不包含连接信息"))
                     } else {
                         parseHostPairingPayload(rawValue)
                     }
@@ -145,7 +145,7 @@ private fun rememberPairingScanner(onResult: (Result<HostDraft>) -> Unit): () ->
             }
             .addOnFailureListener { error ->
                 if (error !is ApiException || error.statusCode != CommonStatusCodes.CANCELED) {
-                    onResult(Result.failure(IllegalStateException("Could not open the QR scanner")))
+                    onResult(Result.failure(IllegalStateException("无法打开二维码扫描器")))
                 }
             }
     }
@@ -235,7 +235,7 @@ private fun HostsHeader(actions: HostsScreenActions) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "Hosts",
+            text = "主机",
             style = MaterialTheme.typography.headlineSmall,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -244,10 +244,10 @@ private fun HostsHeader(actions: HostsScreenActions) {
                     imageVector = Icons.Default.QrCodeScanner,
                     contentDescription = null,
                 )
-                Text("Scan QR")
+                Text("扫描二维码")
             }
             Button(onClick = actions.onAddClick) {
-                Text("Add host")
+                Text("添加主机")
             }
         }
     }
@@ -257,7 +257,7 @@ private fun HostsHeader(actions: HostsScreenActions) {
 private fun HostStateMessages(state: HostsUiState) {
     if (state.requiresTokenReentry) {
         Text(
-            text = "Token protection was updated. Re-enter a token when you next use each connection.",
+            text = "令牌保护方式已更新。下次使用各连接时，请重新输入令牌。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -281,14 +281,14 @@ private fun FirstRunConnectionCard(
             modifier = Modifier.fillMaxWidth().padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Connect your computer", style = MaterialTheme.typography.headlineSmall)
+            Text("连接你的电脑", style = MaterialTheme.typography.headlineSmall)
             Text(
                 text =
-                    "Before continuing, start the Pi Mobile bridge on your computer " +
-                        "and connect both devices through Tailscale.",
+                    "继续之前，请在电脑上启动 Pi Mobile Bridge，" +
+                        "并通过 Tailscale 连接电脑和手机。",
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Text("Run pnpm pair in the bridge folder, then scan the code shown in your terminal.")
+            Text("在 Bridge 目录中运行 pnpm pair，然后扫描终端显示的二维码。")
             Button(
                 onClick = onScanClick,
                 modifier = Modifier.fillMaxWidth(),
@@ -297,13 +297,13 @@ private fun FirstRunConnectionCard(
                     imageVector = Icons.Default.QrCodeScanner,
                     contentDescription = null,
                 )
-                Text("Scan pairing QR")
+                Text("扫描配对二维码")
             }
             TextButton(
                 onClick = onAddClick,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Enter connection manually")
+                Text("手动输入连接信息")
             }
         }
     }
@@ -343,7 +343,7 @@ private fun HostCard(
             )
 
             Text(
-                text = if (item.hasToken) "Token stored securely" else "No token configured",
+                text = if (item.hasToken) "令牌已安全保存" else "尚未配置令牌",
                 style = MaterialTheme.typography.bodySmall,
             )
 
@@ -361,16 +361,16 @@ private fun HostCard(
                     enabled = item.diagnosticStatus != DiagnosticStatus.TESTING,
                 ) {
                     if (item.diagnosticStatus == DiagnosticStatus.TESTING) {
-                        Text("Testing...")
+                        Text("正在测试…")
                     } else {
-                        Text("Test")
+                        Text("测试")
                     }
                 }
                 TextButton(onClick = onEditClick) {
-                    Text("Edit")
+                    Text("编辑")
                 }
                 TextButton(onClick = onDeleteClick) {
-                    Text("Delete")
+                    Text("删除")
                 }
             }
         }
@@ -390,14 +390,14 @@ private fun DiagnosticStatusIcon(status: DiagnosticStatus) {
         DiagnosticStatus.SUCCESS -> {
             Icon(
                 imageVector = Icons.Default.CheckCircle,
-                contentDescription = "Connection successful",
+                contentDescription = "连接成功",
                 tint = MaterialTheme.colorScheme.primary,
             )
         }
         DiagnosticStatus.FAILED -> {
             Icon(
                 imageVector = Icons.Default.Warning,
-                contentDescription = "Connection failed",
+                contentDescription = "连接失败",
                 tint = MaterialTheme.colorScheme.error,
             )
         }
@@ -417,13 +417,13 @@ private fun DiagnosticResultDetail(result: DiagnosticsResult) {
                 )
                 result.model?.let {
                     Text(
-                        text = "Model: $it",
+                        text = "模型：$it",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
                 result.cwd?.let {
                     Text(
-                        text = "CWD: $it",
+                        text = "工作目录：$it",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -464,7 +464,7 @@ private fun HostEditorDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(if (initialDraft.id == null) "Connect your computer" else "Edit connection")
+            Text(if (initialDraft.id == null) "连接你的电脑" else "编辑连接")
         },
         text = {
             HostDraftFields(
@@ -476,12 +476,12 @@ private fun HostEditorDialog(
         },
         confirmButton = {
             TextButton(onClick = { onSave(draft) }) {
-                Text(if (initialDraft.id == null) "Save connection" else "Save")
+                Text(if (initialDraft.id == null) "保存连接" else "保存")
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text("取消")
             }
         },
     )
@@ -498,7 +498,7 @@ private fun HostDraftFields(
             onValueChange = { newName ->
                 onDraftChange(draft.copy(name = newName))
             },
-            label = { Text("Name") },
+            label = { Text("名称") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -508,7 +508,7 @@ private fun HostDraftFields(
             onValueChange = { newHost ->
                 onDraftChange(draft.copy(host = newHost))
             },
-            label = { Text("Host") },
+            label = { Text("主机地址") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -518,7 +518,7 @@ private fun HostDraftFields(
             onValueChange = { newPort ->
                 onDraftChange(draft.copy(port = newPort))
             },
-            label = { Text("Port") },
+            label = { Text("端口") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -528,7 +528,7 @@ private fun HostDraftFields(
             onValueChange = { newToken ->
                 onDraftChange(draft.copy(token = newToken))
             },
-            label = { Text("Token") },
+            label = { Text("令牌") },
             visualTransformation = PasswordVisualTransformation(),
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
@@ -539,7 +539,7 @@ private fun HostDraftFields(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text("Use TLS")
+            Text("使用 TLS 加密")
             Switch(
                 checked = draft.useTls,
                 onCheckedChange = { checked ->

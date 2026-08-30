@@ -16,7 +16,7 @@ internal fun formatContextUsageLabel(
     stats: SessionStats?,
     currentModel: ModelInfo?,
 ): String {
-    val statsSnapshot = stats ?: return "Ctx --"
+    val statsSnapshot = stats ?: return "上下文 --"
 
     val explicitUsedTokens = statsSnapshot.contextUsedTokens?.coerceAtLeast(0L)
     val explicitWindowTokens = statsSnapshot.contextWindowTokens?.takeIf { it > 0 }
@@ -50,17 +50,17 @@ private fun buildContextUsageCoreLabel(
     return when {
         explicitPercent != null && explicitUsedTokens != null && explicitWindowTokens != null ->
             formatExactContextUsage(explicitPercent, explicitUsedTokens, explicitWindowTokens)
-        explicitPercent != null -> "Ctx $explicitPercent%"
+        explicitPercent != null -> "上下文 $explicitPercent%"
         explicitUsedTokens != null && explicitWindowTokens != null ->
             formatExactContextUsage(
                 computeContextPercent(explicitUsedTokens, explicitWindowTokens),
                 explicitUsedTokens,
                 explicitWindowTokens,
             )
-        explicitUsedTokens != null -> "Ctx ${formatNumber(explicitUsedTokens)}"
+        explicitUsedTokens != null -> "上下文 ${formatNumber(explicitUsedTokens)}"
         fallbackWindowTokens != null ->
-            "Ctx ~${formatNumber(fallbackUsedTokens)}/${formatNumber(fallbackWindowTokens)}"
-        else -> "Ctx ~${formatNumber(fallbackUsedTokens)}"
+            "上下文 ~${formatNumber(fallbackUsedTokens)}/${formatNumber(fallbackWindowTokens)}"
+        else -> "上下文 ~${formatNumber(fallbackUsedTokens)}"
     }
 }
 
@@ -78,7 +78,7 @@ private fun formatExactContextUsage(
     usedTokens: Long,
     windowTokens: Long,
 ): String {
-    return "Ctx $percent% · ${formatNumber(usedTokens)}/${formatNumber(windowTokens)}"
+    return "上下文 $percent% · ${formatNumber(usedTokens)}/${formatNumber(windowTokens)}"
 }
 
 @Suppress("MagicNumber")

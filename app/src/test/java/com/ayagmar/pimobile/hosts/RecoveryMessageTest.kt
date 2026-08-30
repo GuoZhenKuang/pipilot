@@ -20,9 +20,9 @@ class RecoveryMessageTest {
         val auth = DiagnosticsResult.AuthError(profile, "token=super-secret").toRecoveryMessage()
         val rpc = DiagnosticsResult.RpcError(profile, "spawn failed").toRecoveryMessage()
 
-        assertEquals("Try again", network.actionLabel)
-        assertEquals("Update token", auth.actionLabel)
-        assertEquals("Test Pi again", rpc.actionLabel)
+        assertEquals("重试", network.actionLabel)
+        assertEquals("更新令牌", auth.actionLabel)
+        assertEquals("重新测试 Pi", rpc.actionLabel)
     }
 
     @Test

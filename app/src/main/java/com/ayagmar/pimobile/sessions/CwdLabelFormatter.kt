@@ -7,7 +7,7 @@ internal fun formatCwdTail(
     val segments = cwd.trim().trimEnd('/').split('/').filter { it.isNotBlank() }
 
     return when {
-        cwd.isBlank() -> "(unknown)"
+        cwd.isBlank() -> "（未知）"
         segments.isEmpty() -> "/"
         else -> segments.takeLast(maxSegments).joinToString("/")
     }

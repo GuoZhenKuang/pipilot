@@ -26,7 +26,7 @@ class ChatScreenContextUsageLabelTest {
                 currentModel = modelWithContextWindow(128_000),
             )
 
-        assertEquals("Ctx ~2.7K/128.0K", label)
+        assertEquals("上下文 ~2.7K/128.0K", label)
     }
 
     @Test
@@ -53,7 +53,7 @@ class ChatScreenContextUsageLabelTest {
                 currentModel = modelWithContextWindow(200_000),
             )
 
-        assertEquals("Ctx 2% · 3.1K/128.0K · C2 · $0.450", label)
+        assertEquals("上下文 2% · 3.1K/128.0K · C2 · $0.450", label)
     }
 
     @Test
@@ -77,7 +77,7 @@ class ChatScreenContextUsageLabelTest {
                 currentModel = modelWithContextWindow(128_000),
             )
 
-        assertEquals("Ctx 90%", label)
+        assertEquals("上下文 90%", label)
     }
 
     @Test
@@ -101,7 +101,7 @@ class ChatScreenContextUsageLabelTest {
                 currentModel = null,
             )
 
-        assertEquals("Ctx ~3.2K/64.0K", label)
+        assertEquals("上下文 ~3.2K/64.0K", label)
     }
 
     private fun modelWithContextWindow(window: Int): ModelInfo {

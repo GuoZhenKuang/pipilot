@@ -38,11 +38,11 @@ class BridgeSessionIndexRemoteDataSource(
     override suspend fun fetch(hostId: String): List<SessionGroup> {
         val hostProfile =
             profileStore.list().firstOrNull { profile -> profile.id == hostId }
-                ?: throw IllegalArgumentException("Unknown host id: $hostId")
+                ?: throw IllegalArgumentException("未知主机 ID：$hostId")
 
         val token = tokenStore.getToken(hostId)
         check(!token.isNullOrBlank()) {
-            "No token configured for host: ${hostProfile.name}"
+            "主机 ${hostProfile.name} 尚未配置令牌"
         }
 
         val hostMutex = synchronized(mutexesByHost) { mutexesByHost.getOrPut(hostId) { Mutex() } }
@@ -102,7 +102,7 @@ class BridgeSessionIndexRemoteDataSource(
 
                     BRIDGE_ERROR_TYPE -> {
                         val decoded = json.decodeFromJsonElement(BridgeErrorPayload.serializer(), payload)
-                        throw IllegalStateException(decoded.message ?: "Bridge returned an error")
+                        throw IllegalStateException(decoded.message ?: "Bridge 返回了错误")
                     }
 
                     else -> null
@@ -149,8 +149,8 @@ class BridgeSessionIndexRemoteDataSource(
         private const val BRIDGE_LIST_SESSIONS_TYPE = "bridge_list_sessions"
         private const val BRIDGE_SESSIONS_TYPE = "bridge_sessions"
         private const val BRIDGE_ERROR_TYPE = "bridge_error"
-        private const val DEFAULT_CONNECT_TIMEOUT_MS = 10_000L
-        private const val DEFAULT_REQUEST_TIMEOUT_MS = 10_000L
+        private const val DEFAULT_CONNECT_TIMEOUT_MS = 30_000L
+        private const val DEFAULT_REQUEST_TIMEOUT_MS = 30_000L
 
         val defaultJson: Json =
             Json {

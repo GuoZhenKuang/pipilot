@@ -100,7 +100,7 @@ fun buildSessionCockpit(
             group.sessions.forEach { session ->
                 val key = session.stableKey(host.id)
                 if (key != null) foundStableKeys += key
-                val title = privacySafeText(session.displayName ?: session.firstUserMessagePreview) ?: "Untitled session"
+                val title = privacySafeText(session.displayName ?: session.firstUserMessagePreview) ?: "未命名会话"
                 val preview =
                     privacySafeText(session.firstUserMessagePreview)
                         ?.takeUnless { it == title }
@@ -109,7 +109,7 @@ fun buildSessionCockpit(
                         listKey = key?.let { "${it.hostProfileId}:${it.sessionId}" } ?: "legacy:${host.id}:${session.sessionPath}",
                         key = key,
                         hostId = host.id,
-                        hostLabel = privacySafeText(host.name) ?: "Host",
+                        hostLabel = privacySafeText(host.name) ?: "主机",
                         workspaceLabel = workspaceLabel,
                         title = title,
                         preview = preview,
@@ -123,7 +123,7 @@ fun buildSessionCockpit(
                         freshness = requireNotNull(statusByHost[host.id]).kind,
                         stableActionDisabledReason =
                             if (key == null) {
-                                "Pin and hide need a unique stable session identity"
+                                "置顶和隐藏操作需要唯一且稳定的会话标识"
                             } else {
                                 null
                             },
@@ -141,9 +141,9 @@ fun buildSessionCockpit(
                     listKey = "${key.hostProfileId}:${key.sessionId}",
                     key = key,
                     hostId = host.id,
-                    hostLabel = privacySafeText(host.name) ?: "Host",
-                    workspaceLabel = "Unavailable workspace",
-                    title = "Unavailable saved session",
+                    hostLabel = privacySafeText(host.name) ?: "主机",
+                    workspaceLabel = "工作区不可用",
+                    title = "已保存的会话不可用",
                     preview = null,
                     model = null,
                     messageCount = null,
@@ -153,7 +153,7 @@ fun buildSessionCockpit(
                     isHidden = key in saved.hidden,
                     isActive = key == activeKey,
                     freshness = statusByHost[host.id]?.kind ?: HostSessionStatusKind.ERROR,
-                    stableActionDisabledReason = "Refresh this host or remove the saved item",
+                    stableActionDisabledReason = "请刷新此主机或移除已保存的项目",
                     isUnavailableSavedItem = true,
                 )
         }
@@ -190,7 +190,7 @@ fun privacySafeText(raw: String?): String? {
 
 fun friendlyWorkspaceLabel(cwd: String): String {
     val normalized = cwd.trim().replace('\\', '/').trimEnd('/')
-    return privacySafeText(normalized.substringAfterLast('/'))?.takeUnless { it == "[path]" } ?: "Workspace"
+    return privacySafeText(normalized.substringAfterLast('/'))?.takeUnless { it == "[path]" } ?: "工作区"
 }
 
 private fun SessionRecord.stableKey(hostId: String): SessionKey? =
@@ -212,7 +212,7 @@ private fun SessionIndexState?.toHostStatus(host: HostProfile): HostSessionStatu
             source == SessionIndexSource.REMOTE -> HostSessionStatusKind.FRESH
             else -> HostSessionStatusKind.LOADING
         }
-    return HostSessionStatus(host.id, privacySafeText(host.name) ?: "Host", kind, error?.let(::privacySafeText))
+    return HostSessionStatus(host.id, privacySafeText(host.name) ?: "主机", kind, error?.let(::privacySafeText))
 }
 
 private fun SessionCockpitItem.matches(filter: SessionFreshnessFilter): Boolean =

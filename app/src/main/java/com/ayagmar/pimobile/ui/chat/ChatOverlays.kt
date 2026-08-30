@@ -109,7 +109,7 @@ private fun SelectDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text("取消")
             }
         },
     )
@@ -127,12 +127,12 @@ private fun ConfirmDialog(
         text = { Text(request.message) },
         confirmButton = {
             Button(onClick = { onConfirm(true) }) {
-                Text("Yes")
+                Text("是")
             }
         },
         dismissButton = {
             TextButton(onClick = { onConfirm(false) }) {
-                Text("No")
+                Text("否")
             }
         },
     )
@@ -163,12 +163,12 @@ private fun InputDialog(
                 onClick = { onConfirm(text) },
                 enabled = text.isNotBlank(),
             ) {
-                Text("OK")
+                Text("确定")
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text("取消")
             }
         },
     )
@@ -196,12 +196,12 @@ private fun EditorDialog(
         },
         confirmButton = {
             Button(onClick = { onConfirm(text) }) {
-                Text("OK")
+                Text("确定")
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text("取消")
             }
         },
     )
@@ -241,7 +241,7 @@ internal fun NotificationsDisplay(
         Snackbar(
             action = {
                 TextButton(onClick = { onClear(index) }) {
-                    Text("Dismiss")
+                    Text("关闭")
                 }
             },
             containerColor = containerColor,
@@ -276,17 +276,17 @@ private val commandSupportOrder =
 private val CommandSupport.groupLabel: String
     get() =
         when (this) {
-            CommandSupport.SUPPORTED -> "Supported"
-            CommandSupport.BRIDGE_BACKED -> "Bridge-backed"
-            CommandSupport.UNSUPPORTED -> "Unsupported"
+            CommandSupport.SUPPORTED -> "支持"
+            CommandSupport.BRIDGE_BACKED -> "由 Bridge 支持"
+            CommandSupport.UNSUPPORTED -> "不支持"
         }
 
 private val CommandSupport.badge: String
     get() =
         when (this) {
-            CommandSupport.SUPPORTED -> "supported"
-            CommandSupport.BRIDGE_BACKED -> "bridge-backed"
-            CommandSupport.UNSUPPORTED -> "unsupported"
+            CommandSupport.SUPPORTED -> "支持"
+            CommandSupport.BRIDGE_BACKED -> "由 Bridge 支持"
+            CommandSupport.UNSUPPORTED -> "不支持"
         }
 
 @Composable
@@ -348,7 +348,7 @@ internal fun CommandPalette(
 
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Commands") },
+        title = { Text("命令") },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
@@ -356,7 +356,7 @@ internal fun CommandPalette(
                 OutlinedTextField(
                     value = query,
                     onValueChange = onQueryChange,
-                    placeholder = { Text("Search commands...") },
+                    placeholder = { Text("搜索命令…") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                 )
@@ -370,7 +370,7 @@ internal fun CommandPalette(
                     }
                 } else if (filteredPaletteCommands.isEmpty()) {
                     Text(
-                        text = "No commands found",
+                        text = "没有找到命令",
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(16.dp),
                     )
@@ -410,7 +410,7 @@ internal fun CommandPalette(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text("取消")
             }
         },
     )
@@ -455,7 +455,7 @@ private fun CommandItem(
             }
             if (support == CommandSupport.SUPPORTED) {
                 Text(
-                    text = "Source: ${command.source}",
+                    text = "来源：${command.source}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                 )

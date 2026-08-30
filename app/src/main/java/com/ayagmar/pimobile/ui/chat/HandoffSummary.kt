@@ -9,17 +9,17 @@ data class HandoffSummaryData(
 )
 
 enum class HandoffRunStatus(val label: String) {
-    WORKING("Pi is working"),
-    RETRYING("Pi is retrying"),
-    IDLE("Pi is idle"),
+    WORKING("Pi 正在工作"),
+    RETRYING("Pi 正在重试"),
+    IDLE("Pi 处于空闲状态"),
 }
 
 fun formatHandoffSummary(data: HandoffSummaryData): String =
     buildList {
-        add("Pi Mobile handoff")
-        data.sessionName?.takeIf { it.isNotBlank() }?.let { add("Session: $it") }
-        data.cwd?.takeIf { it.isNotBlank() }?.let { add("Working directory: $it") }
-        data.sessionPath?.takeIf { it.isNotBlank() }?.let { add("Session file: $it") }
-        data.model?.takeIf { it.isNotBlank() }?.let { add("Model: $it") }
-        add("Status: ${data.runStatus.label}")
+        add("Pi Mobile 交接摘要")
+        data.sessionName?.takeIf { it.isNotBlank() }?.let { add("会话：$it") }
+        data.cwd?.takeIf { it.isNotBlank() }?.let { add("工作目录：$it") }
+        data.sessionPath?.takeIf { it.isNotBlank() }?.let { add("会话文件：$it") }
+        data.model?.takeIf { it.isNotBlank() }?.let { add("模型：$it") }
+        add("状态：${data.runStatus.label}")
     }.joinToString("\n")

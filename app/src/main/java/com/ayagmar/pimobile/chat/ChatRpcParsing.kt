@@ -35,7 +35,7 @@ internal fun parseModelInfo(data: JsonObject?): ModelInfo? {
     val model = data?.get("model") as? JsonObject ?: return null
     return ModelInfo(
         id = model.stringField("id") ?: "unknown",
-        name = model.stringField("name") ?: "Unknown Model",
+        name = model.stringField("name") ?: "未知模型",
         provider = model.stringField("provider") ?: "unknown",
         thinkingLevel = data.stringField("thinkingLevel") ?: "off",
         contextWindow = model.intField("contextWindow"),

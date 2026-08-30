@@ -32,7 +32,7 @@ class TimelineAutoScrollReducerTest {
         assertFalse(updated.sticksToBottom)
         assertEquals(2, updated.assistantUnreadCount)
         assertEquals(3, updated.toolUnreadCount)
-        assertEquals("2 replies · 3 tools", formatUnreadActivityLabel(updated))
+        assertEquals("2 条回复 · 3 个工具", formatUnreadActivityLabel(updated))
     }
 
     @Test
@@ -77,7 +77,7 @@ class TimelineAutoScrollReducerTest {
         val after = before + "tool:read"
 
         assertEquals(TimelineUnreadDelta(toolCount = 1), countNewTimelineActivities(before, after))
-        assertEquals("1 tool", formatUnreadActivityLabel(TimelineReadingState(toolUnreadCount = 1)))
+        assertEquals("1 个工具", formatUnreadActivityLabel(TimelineReadingState(toolUnreadCount = 1)))
     }
 
     private fun assistant(

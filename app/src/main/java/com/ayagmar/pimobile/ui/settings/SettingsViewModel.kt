@@ -118,7 +118,7 @@ class SettingsViewModel(
                     val steeringMode = data.stateModeField("steeringMode", "steering_mode") ?: uiState.steeringMode
                     val followUpMode = data.stateModeField("followUpMode", "follow_up_mode") ?: uiState.followUpMode
 
-                    emitMessage("Bridge reachable")
+                    emitMessage("Bridge 连接正常")
                     uiState =
                         uiState.copy(
                             isChecking = false,
@@ -138,7 +138,7 @@ class SettingsViewModel(
                             piVersion = null,
                             sessionName = null,
                             pendingMessageCount = null,
-                            errorMessage = result.exceptionOrNull()?.message ?: "Connection failed",
+                            errorMessage = result.exceptionOrNull()?.message ?: "连接失败",
                         )
                 }
             } catch (e: CancellationException) {
@@ -170,7 +170,7 @@ class SettingsViewModel(
                 uiState =
                     uiState.copy(
                         autoCompactionEnabled = revertedValue,
-                        errorMessage = "Failed to update auto-compaction",
+                        errorMessage = "更新自动压缩设置失败",
                     )
                 prefs.edit { putBoolean(KEY_AUTO_COMPACTION, revertedValue) }
             }
@@ -190,7 +190,7 @@ class SettingsViewModel(
                 uiState =
                     uiState.copy(
                         autoRetryEnabled = revertedValue,
-                        errorMessage = "Failed to update auto-retry",
+                        errorMessage = "更新自动重试设置失败",
                     )
                 prefs.edit { putBoolean(KEY_AUTO_RETRY, revertedValue) }
             }
@@ -240,7 +240,7 @@ class SettingsViewModel(
                     uiState.copy(
                         steeringMode = previousMode,
                         isUpdatingSteeringMode = false,
-                        errorMessage = result.exceptionOrNull()?.message ?: "Failed to update steering mode",
+                        errorMessage = result.exceptionOrNull()?.message ?: "更新引导模式失败",
                     )
                 }
         }
@@ -261,7 +261,7 @@ class SettingsViewModel(
                     uiState.copy(
                         followUpMode = previousMode,
                         isUpdatingFollowUpMode = false,
-                        errorMessage = result.exceptionOrNull()?.message ?: "Failed to update follow-up mode",
+                        errorMessage = result.exceptionOrNull()?.message ?: "更新追问模式失败",
                     )
                 }
         }
@@ -383,12 +383,12 @@ private fun transportRuntimeNote(
 ): String {
     return when {
         requested == TransportPreference.SSE && effective != TransportPreference.SSE ->
-            "SSE is not supported by the bridge yet; using WebSocket fallback."
+            "Bridge 尚不支持 SSE，已回退到 WebSocket。"
 
         requested == TransportPreference.AUTO ->
-            "Auto currently resolves to ${effective.value} with the bridge transport layer."
+            "Auto 在 Bridge 传输层当前实际使用 ${effective.value}。"
 
         else ->
-            "Using ${effective.value} transport."
+            "当前使用 ${effective.value} 传输。"
     }
 }

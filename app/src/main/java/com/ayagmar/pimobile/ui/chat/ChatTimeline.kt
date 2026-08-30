@@ -111,7 +111,7 @@ internal fun ChatBody(
         }
     } else if (timeline.isEmpty() && !showInlineRunProgress) {
         Text(
-            text = "No chat messages yet. Resume a session and send a prompt.",
+            text = "暂无聊天消息。请恢复一个会话并发送消息。",
             style = MaterialTheme.typography.bodyLarge,
         )
     } else {
@@ -235,7 +235,7 @@ private fun ChatTimeline(
                 onClick = autoScrollUi.onJumpToLatest,
                 modifier = Modifier.testTag(CHAT_JUMP_TO_LATEST_TAG),
             ) {
-                Text("Paused · ↓ ${autoScrollUi.unreadLabel}")
+                Text("已暂停跟随 · ↓ ${autoScrollUi.unreadLabel}")
             }
         }
 
@@ -251,7 +251,7 @@ private fun ChatTimeline(
                 tonalElevation = 2.dp,
             ) {
                 Text(
-                    text = "Following live",
+                    text = "正在跟随最新消息",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -586,7 +586,7 @@ private fun ChatTimelineList(
                     onClick = onLoadOlderMessages,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("Load older messages ($hiddenHistoryCount hidden)")
+                    Text("加载更早的消息（已隐藏 $hiddenHistoryCount 条）")
                 }
             }
         }
@@ -722,16 +722,16 @@ private fun ToolGroupDisclosure(
     val errors = tools.count { it.isError }
     val state =
         when {
-            errors > 0 -> "$errors failed"
-            running > 0 -> "$running running"
-            else -> "completed"
+            errors > 0 -> "$errors 个失败"
+            running > 0 -> "$running 个运行中"
+            else -> "已完成"
         }
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .semantics(mergeDescendants = true) {
-                    stateDescription = if (expanded) "Expanded, $state" else "Collapsed, $state"
+                    stateDescription = if (expanded) "已展开，$state" else "已收起，$state"
                 }.clickable(onClick = onToggle)
                 .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -739,10 +739,10 @@ private fun ToolGroupDisclosure(
     ) {
         Icon(
             imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-            contentDescription = if (expanded) "Collapse tool activity" else "Expand tool activity",
+            contentDescription = if (expanded) "收起工具活动" else "展开工具活动",
             modifier = Modifier.size(18.dp),
         )
-        Text("${tools.size} tools used · $state", style = MaterialTheme.typography.labelMedium)
+        Text("使用了 ${tools.size} 个工具 · $state", style = MaterialTheme.typography.labelMedium)
     }
 }
 
@@ -770,9 +770,9 @@ private fun ToolActivityRow(
                     .semantics(mergeDescendants = true) {
                         stateDescription =
                             when (presentation.status) {
-                                ToolActivityStatus.RUNNING -> "Running"
-                                ToolActivityStatus.SUCCESS -> "Completed"
-                                ToolActivityStatus.ERROR -> "Failed"
+                                ToolActivityStatus.RUNNING -> "运行中"
+                                ToolActivityStatus.SUCCESS -> "已完成"
+                                ToolActivityStatus.ERROR -> "失败"
                             }
                     }.clickable(enabled = presentation.hasDetails) { onToggleToolExpansion(item.id) }
                     .padding(vertical = 6.dp),
@@ -785,7 +785,7 @@ private fun ToolActivityRow(
             if (presentation.hasDetails) {
                 Icon(
                     if (item.isCollapsed) Icons.Default.ExpandMore else Icons.Default.ExpandLess,
-                    contentDescription = if (item.isCollapsed) "Show details" else "Hide details",
+                    contentDescription = if (item.isCollapsed) "显示详情" else "隐藏详情",
                     modifier = Modifier.size(18.dp),
                 )
             }
@@ -874,7 +874,7 @@ private fun UserCard(
                         modifier = Modifier.size(16.dp),
                     )
                     Text(
-                        text = if (imageCount == 1) "1 image attached" else "$imageCount images attached",
+                        text = "已附加 $imageCount 张图片",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                     )
@@ -917,7 +917,7 @@ private fun UserImagePreview(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = "IMG",
+                text = "图片",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -928,8 +928,8 @@ private fun UserImagePreview(
     AsyncImage(
         model = presentation.model,
         contentDescription =
-            presentation.displayName?.let { "Preview attached image $it" }
-                ?: "Preview attached image",
+            presentation.displayName?.let { "预览附加图片 $it" }
+                ?: "预览附加图片",
         modifier =
             Modifier
                 .size(USER_IMAGE_PREVIEW_SIZE_DP.dp)
@@ -954,7 +954,7 @@ private fun AssistantCard(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = if (item.isStreaming) "Pi · responding" else "Pi",
+                text = if (item.isStreaming) "Pi · 正在回复" else "Pi",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.weight(1f),
@@ -966,7 +966,7 @@ private fun AssistantCard(
                 ) {
                     Icon(
                         Icons.Default.ContentCopy,
-                        contentDescription = "Copy answer",
+                        contentDescription = "复制回复",
                         modifier = Modifier.size(16.dp),
                     )
                 }
@@ -1058,7 +1058,7 @@ private fun ThinkingHeader(isThinkingComplete: Boolean) {
             tint = MaterialTheme.colorScheme.onTertiaryContainer,
         )
         Text(
-            text = if (isThinkingComplete) " Thinking" else " Thinking…",
+            text = if (isThinkingComplete) " 思考过程" else " 正在思考…",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onTertiaryContainer,
         )
@@ -1083,9 +1083,9 @@ private fun ThinkingBlock(
                     .semantics(mergeDescendants = true) {
                         stateDescription =
                             if (isThinkingExpanded) {
-                                "Expanded"
+                                "已展开"
                             } else {
-                                "Collapsed"
+                                "已收起"
                             }
                     }.clickable { onToggleThinkingExpansion(itemId) }
                     .padding(vertical = 4.dp),
@@ -1095,7 +1095,7 @@ private fun ThinkingBlock(
             Spacer(modifier = Modifier.weight(1f))
             Icon(
                 if (isThinkingExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                contentDescription = if (isThinkingExpanded) "Hide thinking" else "Show thinking",
+                contentDescription = if (isThinkingExpanded) "隐藏思考过程" else "显示思考过程",
                 modifier = Modifier.size(18.dp),
             )
         }
@@ -1159,8 +1159,8 @@ private fun ToolCard(
 
                 val suffix =
                     when {
-                        item.isError -> "(error)"
-                        item.isStreaming -> "(running)"
+                        item.isError -> "（错误）"
+                        item.isStreaming -> "（运行中）"
                         else -> ""
                     }
 
@@ -1179,7 +1179,7 @@ private fun ToolCard(
                     IconButton(onClick = { copyToClipboard(item.output) }) {
                         Icon(
                             imageVector = Icons.Default.ContentCopy,
-                            contentDescription = "Copy tool output",
+                            contentDescription = "复制工具输出",
                             modifier = Modifier.size(18.dp),
                         )
                     }
@@ -1215,7 +1215,7 @@ private fun ToolCard(
                         item.output
                     }
 
-                val rawOutput = displayOutput.ifBlank { "(no output yet)" }
+                val rawOutput = displayOutput.ifBlank { "（暂无输出）" }
                 val shouldHighlight = !item.isStreaming && rawOutput.length <= TOOL_HIGHLIGHT_MAX_LENGTH
 
                 SelectionContainer {
@@ -1248,7 +1248,7 @@ private fun ToolCard(
                             contentDescription = null,
                             modifier = Modifier.size(18.dp),
                         )
-                        Text(if (item.isCollapsed) "Expand" else "Collapse")
+                        Text(if (item.isCollapsed) "展开" else "收起")
                     }
                 }
             }
@@ -1284,12 +1284,12 @@ private fun ToolArgumentsSection(
             ) {
                 Icon(
                     imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                    contentDescription = if (isExpanded) "收起" else "展开",
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = "Arguments (${arguments.size})",
+                    text = "参数（${arguments.size}）",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1301,7 +1301,7 @@ private fun ToolArgumentsSection(
             ) {
                 Icon(
                     imageVector = Icons.Default.ContentCopy,
-                    contentDescription = "Copy arguments",
+                    contentDescription = "复制参数",
                     modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

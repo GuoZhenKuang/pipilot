@@ -235,7 +235,7 @@ class ChatViewModelWorkflowCommandTest {
             assertEquals(1, controller.importSessionJsonlCallCount)
             assertEquals("picked-session.jsonl", controller.lastImportedSessionFileName)
             assertEquals("{\"type\":\"session\"}\n", controller.lastImportedSessionJsonlContent)
-            assertTrue(viewModel.uiState.value.notifications.any { it.message.contains("Session imported") })
+            assertTrue(viewModel.uiState.value.notifications.any { it.message.contains("会话已导入") })
         }
 
     @Test

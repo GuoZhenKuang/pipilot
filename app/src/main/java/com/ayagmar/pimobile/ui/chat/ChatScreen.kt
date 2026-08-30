@@ -234,7 +234,7 @@ fun ChatRoute(
                     }
 
                 if (jsonlContent == null) {
-                    chatViewModel.onImportSessionReadFailed("Failed to read selected JSONL file")
+                    chatViewModel.onImportSessionReadFailed("无法读取所选 JSONL 文件")
                     return@launch
                 }
 
@@ -600,7 +600,7 @@ private fun ChatHeader(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                val title = extensionTitle ?: sessionName ?: "Chat"
+                val title = extensionTitle ?: sessionName ?: "聊天"
                 Text(
                     text = title,
                     style =
@@ -642,7 +642,7 @@ private fun ChatHeader(
                     IconButton(onClick = callbacks.onSyncNow) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
-                            contentDescription = "Sync now",
+                            contentDescription = "立即同步",
                         )
                     }
                 }
@@ -650,7 +650,7 @@ private fun ChatHeader(
                 IconButton(onClick = { showSecondaryActionsMenu = true }) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
-                        contentDescription = "More actions",
+                        contentDescription = "更多操作",
                     )
                 }
 
@@ -659,35 +659,35 @@ private fun ChatHeader(
                     onDismissRequest = { showSecondaryActionsMenu = false },
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Tree") },
+                        text = { Text("会话树") },
                         onClick = {
                             showSecondaryActionsMenu = false
                             callbacks.onShowTreeSheet()
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("Bash") },
+                        text = { Text("终端") },
                         onClick = {
                             showSecondaryActionsMenu = false
                             callbacks.onShowBashDialog()
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("Session details") },
+                        text = { Text("会话详情") },
                         onClick = {
                             showSecondaryActionsMenu = false
                             callbacks.onShowStatsSheet()
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("Copy last response") },
+                        text = { Text("复制最新回复") },
                         onClick = {
                             showSecondaryActionsMenu = false
                             callbacks.onCopyLastResponse()
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("Compact now") },
+                        text = { Text("立即压缩上下文") },
                         onClick = {
                             showSecondaryActionsMenu = false
                             callbacks.onCompactSession()
@@ -732,10 +732,10 @@ private fun formatConnectionSummary(
 ): String {
     val statusLabel =
         when (connectionState) {
-            com.ayagmar.pimobile.corenet.ConnectionState.CONNECTED -> "Connected"
-            com.ayagmar.pimobile.corenet.ConnectionState.CONNECTING -> "Connecting"
-            com.ayagmar.pimobile.corenet.ConnectionState.RECONNECTING -> "Reconnecting"
-            com.ayagmar.pimobile.corenet.ConnectionState.DISCONNECTED -> "Offline"
+            com.ayagmar.pimobile.corenet.ConnectionState.CONNECTED -> "已连接"
+            com.ayagmar.pimobile.corenet.ConnectionState.CONNECTING -> "连接中"
+            com.ayagmar.pimobile.corenet.ConnectionState.RECONNECTING -> "重新连接中"
+            com.ayagmar.pimobile.corenet.ConnectionState.DISCONNECTED -> "离线"
         }
 
     if (pendingMessageCount <= 0) {
@@ -746,8 +746,7 @@ private fun formatConnectionSummary(
 }
 
 private fun formatQueuedMessagesLabel(pendingMessageCount: Int): String {
-    val suffix = if (pendingMessageCount == 1) "msg" else "msgs"
-    return "Queued $pendingMessageCount $suffix"
+    return "排队中：$pendingMessageCount 条消息"
 }
 
 @Composable
@@ -772,9 +771,9 @@ private fun LiveRunProgressIndicator(
         Text(
             text =
                 if (phase == LiveRunPhase.WORKING) {
-                    "Working · waiting for activity · ${formatRunElapsed(elapsedSeconds)}"
+                    "工作中 · 等待活动 · ${formatRunElapsed(elapsedSeconds)}"
                 } else {
-                    "Working · ${phase.label} · ${formatRunElapsed(elapsedSeconds)}"
+                    "工作中 · ${phase.label} · ${formatRunElapsed(elapsedSeconds)}"
                 },
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -801,7 +800,7 @@ internal fun InlineRunProgressCard(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
-                text = "Assistant",
+                text = "助手",
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
@@ -844,7 +843,7 @@ private fun BashDialog(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Run Bash Command")
+                Text("执行终端命令")
                 Icon(
                     imageVector = Icons.Default.Terminal,
                     contentDescription = null,
@@ -862,7 +861,7 @@ private fun BashDialog(
                     OutlinedTextField(
                         value = command,
                         onValueChange = onCommandChange,
-                        placeholder = { Text("Enter command...") },
+                        placeholder = { Text("输入命令…") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         enabled = !isExecuting,
@@ -872,7 +871,7 @@ private fun BashDialog(
                                 IconButton(onClick = { showHistoryDropdown = true }) {
                                     Icon(
                                         imageVector = Icons.Default.ExpandMore,
-                                        contentDescription = "History",
+                                        contentDescription = "历史记录",
                                     )
                                 }
                             }
@@ -919,7 +918,7 @@ private fun BashDialog(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = "Output",
+                                text = "输出",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -931,7 +930,7 @@ private fun BashDialog(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.ContentCopy,
-                                        contentDescription = "Copy output",
+                                        contentDescription = "复制输出",
                                         modifier = Modifier.size(18.dp),
                                     )
                                 }
@@ -940,7 +939,7 @@ private fun BashDialog(
 
                         SelectionContainer {
                             Text(
-                                text = output.ifEmpty { "(no output)" },
+                                text = output.ifEmpty { "（无输出）" },
                                 style = MaterialTheme.typography.bodySmall,
                                 fontFamily = FontFamily.Monospace,
                                 modifier =
@@ -970,7 +969,7 @@ private fun BashDialog(
                             onClick = {},
                             label = {
                                 Text(
-                                    text = "Exit: $exitCode",
+                                    text = "退出码：$exitCode",
                                     color = exitColor,
                                 )
                             },
@@ -982,7 +981,7 @@ private fun BashDialog(
                             onClick = { copyToClipboard(fullLogPath) },
                         ) {
                             Text(
-                                text = "Output truncated (copy path)",
+                                text = "输出已截断（可复制完整路径）",
                                 style = MaterialTheme.typography.labelSmall,
                             )
                         }
@@ -1004,7 +1003,7 @@ private fun BashDialog(
                         contentDescription = null,
                         modifier = Modifier.size(18.dp).padding(end = 4.dp),
                     )
-                    Text("Abort")
+                    Text("中止")
                 }
             } else {
                 Button(
@@ -1016,14 +1015,14 @@ private fun BashDialog(
                         contentDescription = null,
                         modifier = Modifier.size(18.dp).padding(end = 4.dp),
                     )
-                    Text("Execute")
+                    Text("执行")
                 }
             }
         },
         dismissButton = {
             if (!isExecuting) {
                 TextButton(onClick = onDismiss) {
-                    Text("Close")
+                    Text("关闭")
                 }
             }
         },

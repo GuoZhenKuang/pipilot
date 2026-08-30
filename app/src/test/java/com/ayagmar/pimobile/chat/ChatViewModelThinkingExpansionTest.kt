@@ -485,7 +485,7 @@ class ChatViewModelThinkingExpansionTest {
             dispatcher.scheduler.advanceUntilIdle()
 
             assertEquals(0, controller.sendPromptCallCount)
-            assertTrue(viewModel.uiState.value.errorMessage?.contains("Settings tab") == true)
+            assertTrue(viewModel.uiState.value.errorMessage?.contains("设置页") == true)
         }
 
     @Test
@@ -888,7 +888,7 @@ class ChatViewModelThinkingExpansionTest {
             assertEquals(baselineStateCalls, controller.getStateCallCount)
             assertEquals("reload failed", viewModel.uiState.value.errorMessage)
             assertEquals(
-                "Potential cross-device session edits detected. Use Sync now before continuing.",
+                "检测到可能的跨设备会话编辑冲突，请先点击立即同步再继续。",
                 viewModel.uiState.value.sessionCoherencyWarning,
             )
         }

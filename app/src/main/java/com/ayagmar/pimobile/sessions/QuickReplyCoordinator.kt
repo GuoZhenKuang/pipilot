@@ -91,7 +91,7 @@ class QuickReplyCoordinator(
                 _state.value.copy(
                     deliveryMode = null,
                     phase = QuickReplyPhase.ERROR,
-                    message = "Steer is unavailable while Pi is retrying. Choose Follow up.",
+                    message = "Pi 重试期间无法调整方向，请选择追加消息。",
                     canOpenChat = true,
                 )
             return
@@ -135,14 +135,14 @@ class QuickReplyCoordinator(
         if (!isCurrent(requestGeneration)) return
         result.fold(
             onSuccess = {
-                _state.value = _state.value.copy(phase = QuickReplyPhase.SENT, message = "Reply sent", canOpenChat = true)
+                _state.value = _state.value.copy(phase = QuickReplyPhase.SENT, message = "回复已发送", canOpenChat = true)
                 if (openAfterSend) onOpenChat()
             },
             onFailure = { error ->
                 publish(
                     requestGeneration,
                     QuickReplyPhase.ERROR,
-                    error.message ?: "Reply could not be sent",
+                    error.message ?: "无法发送回复",
                     canOpenChat = controller.activeSession.value?.sessionKey != null,
                 )
             },
@@ -160,7 +160,7 @@ class QuickReplyCoordinator(
             publish(
                 requestGeneration,
                 QuickReplyPhase.ERROR,
-                "A session switch is already in progress. Wait and retry.",
+                "正在切换会话，请稍后重试。",
                 canOpenChat = activeKey != null,
             )
             return true
@@ -169,7 +169,7 @@ class QuickReplyCoordinator(
             publish(
                 requestGeneration,
                 QuickReplyPhase.CONFLICT,
-                "Another session is running. Open the current session or cancel.",
+                "另一个会话正在运行。请打开当前会话或取消。",
                 canOpenChat = activeKey != null,
             )
             return true
@@ -187,7 +187,7 @@ class QuickReplyCoordinator(
             publish(
                 requestGeneration,
                 QuickReplyPhase.EDITING,
-                "Choose Follow up or Steer for the active run.",
+                "请为当前运行选择追加消息或调整方向。",
                 canOpenChat = true,
             )
             return null
@@ -196,7 +196,7 @@ class QuickReplyCoordinator(
             publish(
                 requestGeneration,
                 QuickReplyPhase.ERROR,
-                "Steer is unavailable while Pi is retrying. Choose Follow up.",
+                "Pi 重试期间无法调整方向，请选择追加消息。",
                 canOpenChat = true,
             )
             return null
@@ -214,17 +214,17 @@ class QuickReplyCoordinator(
     ): Result<Unit>? {
         val host = hostById(key.hostProfileId)
         if (host == null) {
-            publish(requestGeneration, QuickReplyPhase.ERROR, "This host is no longer configured")
+            publish(requestGeneration, QuickReplyPhase.ERROR, "此主机已不在配置中")
             return null
         }
         val token = tokenStore.getToken(key.hostProfileId)
         if (token.isNullOrBlank()) {
-            publish(requestGeneration, QuickReplyPhase.ERROR, "Enter a token for ${host.name}")
+            publish(requestGeneration, QuickReplyPhase.ERROR, "请为 ${host.name} 输入令牌")
             return null
         }
         val record = recordByKey(key)
         if (record == null || !record.hasStableIdentity || record.sessionId != key.sessionId) {
-            publish(requestGeneration, QuickReplyPhase.ERROR, "Refresh sessions before replying to this target")
+            publish(requestGeneration, QuickReplyPhase.ERROR, "回复此目标前请先刷新会话")
             return null
         }
         val resume = controller.resume(host, token, record)
@@ -233,14 +233,14 @@ class QuickReplyCoordinator(
             publish(
                 requestGeneration,
                 QuickReplyPhase.ERROR,
-                resume.exceptionOrNull()?.message ?: "Could not acquire session control",
+                resume.exceptionOrNull()?.message ?: "无法取得会话控制权",
                 canOpenChat = controller.activeSession.value?.sessionKey != null,
             )
             return null
         }
         val resolvedActiveSession = controller.activeSession.value
         if (resolvedActiveSession?.isSwitching == true || resolvedActiveSession?.sessionKey != key) {
-            publish(requestGeneration, QuickReplyPhase.ERROR, "Could not confirm the resumed quick-reply target")
+            publish(requestGeneration, QuickReplyPhase.ERROR, "无法确认恢复后的快速回复目标")
             return null
         }
         if (!isCurrent(requestGeneration)) return null

@@ -60,7 +60,7 @@ class SessionsViewModelTest {
             assertTrue(viewModel.uiState.value.hosts.isEmpty())
             assertTrue(viewModel.uiState.value.items.isEmpty())
             assertFalse(viewModel.uiState.value.isLoading)
-            assertEquals("Add a host to browse sessions.", viewModel.uiState.value.errorMessage)
+            assertEquals("请先添加主机，才能浏览会话。", viewModel.uiState.value.errorMessage)
             viewModel.newSession()
             advanceUntilIdle()
             assertEquals(0, controller.ensureConnectedCallCount)

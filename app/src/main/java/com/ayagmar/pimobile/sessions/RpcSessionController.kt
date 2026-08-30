@@ -207,9 +207,9 @@ class RpcSessionController(
                                     sessionPath = session.sessionPath,
                                 ),
                             expectedCommand = SWITCH_SESSION_COMMAND,
-                        ).requireSuccess("Failed to resume selected session")
+                        ).requireSuccess("无法恢复所选会话")
 
-                    switchResponse.requireNotCancelled("Session switch was cancelled")
+                    switchResponse.requireNotCancelled("会话切换已取消")
                     runCatching {
                         PerformanceMetrics.recordOperation(
                             operation = "session_switch_response",
@@ -223,7 +223,7 @@ class RpcSessionController(
                 val actualSessionId = state.data.stringField("sessionId")
                 if (session.hasStableIdentity) {
                     check(actualSessionId == session.sessionId) {
-                        "Resumed session identity did not match the selected session"
+                        "恢复后的会话标识与所选会话不一致"
                     }
                 }
                 resetSessionProjection()
@@ -251,13 +251,13 @@ class RpcSessionController(
         connection: PiRpcConnection,
         expectedSessionId: String?,
     ): RpcResponse {
-        var state = connection.requestState().requireSuccess("Failed to verify resumed session")
+        var state = connection.requestState().requireSuccess("无法验证恢复后的会话")
 
         if (expectedSessionId != null) {
             repeat(SESSION_IDENTITY_RETRY_COUNT - 1) {
                 if (state.data.stringField("sessionId") == expectedSessionId) return state
                 delay(SESSION_IDENTITY_RETRY_DELAY_MS)
-                state = connection.requestState().requireSuccess("Failed to verify resumed session")
+                state = connection.requestState().requireSuccess("无法验证恢复后的会话")
             }
         }
         return state
@@ -267,11 +267,11 @@ class RpcSessionController(
         return mutex.withLock {
             runCatching {
                 val connection = ensureActiveConnection()
-                val stateResponse = connection.requestState().requireSuccess("Failed to load state")
+                val stateResponse = connection.requestState().requireSuccess("无法加载状态")
                 onStateAvailable(stateResponse)
                 val messagesResponse =
                     projectedMessagesResponse
-                        ?: connection.requestMessages().requireSuccess("Failed to load messages")
+                        ?: connection.requestMessages().requireSuccess("无法加载消息")
                 SessionBootstrapSnapshot(
                     stateResponse = stateResponse,
                     messagesResponse = messagesResponse,
@@ -285,7 +285,7 @@ class RpcSessionController(
             runCatching {
                 val connection = ensureActiveConnection()
                 projectedMessagesResponse
-                    ?: connection.requestMessages().requireSuccess("Failed to load messages")
+                    ?: connection.requestMessages().requireSuccess("无法加载消息")
             }
         }
     }
@@ -294,7 +294,7 @@ class RpcSessionController(
         return mutex.withLock {
             runCatching {
                 val connection = ensureActiveConnection()
-                connection.requestState().requireSuccess("Failed to load state")
+                connection.requestState().requireSuccess("无法加载状态")
             }
         }
     }
@@ -305,7 +305,7 @@ class RpcSessionController(
                 val connection = ensureActiveConnection()
                 val sessionPath = refreshCurrentSessionPath(connection)
                 check(!sessionPath.isNullOrBlank()) {
-                    "No active session file available to reload"
+                    "没有可重新加载的活动会话文件"
                 }
 
                 val switchResponse =
@@ -314,9 +314,9 @@ class RpcSessionController(
                         requestTimeoutMs = requestTimeoutMs,
                         command = SwitchSessionCommand(id = UUID.randomUUID().toString(), sessionPath = sessionPath),
                         expectedCommand = SWITCH_SESSION_COMMAND,
-                    ).requireSuccess("Failed to reload active session")
+                    ).requireSuccess("无法重新加载活动会话")
 
-                switchResponse.requireNotCancelled("Active session reload was cancelled")
+                switchResponse.requireNotCancelled("重新加载活动会话已取消")
 
                 refreshCurrentSessionPath(connection)
             }
@@ -332,7 +332,7 @@ class RpcSessionController(
                     requestTimeoutMs = requestTimeoutMs,
                     command = SetSessionNameCommand(id = UUID.randomUUID().toString(), name = name),
                     expectedCommand = SET_SESSION_NAME_COMMAND,
-                ).requireSuccess("Failed to rename session")
+                ).requireSuccess("无法重命名会话")
 
                 refreshCurrentSessionPath(connection)
             }
@@ -348,7 +348,7 @@ class RpcSessionController(
                     requestTimeoutMs = requestTimeoutMs,
                     command = CompactCommand(id = UUID.randomUUID().toString()),
                     expectedCommand = COMPACT_COMMAND,
-                ).requireSuccess("Failed to compact session")
+                ).requireSuccess("无法压缩会话上下文")
 
                 refreshCurrentSessionPath(connection)
             }
@@ -365,9 +365,9 @@ class RpcSessionController(
                         requestTimeoutMs = requestTimeoutMs,
                         command = ExportHtmlCommand(id = UUID.randomUUID().toString()),
                         expectedCommand = EXPORT_HTML_COMMAND,
-                    ).requireSuccess("Failed to export session")
+                    ).requireSuccess("导出会话失败")
 
-                response.data.stringField("path") ?: error("Export succeeded but did not return output path")
+                response.data.stringField("path") ?: error("导出成功但未返回输出路径")
             }
         }
     }
@@ -391,7 +391,7 @@ class RpcSessionController(
                         requestTimeoutMs = requestTimeoutMs,
                         command = GetForkMessagesCommand(id = UUID.randomUUID().toString()),
                         expectedCommand = GET_FORK_MESSAGES_COMMAND,
-                    ).requireSuccess("Failed to load fork messages")
+                    ).requireSuccess("加载分叉消息失败")
 
                 parseForkableMessages(response.data)
             }
@@ -414,7 +414,7 @@ class RpcSessionController(
                 if (sessionPath.isNullOrBlank() || sessionPath == activeSessionPath) {
                     val response =
                         connection.requestTree(treeRequestTimeoutMs)
-                            .requireSuccess("Failed to load active session tree")
+                            .requireSuccess("加载当前会话树失败")
                     val snapshot =
                         parseRpcSessionTreeSnapshot(
                             data = response.data,
@@ -517,11 +517,11 @@ class RpcSessionController(
                         entryId = entryId,
                     ),
                 expectedCommand = FORK_COMMAND,
-            ).requireSuccess("Failed to fork session")
+            ).requireSuccess("创建分叉会话失败")
 
         val cancelled = forkResponse.data.booleanField("cancelled") ?: false
         check(!cancelled) {
-            "Fork was cancelled"
+            "已取消分叉"
         }
 
         val newPath = refreshCurrentSessionPath(connection)
@@ -559,7 +559,7 @@ class RpcSessionController(
                         requestTimeoutMs = requestTimeoutMs,
                         command = command,
                         expectedCommand = PROMPT_COMMAND,
-                    ).requireSuccess("Failed to send prompt")
+                    ).requireSuccess("无法发送消息")
                     Unit
                 }.onFailure {
                     if (shouldMarkStreaming) {
@@ -579,7 +579,7 @@ class RpcSessionController(
                     requestTimeoutMs = requestTimeoutMs,
                     command = AbortCommand(id = UUID.randomUUID().toString()),
                     expectedCommand = ABORT_COMMAND,
-                ).requireSuccess("Failed to abort")
+                ).requireSuccess("无法中止运行")
                 Unit
             }
         }
@@ -602,7 +602,7 @@ class RpcSessionController(
                             message = message,
                         ),
                     expectedCommand = STEER_COMMAND,
-                ).requireSuccess("Failed to steer")
+                ).requireSuccess("无法发送调整方向消息")
                 Unit
             }
         }
@@ -625,7 +625,7 @@ class RpcSessionController(
                             message = message,
                         ),
                     expectedCommand = FOLLOW_UP_COMMAND,
-                ).requireSuccess("Failed to queue follow-up")
+                ).requireSuccess("无法将追加消息加入队列")
                 Unit
             }
         }
@@ -641,7 +641,7 @@ class RpcSessionController(
                         requestTimeoutMs = requestTimeoutMs,
                         command = CycleModelCommand(id = UUID.randomUUID().toString()),
                         expectedCommand = CYCLE_MODEL_COMMAND,
-                    ).requireSuccess("Failed to cycle model")
+                    ).requireSuccess("切换模型失败")
 
                 parseModelInfo(response.data)
             }
@@ -658,7 +658,7 @@ class RpcSessionController(
                         requestTimeoutMs = requestTimeoutMs,
                         command = CycleThinkingLevelCommand(id = UUID.randomUUID().toString()),
                         expectedCommand = CYCLE_THINKING_COMMAND,
-                    ).requireSuccess("Failed to cycle thinking level")
+                    ).requireSuccess("切换思考级别失败")
 
                 response.data?.stringField("level")
             }
@@ -675,7 +675,7 @@ class RpcSessionController(
                         requestTimeoutMs = requestTimeoutMs,
                         command = SetThinkingLevelCommand(id = UUID.randomUUID().toString(), level = level),
                         expectedCommand = SET_THINKING_LEVEL_COMMAND,
-                    ).requireSuccess("Failed to set thinking level")
+                    ).requireSuccess("设置思考级别失败")
 
                 response.data?.stringField("level") ?: level
             }
@@ -691,7 +691,7 @@ class RpcSessionController(
                     requestTimeoutMs = requestTimeoutMs,
                     command = AbortRetryCommand(id = UUID.randomUUID().toString()),
                     expectedCommand = ABORT_RETRY_COMMAND,
-                ).requireSuccess("Failed to abort retry")
+                ).requireSuccess("中止重试失败")
                 Unit
             }
         }
@@ -728,9 +728,9 @@ class RpcSessionController(
                         requestTimeoutMs = requestTimeoutMs,
                         command = NewSessionCommand(id = UUID.randomUUID().toString()),
                         expectedCommand = NEW_SESSION_COMMAND,
-                    ).requireSuccess("Failed to create new session")
+                    ).requireSuccess("无法新建会话")
 
-                newSessionResponse.requireNotCancelled("New session was cancelled")
+                newSessionResponse.requireNotCancelled("新建会话已取消")
 
                 val newPath = refreshCurrentSessionPath(connection)
                 resetSessionProjection()
@@ -750,7 +750,7 @@ class RpcSessionController(
                         requestTimeoutMs = requestTimeoutMs,
                         command = GetCommandsCommand(id = UUID.randomUUID().toString()),
                         expectedCommand = GET_COMMANDS_COMMAND,
-                    ).requireSuccess("Failed to load commands")
+                    ).requireSuccess("加载命令列表失败")
 
                 parseSlashCommands(response.data)
             }
@@ -771,7 +771,7 @@ class RpcSessionController(
                         requestTimeoutMs = requestTimeoutMs,
                         command = GetLastAssistantTextCommand(id = UUID.randomUUID().toString()),
                         expectedCommand = GET_LAST_ASSISTANT_TEXT_COMMAND,
-                    ).requireSuccess("Failed to load last assistant text")
+                    ).requireSuccess("读取最新助手回复失败")
 
                 response.data.stringField("text")
             }
@@ -825,7 +825,7 @@ class RpcSessionController(
                         requestTimeoutMs = timeoutMs?.toLong() ?: BASH_TIMEOUT_MS,
                         command = bashCommand,
                         expectedCommand = BASH_COMMAND,
-                    ).requireSuccess("Failed to execute bash command")
+                    ).requireSuccess("执行 bash 命令失败")
 
                 parseBashResult(response.data)
             }
@@ -841,7 +841,7 @@ class RpcSessionController(
                     requestTimeoutMs = requestTimeoutMs,
                     command = AbortBashCommand(id = UUID.randomUUID().toString()),
                     expectedCommand = ABORT_BASH_COMMAND,
-                ).requireSuccess("Failed to abort bash command")
+                ).requireSuccess("中止 bash 命令失败")
                 Unit
             }
         }
@@ -857,7 +857,7 @@ class RpcSessionController(
                         requestTimeoutMs = requestTimeoutMs,
                         command = GetSessionStatsCommand(id = UUID.randomUUID().toString()),
                         expectedCommand = GET_SESSION_STATS_COMMAND,
-                    ).requireSuccess("Failed to get session stats")
+                    ).requireSuccess("获取会话统计失败")
 
                 parseSessionStats(response.data)
             }
@@ -874,7 +874,7 @@ class RpcSessionController(
                         requestTimeoutMs = requestTimeoutMs,
                         command = GetAvailableModelsCommand(id = UUID.randomUUID().toString()),
                         expectedCommand = GET_AVAILABLE_MODELS_COMMAND,
-                    ).requireSuccess("Failed to get available models")
+                    ).requireSuccess("获取可用模型失败")
 
                 parseAvailableModels(response.data)
             }
@@ -899,11 +899,11 @@ class RpcSessionController(
                                 modelId = modelId,
                             ),
                         expectedCommand = SET_MODEL_COMMAND,
-                    ).requireSuccess("Failed to set model")
+                    ).requireSuccess("设置模型失败")
 
                 // set_model returns the model object directly (without thinkingLevel).
                 // Refresh state to get the effective thinking level.
-                val refreshedState = connection.requestState().requireSuccess("Failed to refresh state after set_model")
+                val refreshedState = connection.requestState().requireSuccess("设置模型后刷新状态失败")
                 parseModelInfo(refreshedState.data) ?: parseModelInfo(response.data)
             }
         }
@@ -922,7 +922,7 @@ class RpcSessionController(
                             enabled = enabled,
                         ),
                     expectedCommand = SET_AUTO_COMPACTION_COMMAND,
-                ).requireSuccess("Failed to set auto-compaction")
+                ).requireSuccess("设置自动压缩失败")
                 Unit
             }
         }
@@ -941,7 +941,7 @@ class RpcSessionController(
                             enabled = enabled,
                         ),
                     expectedCommand = SET_AUTO_RETRY_COMMAND,
-                ).requireSuccess("Failed to set auto-retry")
+                ).requireSuccess("设置自动重试失败")
                 Unit
             }
         }
@@ -960,7 +960,7 @@ class RpcSessionController(
                             mode = mode,
                         ),
                     expectedCommand = SET_STEERING_MODE_COMMAND,
-                ).requireSuccess("Failed to set steering mode")
+                ).requireSuccess("设置引导模式失败")
                 Unit
             }
         }
@@ -979,7 +979,7 @@ class RpcSessionController(
                             mode = mode,
                         ),
                     expectedCommand = SET_FOLLOW_UP_MODE_COMMAND,
-                ).requireSuccess("Failed to set follow-up mode")
+                ).requireSuccess("设置追问模式失败")
                 Unit
             }
         }
@@ -991,7 +991,7 @@ class RpcSessionController(
         cwd: String,
     ): PiRpcConnection {
         val normalizedCwd = cwd.trim()
-        require(normalizedCwd.isNotBlank()) { "cwd must not be blank" }
+        require(normalizedCwd.isNotBlank()) { "cwd 不能为空" }
 
         val currentConnection = activeConnection
         val currentContext = activeContext
@@ -1190,14 +1190,14 @@ class RpcSessionController(
             return
         }
 
-        val rebuildResponse = connection.requestEntries().requireSuccess("Failed to rebuild session entries")
+        val rebuildResponse = connection.requestEntries().requireSuccess("重建会话条目失败")
         val rebuilt = entryProjection.apply(rebuildResponse.data, fullRebuild = true)
         _syncMetrics.value = _syncMetrics.value.copy(fullRebuilds = _syncMetrics.value.fullRebuilds + 1)
         projectedMessagesResponse =
             if (rebuilt is ProjectionUpdate.Applied) {
                 rebuilt.toMessagesResponse()
             } else {
-                connection.requestMessages().requireSuccess("Failed to rebuild session timeline")
+                connection.requestMessages().requireSuccess("重建会话时间线失败")
             }
         _timelineInvalidated.emit(Unit)
     }
@@ -1269,18 +1269,18 @@ class RpcSessionController(
         if (expectedSessionKey == null) return
         val active = _activeSession.value
         check(active?.sessionKey == expectedSessionKey && !active.isSwitching) {
-            "The active session changed before quick reply could be dispatched"
+            "发送快捷回复前活动会话已切换，请重试"
         }
     }
 
     private fun ensureActiveConnection(): PiRpcConnection {
         return requireNotNull(activeConnection) {
-            "No active session. Resume a session first."
+            "没有活动会话，请先恢复一个会话。"
         }
     }
 
     private suspend fun refreshCurrentSessionPath(connection: PiRpcConnection): String? {
-        val stateResponse = connection.requestState().requireSuccess("Failed to read connection state")
+        val stateResponse = connection.requestState().requireSuccess("读取连接状态失败")
         return stateResponse.data.stringField("sessionFile")
     }
 

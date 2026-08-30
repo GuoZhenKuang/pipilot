@@ -73,7 +73,7 @@ internal fun ToolDetailsSheet(
                 .joinToString("\n") { (key, value) -> "$key: $value" }
                 .take(MAX_TOOL_ARGUMENT_PREVIEW_CHARS)
         }
-    val outputText = remember(tool.output) { tool.output.ifBlank { "(no output)" }.take(MAX_TOOL_OUTPUT_PREVIEW_CHARS) }
+    val outputText = remember(tool.output) { tool.output.ifBlank { "（无输出）" }.take(MAX_TOOL_OUTPUT_PREVIEW_CHARS) }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -85,25 +85,25 @@ internal fun ToolDetailsSheet(
                     .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(tool.toolName.ifBlank { "Tool details" }, style = MaterialTheme.typography.titleLarge)
+            Text(tool.toolName.ifBlank { "工具详情" }, style = MaterialTheme.typography.titleLarge)
             Text(
                 text =
                     if (tool.isError) {
-                        "Failed"
+                        "失败"
                     } else if (tool.isStreaming) {
-                        "Running"
+                        "运行中"
                     } else {
-                        "Completed"
+                        "已完成"
                     },
                 style = MaterialTheme.typography.labelMedium,
                 color = if (tool.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
             )
             if (tool.arguments.isNotEmpty()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Arguments", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    Text("参数", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                     TextButton(onClick = { copyToClipboard(argumentsText) }) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy tool arguments")
-                        Text("Copy")
+                        Icon(Icons.Default.ContentCopy, contentDescription = "复制工具参数")
+                        Text("复制")
                     }
                 }
                 SelectionContainer {
@@ -115,10 +115,10 @@ internal fun ToolDetailsSheet(
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Output", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                Text("输出", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                 TextButton(onClick = { copyToClipboard(outputText) }) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy tool output")
-                    Text("Copy")
+                    Icon(Icons.Default.ContentCopy, contentDescription = "复制工具输出")
+                    Text("复制")
                 }
             }
             SelectionContainer {
@@ -177,36 +177,36 @@ internal fun SessionStatsSheet(
             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Session details", style = MaterialTheme.typography.titleLarge)
-            StatsSection(title = "Session") {
-                sessionName?.let { StatRow("Name", it) }
-                cwd?.let { StatRow("Working directory", it) }
-                model?.let { StatRow("Model", "${it.provider}/${it.id}") }
-                StatRow("Status", status.label)
-                StatRow("Queued", pendingMessageCount.toString())
+            Text("会话详情", style = MaterialTheme.typography.titleLarge)
+            StatsSection(title = "会话") {
+                sessionName?.let { StatRow("名称", it) }
+                cwd?.let { StatRow("工作目录", it) }
+                model?.let { StatRow("模型", "${it.provider}/${it.id}") }
+                StatRow("状态", status.label)
+                StatRow("排队消息", pendingMessageCount.toString())
             }
             if (isLoading) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
             } else if (stats != null) {
-                StatsSection(title = "Usage") {
-                    StatRow("Input tokens", formatNumber(stats.inputTokens))
-                    StatRow("Output tokens", formatNumber(stats.outputTokens))
-                    StatRow("Messages", stats.messageCount.toString())
-                    StatRow("Total cost", formatCost(stats.totalCost))
+                StatsSection(title = "用量") {
+                    StatRow("输入 Token", formatNumber(stats.inputTokens))
+                    StatRow("输出 Token", formatNumber(stats.outputTokens))
+                    StatRow("消息数", stats.messageCount.toString())
+                    StatRow("总费用", formatCost(stats.totalCost))
                 }
             }
-            Text("Handoff to computer", style = MaterialTheme.typography.titleMedium)
+            Text("交接到电脑", style = MaterialTheme.typography.titleMedium)
             SelectionContainer { Text(summary, style = MaterialTheme.typography.bodySmall) }
             TextButton(onClick = { copyToClipboard(summary) }) {
                 Icon(Icons.Default.ContentCopy, contentDescription = null)
-                Text("Copy handoff summary")
+                Text("复制交接摘要")
             }
-            TextButton(onClick = onCopyLatestResponse) { Text("Copy latest response") }
-            TextButton(onClick = onExportSession) { Text("Export conversation/session") }
+            TextButton(onClick = onCopyLatestResponse) { Text("复制最新回复") }
+            TextButton(onClick = onExportSession) { Text("导出对话/会话") }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = onSync) { Text("Sync now") }
-                TextButton(onClick = onRefresh) { Text("Refresh stats") }
-                TextButton(onClick = onCompact) { Text("Compact") }
+                TextButton(onClick = onSync) { Text("立即同步") }
+                TextButton(onClick = onRefresh) { Text("刷新统计") }
+                TextButton(onClick = onCompact) { Text("压缩上下文") }
             }
         }
     }
@@ -321,7 +321,7 @@ internal fun ModelPickerSheet(
 
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Select Model") },
+        title = { Text("选择模型") },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 500.dp),
@@ -329,7 +329,7 @@ internal fun ModelPickerSheet(
                 OutlinedTextField(
                     value = query,
                     onValueChange = onQueryChange,
-                    placeholder = { Text("Search models...") },
+                    placeholder = { Text("搜索模型…") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                     leadingIcon = {
@@ -349,7 +349,7 @@ internal fun ModelPickerSheet(
                     }
                 } else if (filteredModels.isEmpty()) {
                     Text(
-                        text = "No models found",
+                        text = "没有找到模型",
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(16.dp),
                     )
@@ -387,7 +387,7 @@ internal fun ModelPickerSheet(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text("取消")
             }
         },
     )
@@ -434,7 +434,7 @@ private fun ModelItem(
                         onClick = {},
                         label = {
                             Text(
-                                "Thinking",
+                                "思考级别",
                                 style = MaterialTheme.typography.labelSmall,
                             )
                         },
@@ -449,21 +449,21 @@ private fun ModelItem(
             ) {
                 model.contextWindow?.let { ctx ->
                     Text(
-                        text = "Context: ${formatNumber(ctx.toLong())}",
+                        text = "上下文：${formatNumber(ctx.toLong())}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 model.inputCostPer1k?.let { cost ->
                     Text(
-                        text = "In: \$${String.format(java.util.Locale.US, "%.4f", cost)}/1k",
+                        text = "输入：\$${String.format(java.util.Locale.US, "%.4f", cost)}/1k",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 model.outputCostPer1k?.let { cost ->
                     Text(
-                        text = "Out: \$${String.format(java.util.Locale.US, "%.4f", cost)}/1k",
+                        text = "输出：\$${String.format(java.util.Locale.US, "%.4f", cost)}/1k",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -494,12 +494,12 @@ internal fun TreeNavigationSheet(
 
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Session tree") },
+        title = { Text("会话树") },
         text = {
             Column(modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
                 if (tree != null) {
                     Text(
-                        text = "Current session tree",
+                        text = "当前会话树",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 8.dp),
@@ -525,7 +525,7 @@ internal fun TreeNavigationSheet(
 
                 if (isLoading && entries.isNotEmpty()) {
                     Text(
-                        text = "Updating tree…",
+                        text = "正在更新会话树…",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.padding(bottom = 6.dp),
@@ -552,7 +552,7 @@ internal fun TreeNavigationSheet(
 
                     entries.isEmpty() -> {
                         Text(
-                            text = "No tree data available",
+                            text = "暂无会话树数据",
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }
@@ -583,7 +583,7 @@ internal fun TreeNavigationSheet(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Close")
+                Text("关闭")
             }
         },
     )
@@ -654,7 +654,7 @@ private fun TreeEntryRow(
 
                 if (isCurrent) {
                     Text(
-                        text = "● current",
+                        text = "● 当前",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
@@ -685,7 +685,7 @@ private fun TreeEntryRow(
             ) {
                 if (childCount > 1) {
                     Text(
-                        text = "↳ $childCount branches",
+                        text = "↳ $childCount 个分支",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.tertiary,
                     )
@@ -700,7 +700,7 @@ private fun TreeEntryRow(
                                 vertical = 0.dp,
                             ),
                     ) {
-                        Text("Jump", style = MaterialTheme.typography.labelSmall)
+                        Text("跳转", style = MaterialTheme.typography.labelSmall)
                     }
                     TextButton(
                         onClick = { onForkFromEntry(entry.entryId) },
@@ -710,7 +710,7 @@ private fun TreeEntryRow(
                                 vertical = 0.dp,
                             ),
                     ) {
-                        Text("Fork", style = MaterialTheme.typography.labelSmall)
+                        Text("分叉", style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }

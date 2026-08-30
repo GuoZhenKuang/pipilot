@@ -53,7 +53,7 @@ class BridgeSessionShareRemoteDataSource(
         hostId: String,
         session: SessionRecord,
     ): SessionShare {
-        check(session.hasStableIdentity) { "This session does not have a unique stable identity" }
+        check(session.hasStableIdentity) { "该会话没有唯一的稳定标识" }
         val payload =
             request(hostId, "bridge_get_or_create_session_share") {
                 put("sessionPath", session.sessionPath)
@@ -77,7 +77,7 @@ class BridgeSessionShareRemoteDataSource(
         hostId: String,
         session: SessionRecord,
     ) {
-        check(session.hasStableIdentity) { "This session does not have a unique stable identity" }
+        check(session.hasStableIdentity) { "该会话没有唯一的稳定标识" }
         request(hostId, "bridge_revoke_session_share") {
             put("sessionPath", session.sessionPath)
         }
@@ -91,9 +91,9 @@ class BridgeSessionShareRemoteDataSource(
     ): JsonObject {
         val profile =
             profileStore.list().firstOrNull { candidate -> candidate.id == hostId }
-                ?: throw BridgeShareException("host_unconfigured", "Review and save this host before connecting")
+                ?: throw BridgeShareException("host_unconfigured", "请先检查并保存该主机，然后再连接")
         val token = tokenStore.getToken(hostId)
-        if (token.isNullOrBlank()) throw BridgeShareException("missing_token", "Enter a token for this configured host")
+        if (token.isNullOrBlank()) throw BridgeShareException("missing_token", "请为该主机填写令牌")
         val mutex = synchronized(mutexesByHost) { mutexesByHost.getOrPut(hostId) { Mutex() } }
 
         return mutex.withLock {
@@ -120,7 +120,7 @@ class BridgeSessionShareRemoteDataSource(
                             val hello = awaitPayload(incoming) { payload -> payload.type() == BRIDGE_HELLO_TYPE }
                             verifyAuthenticatedHello(profile, hello)
                         } else if (!verifiedHelloByHost.containsKey(hostId)) {
-                            error("Authenticated bridge capability state is unavailable")
+                            error("无法获取 Bridge 能力状态")
                         }
 
                         transport.send(
@@ -183,7 +183,7 @@ class BridgeSessionShareRemoteDataSource(
         if (stored != null && stored != reported) {
             throw BridgeShareException(
                 "share_origin_mismatch",
-                "The bridge share origin changed. Review the saved host before opening links.",
+                "Bridge 共享来源已变更，请先检查已保存的主机再打开链接。",
             )
         }
         if (stored == null && reported != null) {
@@ -202,12 +202,12 @@ class BridgeSessionShareRemoteDataSource(
         val error = json.decodeFromJsonElement(BridgeErrorPayload.serializer(), payload)
         val message =
             when (error.code) {
-                "share_not_found" -> "This shared session is unavailable or was revoked"
-                "share_state_unavailable" -> "Sharing is unavailable until the bridge operator repairs its state"
-                "session_identity_ambiguous" -> "This session has a duplicate identity and cannot be shared"
-                "session_not_shareable" -> "This session does not have a stable identity yet"
-                "control_lock_denied", "control_lock_required" -> "This session is open elsewhere"
-                else -> "The bridge could not complete the share request"
+                "share_not_found" -> "该共享会话不可用或已被撤销"
+                "share_state_unavailable" -> "共享功能暂不可用，需要 Bridge 管理者先修复状态"
+                "session_identity_ambiguous" -> "该会话标识重复，无法共享"
+                "session_not_shareable" -> "该会话还没有稳定标识"
+                "control_lock_denied", "control_lock_required" -> "该会话正在其他位置打开"
+                else -> "Bridge 无法完成共享请求"
             }
         return BridgeShareException(error.code ?: "share_operation_failed", message)
     }

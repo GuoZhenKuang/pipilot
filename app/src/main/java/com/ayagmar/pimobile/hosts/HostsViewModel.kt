@@ -69,7 +69,7 @@ class HostsViewModel(
                             hostId to
                                 DiagnosticsResult.AuthError(
                                     hostProfile = profile,
-                                    message = "No token configured",
+                                    message = "尚未配置令牌",
                                 )
                         ),
                 )
@@ -138,7 +138,7 @@ class HostsViewModel(
                 val hasExistingToken = profile.id.isNotBlank() && tokenStore.hasToken(profile.id)
                 val hasProvidedToken = draft.token.isNotBlank()
                 if (!hasProvidedToken && !hasExistingToken) {
-                    _uiState.update { state -> state.copy(errorMessage = "Token is required") }
+                    _uiState.update { state -> state.copy(errorMessage = "请填写令牌") }
                     return
                 }
 

@@ -18,15 +18,15 @@ class HandoffSummaryTest {
                 ),
             )
 
-        assertTrue(summary.contains("Session: Chat"))
-        assertTrue(summary.contains("Working directory: /work/project"))
-        assertTrue(summary.contains("Pi is working"))
+        assertTrue(summary.contains("会话：Chat"))
+        assertTrue(summary.contains("工作目录：/work/project"))
+        assertTrue(summary.contains("Pi 正在工作"))
     }
 
     @Test
     fun `omits missing metadata while retaining idle state`() {
         val summary = formatHandoffSummary(HandoffSummaryData(null, null, null, null, HandoffRunStatus.IDLE))
-        assertTrue(summary.contains("Pi is idle"))
+        assertTrue(summary.contains("Pi 处于空闲状态"))
         assertFalse(summary.contains("null"))
     }
 
@@ -37,8 +37,8 @@ class HandoffSummaryTest {
                 HandoffSummaryData(null, null, null, null, HandoffRunStatus.RETRYING),
             )
 
-        assertTrue(summary.contains("Pi is retrying"))
-        assertFalse(summary.contains("Pi is waiting"))
+        assertTrue(summary.contains("Pi 正在重试"))
+        assertFalse(summary.contains("Pi 正在等待"))
     }
 
     @Test

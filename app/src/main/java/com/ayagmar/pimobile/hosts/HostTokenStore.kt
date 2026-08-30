@@ -115,7 +115,7 @@ class TokenCipher(
 
     fun decrypt(payload: String): String {
         val bytes = Base64.getDecoder().decode(payload)
-        require(bytes.size > IV_LENGTH_BYTES) { "Encrypted token payload is invalid" }
+        require(bytes.size > IV_LENGTH_BYTES) { "加密令牌数据无效" }
         val iv = bytes.copyOfRange(0, IV_LENGTH_BYTES)
         val ciphertext = bytes.copyOfRange(IV_LENGTH_BYTES, bytes.size)
         val cipher = Cipher.getInstance(TRANSFORMATION)

@@ -23,7 +23,7 @@ fun shouldCollapseSettledToolGroup(
 
 fun presentToolActivity(tool: ChatTimelineItem.Tool): ToolActivityPresentation =
     ToolActivityPresentation(
-        title = tool.toolName.ifBlank { "Tool" },
+        title = tool.toolName.ifBlank { "工具" },
         summary = tool.summary(),
         status = tool.status(),
         hasDetails = tool.output.isNotBlank() || tool.arguments.isNotEmpty() || tool.editDiff != null,
@@ -39,11 +39,11 @@ private fun ChatTimelineItem.Tool.status(): ToolActivityStatus =
 private fun ChatTimelineItem.Tool.summary(): String {
     val target = arguments.toolTarget()
     return when (toolName.lowercase()) {
-        "read" -> target?.let { "Read $it" } ?: "Read content"
-        "edit" -> target?.let { "Edited $it" } ?: "Edited content"
-        "write" -> target?.let { "Wrote $it" } ?: "Wrote content"
-        "bash" -> arguments["command"]?.lineSequence()?.firstOrNull()?.take(COMMAND_SUMMARY_LENGTH) ?: "Ran command"
-        else -> toolName.ifBlank { "Tool activity" }
+        "read" -> target?.let { "读取 $it" } ?: "读取内容"
+        "edit" -> target?.let { "编辑 $it" } ?: "编辑内容"
+        "write" -> target?.let { "写入 $it" } ?: "写入内容"
+        "bash" -> arguments["command"]?.lineSequence()?.firstOrNull()?.take(COMMAND_SUMMARY_LENGTH) ?: "执行命令"
+        else -> toolName.ifBlank { "工具活动" }
     }
 }
 

@@ -9,9 +9,9 @@ import org.junit.Test
 class ToolActivityPresentationTest {
     @Test
     fun `formats known tool targets`() {
-        assertEquals("Read src/Main.kt", presentToolActivity(tool("read", mapOf("path" to "src/Main.kt"))).summary)
-        assertEquals("Edited a.kt", presentToolActivity(tool("edit", mapOf("file_path" to "a.kt"))).summary)
-        assertEquals("Wrote out.txt", presentToolActivity(tool("write", mapOf("target" to "out.txt"))).summary)
+        assertEquals("读取 src/Main.kt", presentToolActivity(tool("read", mapOf("path" to "src/Main.kt"))).summary)
+        assertEquals("编辑 a.kt", presentToolActivity(tool("edit", mapOf("file_path" to "a.kt"))).summary)
+        assertEquals("写入 out.txt", presentToolActivity(tool("write", mapOf("target" to "out.txt"))).summary)
     }
 
     @Test

@@ -42,7 +42,7 @@ internal fun rememberChatImagePresentation(
                     .getOrElse {
                         ChatImagePresentation(
                             isLoading = false,
-                            errorMessage = "Image preview unavailable",
+                            errorMessage = "图片预览不可用",
                         )
                     }
             }
@@ -57,10 +57,10 @@ internal suspend fun ChatImageSource.copyTo(
             is ChatImageSource.LocalUri ->
                 context.contentResolver.openInputStream(uri.toUri())?.use { input ->
                     input.copyTo(output)
-                } ?: error("Unable to read image")
+                } ?: error("无法读取图片")
             is ChatImageSource.Embedded -> output.write(resolveEmbeddedBytes(this@copyTo))
         }
-    } ?: error("Unable to create image")
+    } ?: error("无法创建图片")
 }
 
 internal suspend fun ChatImageSource.createShareUri(context: Context): Uri =
@@ -73,7 +73,7 @@ internal suspend fun ChatImageSource.createShareUri(context: Context): Uri =
                 is ChatImageSource.LocalUri ->
                     context.contentResolver.openInputStream(uri.toUri())?.use { input ->
                         input.copyTo(output)
-                    } ?: error("Unable to read image")
+                    } ?: error("无法读取图片")
                 is ChatImageSource.Embedded -> output.write(resolveEmbeddedBytes(this@createShareUri))
             }
         }

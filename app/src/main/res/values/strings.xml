@@ -1,16 +1,16 @@
 <resources>
     <string name="app_name">pi-mobile</string>
-    <string name="diff_viewer_copy">Copy</string>
-    <string name="diff_viewer_collapse">Collapse</string>
-    <string name="diff_viewer_loading">Preparing diff preview…</string>
+    <string name="diff_viewer_copy">复制</string>
+    <string name="diff_viewer_collapse">收起</string>
+    <string name="diff_viewer_loading">正在准备差异预览…</string>
 
     <plurals name="diff_viewer_expand_more_lines">
-        <item quantity="one">Expand (%1$d more line)</item>
-        <item quantity="other">Expand (%1$d more lines)</item>
+        <item quantity="one">展开（还有 %1$d 行）</item>
+        <item quantity="other">展开（还有 %1$d 行）</item>
     </plurals>
 
     <plurals name="diff_viewer_hidden_unchanged_lines">
-        <item quantity="one">… %1$d unchanged line …</item>
-        <item quantity="other">… %1$d unchanged lines …</item>
+        <item quantity="one">… %1$d 行未更改 …</item>
+        <item quantity="other">… %1$d 行未更改 …</item>
     </plurals>
 </resources>

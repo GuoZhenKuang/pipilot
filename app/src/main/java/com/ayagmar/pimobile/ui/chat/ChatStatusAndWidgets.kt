@@ -50,8 +50,8 @@ internal fun ModelThinkingControls(
 ) {
     var showThinkingMenu by remember { mutableStateOf(false) }
 
-    val modelText = currentModel?.name ?: "Select model"
-    val thinkingText = thinkingLevel?.uppercase() ?: "OFF"
+    val modelText = currentModel?.name ?: "选择模型"
+    val thinkingText = localizedThinkingLevel(thinkingLevel)
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -183,12 +183,12 @@ internal fun ExtensionStatusStrip(statuses: Map<String, String>) {
                     )
                     Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                         Text(
-                            text = "Extension status",
+                            text = "扩展状态",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = "${presentation.activeCount} active · ${presentation.quietCount} quiet",
+                            text = "${presentation.activeCount} 个活动 · ${presentation.quietCount} 个安静",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -196,7 +196,7 @@ internal fun ExtensionStatusStrip(statuses: Map<String, String>) {
                 }
 
                 TextButton(onClick = { expanded = !expanded }) {
-                    Text(if (expanded) "Hide" else "Show")
+                    Text(if (expanded) "隐藏" else "显示")
                 }
             }
 
@@ -212,7 +212,7 @@ internal fun ExtensionStatusStrip(statuses: Map<String, String>) {
                     }
                     if (presentation.hiddenCount > 0) {
                         Text(
-                            text = "+${presentation.hiddenCount} more",
+                            text = "另有 ${presentation.hiddenCount} 项",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -249,7 +249,7 @@ internal fun ExtensionStatusStrip(statuses: Map<String, String>) {
 
             if (presentation.changedCount > 0) {
                 Text(
-                    text = "${presentation.changedCount} update(s) since last refresh",
+                    text = "自上次刷新后有 ${presentation.changedCount} 项更新",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.tertiary,
                 )
@@ -314,7 +314,7 @@ internal fun buildExtensionStatusPresentation(
         statuses
             .toSortedMap()
             .map { (key, rawValue) ->
-                val value = rawValue.trim().ifEmpty { "(empty)" }
+                val value = rawValue.trim().ifEmpty { "（空）" }
                 ExtensionStatusEntry(
                     key = key,
                     value = value,
@@ -380,6 +380,19 @@ internal fun ExtensionWidgets(
 }
 
 internal const val CHAT_PROMPT_CONTROLS_TAG = "chat_prompt_controls"
+
+private fun localizedThinkingLevel(level: String?): String =
+    when (level?.lowercase()) {
+        null, "off" -> "关闭"
+        "minimal" -> "极少"
+        "low" -> "低"
+        "medium" -> "中"
+        "high" -> "高"
+        "xhigh" -> "很高"
+        "max" -> "最高"
+        else -> level
+    }
+
 internal const val CHAT_STREAMING_CONTROLS_TAG = "chat_streaming_controls"
 internal const val CHAT_PROMPT_INPUT_ROW_TAG = "chat_prompt_input_row"
 internal const val CHAT_RUN_PROGRESS_TAG = "chat_run_progress"
