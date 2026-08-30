@@ -218,7 +218,7 @@ class RpcSessionController(
                     }
                 }
 
-                val state = connection.requestState().requireSuccess("Failed to verify resumed session")
+                val state = awaitResumedState(connection, session.sessionId.takeIf { session.hasStableIdentity })
                 val newPath = state.data.stringField("sessionFile")
                 val actualSessionId = state.data.stringField("sessionId")
                 if (session.hasStableIdentity) {
@@ -245,6 +245,22 @@ class RpcSessionController(
                 Result.failure(error)
             }
         }
+    }
+
+    private suspend fun awaitResumedState(
+        connection: PiRpcConnection,
+        expectedSessionId: String?,
+    ): RpcResponse {
+        var state = connection.requestState().requireSuccess("Failed to verify resumed session")
+
+        if (expectedSessionId != null) {
+            repeat(SESSION_IDENTITY_RETRY_COUNT - 1) {
+                if (state.data.stringField("sessionId") == expectedSessionId) return state
+                delay(SESSION_IDENTITY_RETRY_DELAY_MS)
+                state = connection.requestState().requireSuccess("Failed to verify resumed session")
+            }
+        }
+        return state
     }
 
     override suspend fun bootstrap(onStateAvailable: (RpcResponse) -> Unit): Result<SessionBootstrapSnapshot> {
@@ -1321,7 +1337,9 @@ class RpcSessionController(
         private const val BRIDGE_TREE_NAVIGATION_RESULT_TYPE = "bridge_tree_navigation_result"
         private const val BRIDGE_SESSION_INVALIDATED_TYPE = "bridge_session_invalidated"
         private const val EVENT_BUFFER_CAPACITY = 256
-        private const val DEFAULT_TIMEOUT_MS = 10_000L
+        private const val DEFAULT_TIMEOUT_MS = 30_000L
+        private const val SESSION_IDENTITY_RETRY_COUNT = 5
+        private const val SESSION_IDENTITY_RETRY_DELAY_MS = 200L
         private const val BASH_TIMEOUT_MS = 60_000L
         private const val DISCONNECT_RECOVERY_DELAY_MS = 700L
         private const val TRANSPORT_LOG_TAG = "RpcTransport"
