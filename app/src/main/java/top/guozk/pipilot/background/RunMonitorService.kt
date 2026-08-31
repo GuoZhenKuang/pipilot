@@ -14,8 +14,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import top.guozk.pipilot.MainActivity
 import top.guozk.pipilot.PipilotApplication
@@ -47,14 +45,31 @@ class RunMonitorService : Service() {
         observerJob =
             scope.launch {
                 observer.snapshot
-                    .map { it.phase }
-                    .distinctUntilChanged()
-                    .collect { phase ->
+                    .collect { snapshot ->
                         val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-                        manager.notify(NOTIFICATION_ID, buildNotification(phaseText(phase)))
-                        if (phase == RunStateObserver.Phase.IDLE) {
-                            // 运行结束（完成或失败不区分，保持通用文案），更新通知后自动退出监控
+                        if (snapshot.phase == RunStateObserver.Phase.IDLE) {
+                            // 运行结束：先发一次性结果通知（完成/失败），再收起常驻通知
+                            val keys = snapshot.hostProfileId to snapshot.sessionId
+                            val target =
+                                if (keys.first != null && keys.second != null) {
+                                    PendingSessionNavigation.Target(keys.first!!, keys.second!!)
+                                } else {
+                                    null
+                                }
+                            val outcome =
+                                if (observer.lastRunFailed) {
+                                    getString(R.string.run_monitor_failed)
+                                } else {
+                                    getString(R.string.run_monitor_finished)
+                                }
+                            manager.notify(
+                                RESULT_NOTIFICATION_ID,
+                                buildResultNotification(outcome, target),
+                            )
+                            manager.cancel(NOTIFICATION_ID)
                             stopSelf()
+                        } else {
+                            manager.notify(NOTIFICATION_ID, buildNotification(phaseText(snapshot.phase)))
                         }
                     }
             }
@@ -114,6 +129,30 @@ class RunMonitorService : Service() {
             .build()
     }
 
+    private fun buildResultNotification(
+        outcomeText: String,
+        target: PendingSessionNavigation.Target?,
+    ): Notification {
+        val contentIntent =
+            PendingIntent.getActivity(
+                this,
+                2,
+                Intent(this, MainActivity::class.java),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+        if (target != null) {
+            PendingSessionNavigation.submit(target)
+        }
+        return NotificationCompat.Builder(this, RESULT_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentTitle(getString(R.string.run_monitor_title))
+            .setContentText(outcomeText)
+            .setAutoCancel(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setContentIntent(contentIntent)
+            .build()
+    }
+
     private fun createChannel() {
         val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         val channel =
@@ -125,11 +164,22 @@ class RunMonitorService : Service() {
                 description = getString(R.string.run_monitor_channel_desc)
             }
         manager.createNotificationChannel(channel)
+        val resultChannel =
+            NotificationChannel(
+                RESULT_CHANNEL_ID,
+                getString(R.string.run_monitor_result_channel_name),
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = getString(R.string.run_monitor_result_channel_desc)
+            }
+        manager.createNotificationChannel(resultChannel)
     }
 
     companion object {
         private const val CHANNEL_ID = "run_monitor"
+        private const val RESULT_CHANNEL_ID = "run_monitor_result"
         private const val NOTIFICATION_ID = 1001
+        private const val RESULT_NOTIFICATION_ID = 1002
         private const val ACTION_STOP = "top.guozk.pipilot.background.STOP"
 
         fun start(context: Context) {

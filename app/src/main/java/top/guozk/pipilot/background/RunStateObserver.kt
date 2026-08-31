@@ -34,6 +34,11 @@ class RunStateObserver(
 
     private var job: Job? = null
 
+    /** 最近一次运行是否以失败告终（assistantMessageEvent error/stopReason）。 */
+    @Volatile
+    var lastRunFailed: Boolean = false
+        private set
+
     fun start(scope: CoroutineScope) {
         if (job?.isActive == true) return
         job =
@@ -66,10 +71,17 @@ class RunStateObserver(
 
     internal fun onRpcEvent(event: RpcIncomingMessage) {
         when (event) {
-            is top.guozk.pipilot.corerpc.AgentStartEvent -> update { it.copy(phase = Phase.STREAMING) }
+            is top.guozk.pipilot.corerpc.AgentStartEvent -> {
+                lastRunFailed = false
+                update { it.copy(phase = Phase.STREAMING) }
+            }
             is top.guozk.pipilot.corerpc.AgentSettledEvent ->
                 update {
                     if (it.phase != Phase.IDLE) it.copy(phase = Phase.IDLE) else it
+                }
+            is top.guozk.pipilot.corerpc.MessageUpdateEvent ->
+                if (event.assistantMessageEvent?.type == "error") {
+                    lastRunFailed = true
                 }
             else -> Unit
         }

@@ -18,6 +18,9 @@
     <string name="run_monitor_title">PiPilot 运行监控</string>
     <string name="run_monitor_working">Pi 正在运行…</string>
     <string name="run_monitor_retrying">Pi 正在重试…</string>
-    <string name="run_monitor_finished">运行已结束</string>
     <string name="run_monitor_stop">停止监控</string>
+    <string name="run_monitor_finished">运行已完成</string>
+    <string name="run_monitor_failed">运行已结束（有报错）</string>
+    <string name="run_monitor_result_channel_name">运行结果</string>
+    <string name="run_monitor_result_channel_desc">Pi 运行结束或失败时提醒</string>
 </resources>

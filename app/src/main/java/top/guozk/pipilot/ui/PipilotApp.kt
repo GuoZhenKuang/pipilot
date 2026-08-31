@@ -59,6 +59,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
+import top.guozk.pipilot.background.PendingSessionNavigation
 import top.guozk.pipilot.di.AppGraph
 import top.guozk.pipilot.sessions.ShareNavigationState
 import top.guozk.pipilot.ui.chat.ChatRoute
@@ -186,7 +187,7 @@ private fun DrawerDestinationItem(
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Suppress("LongMethod", "MaxLineLength")
+@Suppress("LongMethod", "MaxLineLength", "CyclomaticComplexMethod")
 @Composable
 fun PipilotApp(appGraph: AppGraph) {
     val context = LocalContext.current
@@ -249,6 +250,14 @@ fun PipilotApp(appGraph: AppGraph) {
                     navigateTo("chat")
                     shareCoordinator.acknowledgeNavigation(state.generation)
                 }
+            }
+        }
+
+        // 通知点击直达会话：前台服务写入待处理目标，这里消费并导航
+        LaunchedEffect(Unit) {
+            val target = PendingSessionNavigation.consume()
+            if (target != null) {
+                navigateTo("chat")
             }
         }
 

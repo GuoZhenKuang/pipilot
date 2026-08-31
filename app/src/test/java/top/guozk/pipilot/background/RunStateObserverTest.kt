@@ -12,6 +12,7 @@ import org.junit.Test
 import top.guozk.pipilot.corenet.ConnectionState
 import top.guozk.pipilot.corerpc.AgentSettledEvent
 import top.guozk.pipilot.corerpc.AgentStartEvent
+import top.guozk.pipilot.corerpc.MessageUpdateEvent
 import top.guozk.pipilot.coresessions.SessionKey
 import top.guozk.pipilot.testutil.FakeSessionController
 
@@ -85,6 +86,26 @@ class RunStateObserverTest {
             assertNull(observer.snapshot.value.hostProfileId)
             assertNull(observer.snapshot.value.sessionId)
             assertEquals(RunStateObserver.Phase.IDLE, observer.snapshot.value.phase)
+            stopObserver(observer)
+            advanceUntilIdle()
+        }
+
+    @Test
+    fun `assistant error marks run failed`() =
+        runTest(StandardTestDispatcher()) {
+            val controller = FakeSessionController()
+            val observer = RunStateObserver(controller)
+            launchObserver(observer)
+            advanceUntilIdle()
+
+            controller.emitEvent(
+                MessageUpdateEvent(
+                    type = "message_update",
+                    assistantMessageEvent = top.guozk.pipilot.corerpc.AssistantMessageEvent(type = "error"),
+                ),
+            )
+            advanceUntilIdle()
+            assertEquals(true, observer.lastRunFailed)
             stopObserver(observer)
             advanceUntilIdle()
         }
