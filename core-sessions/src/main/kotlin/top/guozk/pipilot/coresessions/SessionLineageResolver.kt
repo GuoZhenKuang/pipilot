@@ -69,7 +69,8 @@ object SessionLineageResolver {
                 val next = lineageBySessionId[current]?.parentSessionId ?: break
                 if (next == start) {
                     chain.forEach { id ->
-                        lineageBySessionId[id] = SessionLineage(lineageBySessionId[id]?.parentSessionId, LineageStatus.CYCLE)
+                        val parent = lineageBySessionId[id]?.parentSessionId
+                        lineageBySessionId[id] = SessionLineage(parent, LineageStatus.CYCLE)
                     }
                     break
                 }
