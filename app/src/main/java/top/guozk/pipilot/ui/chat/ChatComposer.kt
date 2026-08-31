@@ -1,6 +1,9 @@
 package top.guozk.pipilot.ui.chat
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.speech.SpeechRecognizer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -28,8 +31,10 @@ import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -37,11 +42,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -57,19 +64,26 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
 import top.guozk.pipilot.chat.ChatImageSource
 import top.guozk.pipilot.chat.ChatViewModel
+import top.guozk.pipilot.chat.DictationController
+import top.guozk.pipilot.chat.DictationError
 import top.guozk.pipilot.chat.ImageEncoder
 import top.guozk.pipilot.chat.PendingImage
 import top.guozk.pipilot.chat.PendingQueueItem
 import top.guozk.pipilot.chat.PendingQueueType
+import top.guozk.pipilot.chat.PlatformDictationRecognizer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Suppress("LongMethod", "LongParameterList")
@@ -277,7 +291,7 @@ private fun deliveryModeLabel(mode: String): String {
     }
 }
 
-@Suppress("LongMethod", "LongParameterList")
+@Suppress("LongMethod", "LongParameterList", "CyclomaticComplexMethod")
 @Composable
 internal fun PromptInputRow(
     inputText: String,
@@ -294,6 +308,56 @@ internal fun PromptInputRow(
     val context = LocalContext.current
     val imageEncoder = remember { ImageEncoder(context) }
     var previewImageUri by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // ---- 语音听写（opt-in；平台识别服务可能把音频传到设备外，首次使用前披露）----
+    var showDictationDisclosure by rememberSaveable { mutableStateOf(false) }
+    var controllerRef by remember { mutableStateOf<DictationController?>(null) }
+    var latestInputText by remember { mutableStateOf(inputText) }
+    latestInputText = inputText
+    var latestOnInputChanged by remember { mutableStateOf(onInputTextChanged) }
+    latestOnInputChanged = onInputTextChanged
+    val dictationController =
+        remember {
+            DictationController(
+                PlatformDictationRecognizer(
+                    context,
+                    object : PlatformDictationRecognizer.Callbacks {
+                        override fun onPartial(text: String) {
+                            controllerRef?.onPartial(text)
+                        }
+
+                        override fun onFinal(text: String) {
+                            // 最终结果一次性追加到草稿末尾（现有草稿绝不丢失）；听写绝不自动发送
+                            controllerRef?.onFinal(text)
+                            latestOnInputChanged(latestInputText + text)
+                        }
+
+                        override fun onEnded(error: DictationError?) {
+                            controllerRef?.onEnded(error)
+                        }
+                    },
+                ),
+            )
+        }
+    controllerRef = dictationController
+    val dictationState by dictationController.state.collectAsState()
+
+    val permissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                showDictationDisclosure = true
+            }
+        }
+    fun startDictationAfterChecks() {
+        val granted =
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            return
+        }
+        showDictationDisclosure = true
+    }
 
     val photoPickerLauncher =
         rememberLauncherForActivityResult(
@@ -371,6 +435,14 @@ internal fun PromptInputRow(
                     }
                 }
             },
+        )
+
+        DictationAssistRow(
+            state = dictationState,
+            controller = dictationController,
+            showDisclosure = showDictationDisclosure,
+            onStartRequested = ::startDictationAfterChecks,
+            onDismissDisclosure = { showDictationDisclosure = false },
         )
 
         previewImageUri?.let { uri ->
@@ -672,3 +744,80 @@ private suspend fun shareImage(
 private const val MIN_IMAGE_SCALE = 1f
 private const val MAX_IMAGE_SCALE = 5f
 private const val IMAGE_METADATA_BACKGROUND_ALPHA = 0.72f
+
+@Composable
+private fun DictationAssistRow(
+    state: top.guozk.pipilot.chat.DictationState,
+    controller: top.guozk.pipilot.chat.DictationController,
+    onStartRequested: () -> Unit,
+    onDismissDisclosure: () -> Unit,
+    showDisclosure: Boolean,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // 听写控制行：麦克风按钮 + 部分结果预览（临时文本，不入草稿）
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onStartRequested, modifier = Modifier.semantics { contentDescription = "语音输入" }) {
+            Icon(
+                imageVector = Icons.Default.Mic,
+                contentDescription = null,
+                tint = if (state.isListening) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+            )
+        }
+        if (state.isListening && state.partialText.isNotBlank()) {
+            Text(
+                state.partialText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+
+    // 首次使用披露：平台识别服务可能把音频传到设备外
+    if (showDisclosure) {
+        DictationDisclosureDialog(
+            onDismiss = onDismissDisclosure,
+            onConfirm = { onDismissDisclosure(); controller.startAfterDisclosure(context) },
+        )
+    }
+
+    // 听写错误一次性提示
+    state.error?.let { error ->
+        val message =
+            when (error) {
+                DictationError.UNAVAILABLE -> "此设备不支持语音识别"
+                DictationError.NO_MATCH -> "没有识别到语音内容"
+                DictationError.BUSY -> "语音识别忙，请稍后再试"
+                DictationError.PERMISSION -> "需要麦克风权限"
+                DictationError.NETWORK -> "语音识别网络异常"
+                DictationError.GENERIC -> "语音识别失败"
+            }
+        Text(
+            message,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+}
+
+@Composable
+private fun DictationDisclosureDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("使用语音输入") },
+        text = {
+            Text("语音输入使用 Android 系统语音识别服务。识别服务可能将你的语音传送到设备外进行处理；识别结果仅作为消息草稿插入，绝不自动发送。")
+        },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("开始") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
