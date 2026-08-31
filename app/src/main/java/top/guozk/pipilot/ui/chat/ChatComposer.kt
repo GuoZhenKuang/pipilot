@@ -3,7 +3,6 @@ package top.guozk.pipilot.ui.chat
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.speech.SpeechRecognizer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -348,6 +347,7 @@ internal fun PromptInputRow(
                 showDictationDisclosure = true
             }
         }
+
     fun startDictationAfterChecks() {
         val granted =
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
@@ -782,7 +782,10 @@ private fun DictationAssistRow(
     if (showDisclosure) {
         DictationDisclosureDialog(
             onDismiss = onDismissDisclosure,
-            onConfirm = { onDismissDisclosure(); controller.startAfterDisclosure(context) },
+            onConfirm = {
+                onDismissDisclosure()
+                controller.startAfterDisclosure(context)
+            },
         )
     }
 

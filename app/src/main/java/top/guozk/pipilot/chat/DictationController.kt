@@ -138,7 +138,7 @@ enum class DictationError {
     BUSY,
     PERMISSION,
     NETWORK,
-    GENERIC;
+    GENERIC,
 
     companion object {
         fun fromPlatform(platformError: Int): DictationError =
