@@ -17,6 +17,8 @@ export interface SessionIndexEntry {
     lastModel?: string;
     sessionId?: string;
     isSessionIdUnique?: boolean;
+    /** Documented exact parent path from the session header. Internal metadata only — never surfaced as lineage identity. */
+    parentSessionPath?: string;
 }
 
 export interface SessionIndexGroup {
@@ -546,6 +548,7 @@ async function parseSessionFile(
         lastModel,
         sessionId,
         isSessionIdUnique: false,
+        parentSessionPath: typeof header.parentSession === "string" && header.parentSession ? header.parentSession : undefined,
     };
 }
 

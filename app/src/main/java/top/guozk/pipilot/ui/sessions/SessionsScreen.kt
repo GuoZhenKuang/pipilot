@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
+import top.guozk.pipilot.coresessions.LineageStatus
 import top.guozk.pipilot.coresessions.SessionIndexRepository
 import top.guozk.pipilot.hosts.HostProfileStore
 import top.guozk.pipilot.hosts.HostTokenStore
@@ -441,6 +442,7 @@ private fun SessionCard(
             }
             val metadata =
                 listOfNotNull(
+                    lineageBadge(item.lineage.status),
                     item.model,
                     item.messageCount?.let { "$it 条消息" },
                     item.updatedAt?.let(::relativeUpdatedTime),
@@ -623,3 +625,13 @@ private fun localizedHostStatus(kindName: String): String =
     }
 
 private const val STATUS_MESSAGE_DURATION_MS = 3_000L
+
+/** 谱系徽标：只显示关系状态，绝不显示路径或外部 ID。 */
+private fun lineageBadge(status: LineageStatus): String? =
+    when (status) {
+        LineageStatus.LIVE -> "分叉"
+        LineageStatus.CYCLE -> "谱系异常"
+        LineageStatus.MISSING -> "父会话缺失"
+        LineageStatus.HISTORICAL -> "父会话已移动"
+        LineageStatus.NONE, LineageStatus.AMBIGUOUS -> null
+    }

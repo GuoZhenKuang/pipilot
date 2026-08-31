@@ -12,6 +12,8 @@ package top.guozk.pipilot.sessions
 import top.guozk.pipilot.coresessions.SessionIndexSource
 import top.guozk.pipilot.coresessions.SessionIndexState
 import top.guozk.pipilot.coresessions.SessionKey
+import top.guozk.pipilot.coresessions.SessionLineage
+import top.guozk.pipilot.coresessions.SessionLineageResolver
 import top.guozk.pipilot.coresessions.SessionRecord
 import top.guozk.pipilot.hosts.HostProfile
 import java.time.Instant
@@ -72,6 +74,7 @@ data class SessionCockpitItem(
     val freshness: HostSessionStatusKind,
     val stableActionDisabledReason: String? = null,
     val isUnavailableSavedItem: Boolean = false,
+    val lineage: SessionLineage = SessionLineage(),
 )
 
 data class SessionCockpitProjection(
@@ -91,6 +94,9 @@ fun buildSessionCockpit(
     val stateByHost = states.associateBy(SessionIndexState::hostId)
     val hostStatuses = hosts.map { host -> stateByHost[host.id].toHostStatus(host) }
     val statusByHost = hostStatuses.associateBy(HostSessionStatus::hostId)
+    val lineageBySessionId =
+        SessionLineageResolver.resolve(states.flatMap { state -> state.groups })
+
     val items = mutableListOf<SessionCockpitItem>()
     val foundStableKeys = mutableSetOf<SessionKey>()
 
@@ -121,6 +127,7 @@ fun buildSessionCockpit(
                         isHidden = key in saved.hidden,
                         isActive = key != null && key == activeKey,
                         freshness = requireNotNull(statusByHost[host.id]).kind,
+                        lineage = session.sessionId?.let { lineageBySessionId[it] } ?: SessionLineage(),
                         stableActionDisabledReason =
                             if (key == null) {
                                 "置顶和隐藏操作需要唯一且稳定的会话标识"
