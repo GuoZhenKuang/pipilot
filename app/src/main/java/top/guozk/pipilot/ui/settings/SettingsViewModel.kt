@@ -37,6 +37,9 @@ class SettingsViewModel(
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 
+    /** 由 UI 层注入：开关变化时启动/停止 RunMonitorService。 */
+    var onRunMonitorChanged: ((Boolean) -> Unit)? = null
+
     private val prefs: SharedPreferences =
         sharedPreferences
             ?: requireNotNull(context) {
@@ -64,6 +67,7 @@ class SettingsViewModel(
                 appVersion = appVersion,
                 autoCompactionEnabled = prefs.getBoolean(KEY_AUTO_COMPACTION, true),
                 autoRetryEnabled = prefs.getBoolean(KEY_AUTO_RETRY, true),
+                runMonitorEnabled = prefs.getBoolean(KEY_RUN_MONITOR, false),
                 transportPreference = transportPreference,
                 effectiveTransportPreference = effectiveTransport,
                 transportRuntimeNote = transportRuntimeNote(transportPreference, effectiveTransport),
@@ -219,6 +223,12 @@ class SettingsViewModel(
         uiState = uiState.copy(themePreference = preference)
     }
 
+    fun toggleRunMonitor(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_RUN_MONITOR, enabled) }
+        uiState = uiState.copy(runMonitorEnabled = enabled)
+        onRunMonitorChanged?.invoke(enabled)
+    }
+
     fun toggleExtensionStatusStrip() {
         val newValue = !uiState.showExtensionStatusStrip
         prefs.edit { putBoolean(KEY_SHOW_EXTENSION_STATUS_STRIP, newValue) }
@@ -290,6 +300,7 @@ class SettingsViewModel(
 
         private const val KEY_AUTO_COMPACTION = "auto_compaction_enabled"
         private const val KEY_AUTO_RETRY = "auto_retry_enabled"
+        private const val KEY_RUN_MONITOR = "run_monitor_enabled"
         private const val KEY_TRANSPORT_PREFERENCE = "transport_preference"
     }
 }
@@ -332,6 +343,7 @@ data class SettingsUiState(
     val errorMessage: String? = null,
     val autoCompactionEnabled: Boolean = true,
     val autoRetryEnabled: Boolean = true,
+    val runMonitorEnabled: Boolean = false,
     val transportPreference: TransportPreference = TransportPreference.AUTO,
     val effectiveTransportPreference: TransportPreference = TransportPreference.WEBSOCKET,
     val transportRuntimeNote: String = "",

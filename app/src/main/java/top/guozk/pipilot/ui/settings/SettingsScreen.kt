@@ -1,5 +1,9 @@
 package top.guozk.pipilot.ui.settings
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
+import top.guozk.pipilot.background.RunMonitorService
 import top.guozk.pipilot.sessions.SessionController
 import top.guozk.pipilot.sessions.TransportPreference
 import top.guozk.pipilot.ui.components.PiButton
@@ -43,6 +48,21 @@ fun SettingsRoute(sessionController: SessionController) {
             )
         }
     val settingsViewModel: SettingsViewModel = viewModel(factory = factory)
+
+    // 通知权限：Android 13+ 需要 POST_NOTIFICATIONS 运行时授权
+    val notificationPermissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    // 开关变化 → 启动/停止前台服务（应用进程内同一 controller）
+    LaunchedEffect(settingsViewModel) {
+        settingsViewModel.onRunMonitorChanged = { enabled ->
+            if (enabled) {
+                RunMonitorService.start(context)
+            } else {
+                RunMonitorService.stop(context)
+            }
+        }
+    }
     var transientStatusMessage by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(settingsViewModel) {
@@ -61,6 +81,12 @@ fun SettingsRoute(sessionController: SessionController) {
     SettingsScreen(
         viewModel = settingsViewModel,
         transientStatusMessage = transientStatusMessage,
+        onRunMonitorToggled = { enabled ->
+            if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            settingsViewModel.toggleRunMonitor(enabled)
+        },
     )
 }
 
@@ -68,6 +94,7 @@ fun SettingsRoute(sessionController: SessionController) {
 private fun SettingsScreen(
     viewModel: SettingsViewModel,
     transientStatusMessage: String?,
+    onRunMonitorToggled: (Boolean) -> Unit,
 ) {
     val uiState = viewModel.uiState
 
@@ -95,11 +122,13 @@ private fun SettingsScreen(
             onPing = viewModel::pingBridge,
         )
 
-        AgentAutomationCard(
+        AutomationSection(
             autoCompactionEnabled = uiState.autoCompactionEnabled,
             autoRetryEnabled = uiState.autoRetryEnabled,
             onToggleAutoCompaction = viewModel::toggleAutoCompaction,
             onToggleAutoRetry = viewModel::toggleAutoRetry,
+            runMonitorEnabled = uiState.runMonitorEnabled,
+            onToggleRunMonitor = { onRunMonitorToggled(!uiState.runMonitorEnabled) },
         )
 
         TransportCard(
@@ -247,6 +276,29 @@ private fun ConnectionMessages(
     }
 }
 
+@Suppress("LongParameterList")
+@Composable
+private fun AutomationSection(
+    autoCompactionEnabled: Boolean,
+    autoRetryEnabled: Boolean,
+    onToggleAutoCompaction: () -> Unit,
+    onToggleAutoRetry: () -> Unit,
+    runMonitorEnabled: Boolean,
+    onToggleRunMonitor: () -> Unit,
+) {
+    AgentAutomationCard(
+        autoCompactionEnabled = autoCompactionEnabled,
+        autoRetryEnabled = autoRetryEnabled,
+        onToggleAutoCompaction = onToggleAutoCompaction,
+        onToggleAutoRetry = onToggleAutoRetry,
+    )
+
+    RunMonitorCard(
+        enabled = runMonitorEnabled,
+        onToggle = onToggleRunMonitor,
+    )
+}
+
 @Composable
 private fun AgentAutomationCard(
     autoCompactionEnabled: Boolean,
@@ -272,6 +324,26 @@ private fun AgentAutomationCard(
             description = "请求失败时按指数退避策略自动重试",
             checked = autoRetryEnabled,
             onToggle = onToggleAutoRetry,
+        )
+    }
+}
+
+@Composable
+private fun RunMonitorCard(
+    enabled: Boolean,
+    onToggle: () -> Unit,
+) {
+    PiCard(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "后台监控",
+            style = MaterialTheme.typography.titleMedium,
+        )
+
+        SettingsToggleRow(
+            title = "后台运行监控",
+            description = "Pi 运行期间保持常驻通知；仅本地生效，杀掉应用后不保证继续",
+            checked = enabled,
+            onToggle = onToggle,
         )
     }
 }

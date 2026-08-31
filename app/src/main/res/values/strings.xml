@@ -13,4 +13,11 @@
         <item quantity="one">… %1$d 行未更改 …</item>
         <item quantity="other">… %1$d 行未更改 …</item>
     </plurals>
+    <string name="run_monitor_channel_name">运行监控</string>
+    <string name="run_monitor_channel_desc">Pi 运行期间显示常驻通知，可随时停止监控</string>
+    <string name="run_monitor_title">PiPilot 运行监控</string>
+    <string name="run_monitor_working">Pi 正在运行…</string>
+    <string name="run_monitor_retrying">Pi 正在重试…</string>
+    <string name="run_monitor_finished">运行已结束</string>
+    <string name="run_monitor_stop">停止监控</string>
 </resources>

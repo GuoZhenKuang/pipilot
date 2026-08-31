@@ -1,6 +1,7 @@
 package top.guozk.pipilot.di
 
 import android.content.Context
+import top.guozk.pipilot.background.RunStateObserver
 import top.guozk.pipilot.coresessions.FileSessionIndexCache
 import top.guozk.pipilot.coresessions.SessionIndexRepository
 import top.guozk.pipilot.hosts.ConnectionDiagnostics
@@ -60,6 +61,11 @@ class AppGraph(
 
     val sessionShareRemoteDataSource: BridgeSessionShareRemoteDataSource by lazy {
         BridgeSessionShareRemoteDataSource(hostProfileStore, hostTokenStore)
+    }
+
+    /** 应用级运行状态观察器：Activity 与前台服务共享同一实例。 */
+    val runStateObserver: RunStateObserver by lazy {
+        RunStateObserver(sessionController)
     }
 
     /** One delivery owner for the entire application process. */
