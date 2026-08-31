@@ -11,12 +11,6 @@ package top.guozk.pipilot.coresessions
  */
 object SessionLineageResolver {
     fun resolve(groups: List<SessionGroup>): Map<String, SessionLineage> {
-        val byStableId =
-            groups
-                .flatMap { it.sessions }
-                .filter { it.hasStableIdentity }
-                .associateBy { it.sessionId!! }
-
         val validIdCounts =
             groups
                 .flatMap { it.sessions }
@@ -25,62 +19,95 @@ object SessionLineageResolver {
                 .eachCount()
 
         // 路径 → ID 的映射只收录「唯一稳定 ID」的会话（与索引侧 normalizeStableIdentities 口径一致）
-        val pathToSessionId =
-            groups
-                .flatMap { it.sessions }
-                .filter { it.hasStableIdentity }
-                .filter { validIdCounts[it.sessionId!!] == 1 }
-                .groupBy { normalizePath(it.sessionPath) }
-                .filterValues { it.size == 1 }
-                .mapValues { it.value.single().sessionId!! }
+        val pathToSessionId = buildPathToSessionId(groups, validIdCounts)
 
+        val lineageBySessionId = buildInitialLineage(groups, pathToSessionId)
+        markCycles(lineageBySessionId)
+        return lineageBySessionId
+    }
+
+    private fun buildPathToSessionId(
+        groups: List<SessionGroup>,
+        validIdCounts: Map<String, Int>,
+    ): Map<String, String> =
+        groups
+            .flatMap { it.sessions }
+            .filter { it.hasStableIdentity }
+            .filter { validIdCounts[it.sessionId!!] == 1 }
+            .groupBy { normalizePath(it.sessionPath) }
+            .filterValues { it.size == 1 }
+            .mapValues { it.value.single().sessionId!! }
+
+    private fun buildInitialLineage(
+        groups: List<SessionGroup>,
+        pathToSessionId: Map<String, String>,
+    ): MutableMap<String, SessionLineage> {
         val lineageBySessionId = mutableMapOf<String, SessionLineage>()
 
-        for (group in groups) {
-            for (session in group.sessions) {
-                val sessionId = session.sessionId?.takeIf { session.hasStableIdentity } ?: continue
-                val parentPath = session.parentSessionPath?.takeIf { it.isNotBlank() } ?: continue
-
-                val normalizedParent = normalizePath(parentPath)
-                val normalizedSelf = normalizePath(session.sessionPath)
-
-                if (normalizedParent == normalizedSelf) {
-                    lineageBySessionId[sessionId] = SessionLineage(null, LineageStatus.CYCLE)
-                    continue
-                }
-
-                val parentId = pathToSessionId[normalizedParent]
-                lineageBySessionId[sessionId] =
-                    if (parentId == null) {
-                        SessionLineage(null, LineageStatus.MISSING)
-                    } else {
-                        SessionLineage(parentId, LineageStatus.LIVE)
-                    }
+        groups
+            .flatMap { it.sessions }
+            .filter { it.hasStableIdentity && !it.parentSessionPath.isNullOrBlank() }
+            .forEach { session ->
+                val sessionId = session.sessionId!!
+                val normalizedParent = normalizePath(session.parentSessionPath!!)
+                lineageBySessionId[sessionId] = resolveParent(session.sessionPath, normalizedParent, pathToSessionId)
             }
-        }
-
-        // 多节点环检测：沿 LIVE 边走，回到起点即整条链标记 CYCLE。
-        for (start in lineageBySessionId.keys) {
-            if (lineageBySessionId[start]?.status != LineageStatus.LIVE) continue
-            var current = start
-            val chain = mutableListOf(start)
-            val seen = mutableSetOf(start)
-            while (true) {
-                val next = lineageBySessionId[current]?.parentSessionId ?: break
-                if (next == start) {
-                    chain.forEach { id ->
-                        val parent = lineageBySessionId[id]?.parentSessionId
-                        lineageBySessionId[id] = SessionLineage(parent, LineageStatus.CYCLE)
-                    }
-                    break
-                }
-                if (!seen.add(next) || lineageBySessionId[next]?.status != LineageStatus.LIVE) break
-                chain.add(next)
-                current = next
-            }
-        }
-
         return lineageBySessionId
+    }
+
+    private fun resolveParent(
+        selfPath: String,
+        normalizedParent: String,
+        pathToSessionId: Map<String, String>,
+    ): SessionLineage =
+        if (normalizedParent == normalizePath(selfPath)) {
+            SessionLineage(null, LineageStatus.CYCLE)
+        } else {
+            pathToSessionId[normalizedParent]
+                ?.let { SessionLineage(it, LineageStatus.LIVE) }
+                ?: SessionLineage(null, LineageStatus.MISSING)
+        }
+
+    /** 多节点环检测：沿 LIVE 边走，回到起点即整条链标记 CYCLE。 */
+    private fun markCycles(lineageBySessionId: MutableMap<String, SessionLineage>) {
+        for (start in lineageBySessionId.keys) {
+            val chain = walkChain(start, lineageBySessionId) ?: continue
+            chain.forEach { id ->
+                val parent = lineageBySessionId[id]?.parentSessionId
+                lineageBySessionId[id] = SessionLineage(parent, LineageStatus.CYCLE)
+            }
+        }
+    }
+
+    /** 从 start 沿 LIVE 边走；回到 start 返回整条链，否则返回 null。 */
+    private fun walkChain(
+        start: String,
+        lineageBySessionId: Map<String, SessionLineage>,
+    ): List<String>? {
+        if (lineageBySessionId[start]?.status != LineageStatus.LIVE) return null
+
+        var current: String? = start
+        val chain = mutableListOf(start)
+        val seen = mutableSetOf(start)
+        var cycleClosed = false
+        var traversing = true
+
+        while (traversing) {
+            val next = lineageBySessionId[current]?.parentSessionId
+            when {
+                next == null -> traversing = false
+                next == start -> {
+                    cycleClosed = true
+                    traversing = false
+                }
+                seen.add(next) && lineageBySessionId[next]?.status == LineageStatus.LIVE -> {
+                    chain.add(next)
+                    current = next
+                }
+                else -> traversing = false
+            }
+        }
+        return if (cycleClosed) chain else null
     }
 
     private fun normalizePath(path: String): String = path.replace('\\', '/').trimEnd('/')

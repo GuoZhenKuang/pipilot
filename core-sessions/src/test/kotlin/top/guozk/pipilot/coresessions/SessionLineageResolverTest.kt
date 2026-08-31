@@ -21,8 +21,6 @@ class SessionLineageResolverTest {
             parentSessionPath = parentPath,
         )
 
-    private val root = SessionGroup("/work", emptyList())
-
     @Test
     fun `live parent resolves to stable id`() {
         val groups =
