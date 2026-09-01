@@ -15,32 +15,21 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 30
         steps:
-            - uses: actions/checkout@v7
-            - name: Set up JDK 21 for stable detekt
-              uses: actions/setup-java@v5
-              with:
-                  distribution: temurin
-                  java-version: 21
+            - uses: actions/checkout@v4
             - name: Set up JDK 25 build runtime
-              uses: actions/setup-java@v5
+              uses: actions/setup-java@v4
               with:
                   distribution: temurin
                   java-version: 25
-                  cache: gradle
-            - uses: android-actions/setup-android@v4
-            - name: Install Android SDK 37
-              run: sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
             - name: Verify toolchain
               run: |
                   java -version
                   ./gradlew --version
-                  test -f "$ANDROID_HOME/platforms/android-37.0/android.jar"
-                  test -x "$ANDROID_HOME/build-tools/37.0.0/aapt2"
             - name: Verify Android
               run: ./gradlew clean ktlintCheck detekt test :benchmark:compileBenchmarkKotlin :app:lintDebug :app:assembleDebug :app:assembleRelease
             - name: Upload test reports on failure
               if: failure()
-              uses: actions/upload-artifact@v7
+              uses: actions/upload-artifact@v4
               with:
                   name: test-reports
                   path: |
@@ -51,7 +40,7 @@ jobs:
             - name: Compile Android test sources
               run: ./gradlew :app:compileDebugAndroidTestKotlin
             - name: Upload debug APK
-              uses: actions/upload-artifact@v7
+              uses: actions/upload-artifact@v4
               with:
                   name: pipilot-debug
                   path: app/build/outputs/apk/debug/app-debug.apk
@@ -61,19 +50,17 @@ jobs:
         name: Bridge checks and production audit
         runs-on: ubuntu-latest
         timeout-minutes: 15
-        defaults:
-            run:
-                working-directory: bridge
         steps:
-            - uses: actions/checkout@v7
-            - uses: pnpm/action-setup@v6
+            - uses: actions/checkout@v4
+            - uses: pnpm/action-setup@v4
               with:
                   version: 10.33.0
-            - uses: actions/setup-node@v6
+            - uses: actions/setup-node@v4
               with:
                   node-version: 24
-                  cache: pnpm
-                  cache-dependency-path: bridge/pnpm-lock.yaml
-            - run: pnpm install --frozen-lockfile
-            - run: pnpm run check
-            - run: pnpm audit --prod --audit-level high
+            - name: Install dependencies
+              run: cd bridge && pnpm install --frozen-lockfile
+            - name: Run check
+              run: cd bridge && pnpm run check
+            - name: Audit dependencies
+              run: cd bridge && pnpm audit --prod --audit-level high
