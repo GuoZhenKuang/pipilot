@@ -46,7 +46,7 @@ subprojects {
         mainClass.set("io.gitlab.arturbosch.detekt.cli.Main")
         javaLauncher.set(
             javaToolchains.launcherFor {
-                languageVersion.set(JavaLanguageVersion.of(21))
+                languageVersion.set(JavaLanguageVersion.of(25))
             },
         )
         inputs.files(detektSources)
